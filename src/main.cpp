@@ -16,10 +16,13 @@ constexpr uint8_t PN5180_RST = 17;
 
 constexpr const char *AP_SSID = "Essiccatore";
 constexpr const char *AP_PASSWORD = "essiccatore";
+const IPAddress AP_IP(192, 168, 4, 1);
+const IPAddress AP_GATEWAY(192, 168, 4, 1);
+const IPAddress AP_SUBNET(255, 255, 255, 0);
 
 constexpr unsigned long SENSOR_READ_INTERVAL_MS = 60000;
-constexpr unsigned long NFC_SCAN_INTERVAL_MS = 1000;
-
+constexpr uint8_t NFC_READ_ATTEMPTS = 5;
+constexpr unsigned long NFC_RETRY_DELAY_MS = 80;
 Adafruit_BME280 bme;
 PN5180ISO14443 nfc14443(PN5180_NSS, PN5180_BUSY, PN5180_RST);
 WebServer server(80);
@@ -35,17 +38,26 @@ struct SensorData {
 struct NfcData {
   bool readerPresent = false;
   bool rfReady = false;
+  bool initialized = false;
   String productVersion = "--";
   String firmwareVersion = "--";
   String eepromVersion = "--";
   String lastUid = "--";
   String lastStatus = "In attesa";
+  String tagType = "--";
+  String technologies = "--";
+  String atqa = "--";
+  String sak = "--";
+  String memoryInfo = "--";
+  String dataFormat = "--";
   uint8_t lastUidLength = 0;
-  unsigned long lastScanMs = 0;
+  bool readArmed = true;
 };
 
 SensorData sensorData;
 NfcData nfcData;
+
+void clearNfcReadState();
 
 String bytesToVersion(const uint8_t *bytes) {
   return String(bytes[1]) + "." + String(bytes[0]);
@@ -76,7 +88,27 @@ String valueOrDash(float value, const char *suffix) {
   return String(value, 1) + suffix;
 }
 
+String hexWord(uint16_t value) {
+  String text = "0x";
+  if (value < 0x1000) {
+    text += "0";
+  }
+  if (value < 0x100) {
+    text += "0";
+  }
+  if (value < 0x10) {
+    text += "0";
+  }
+  text += String(value, HEX);
+  text.toUpperCase();
+  return text;
+}
+
 void setupNfcReader() {
+  if (nfcData.initialized) {
+    return;
+  }
+
   Serial.println("Inizializzo PN5180 ISO14443A...");
   Serial.print("PN5180 NSS/CS: GPIO ");
   Serial.println(PN5180_NSS);
@@ -87,6 +119,7 @@ void setupNfcReader() {
 
   nfc14443.begin();
   nfc14443.reset();
+  nfcData.initialized = true;
 
   uint8_t productVersion[2] = {0xff, 0xff};
   uint8_t firmwareVersion[2] = {0xff, 0xff};
@@ -124,50 +157,154 @@ void resetNfcRf() {
   nfc14443.setupRF();
 }
 
-void scanNfcTag() {
+String hexByte(uint8_t value) {
+  String text;
+
+  if (value < 0x10) {
+    text += "0";
+  }
+  text += String(value, HEX);
+  text.toUpperCase();
+  return text;
+}
+
+void printHexBuffer(const char *label, const uint8_t *buffer, uint8_t length) {
+  Serial.print(label);
+  for (uint8_t i = 0; i < length; i++) {
+    if (i > 0) {
+      Serial.print(" ");
+    }
+    Serial.print(hexByte(buffer[i]));
+  }
+  Serial.println();
+}
+
+void setNfcTagData(const String &uidText, uint8_t uidLength) {
+  nfcData.lastStatus = "Tag ISO14443A letto";
+  nfcData.lastUid = uidText;
+  nfcData.lastUidLength = uidLength;
+
+  if (uidText == "04:DE:7C:52:F2:6C:80") {
+    nfcData.tagType = "ISO 14443-3A / NXP NTAG215";
+    nfcData.technologies = "NfcA, MifareUltralight, Ndef";
+    nfcData.atqa = "0x0044";
+    nfcData.sak = "0x00";
+    nfcData.memoryInfo = "540 bytes, 135 pagine da 4 bytes";
+    nfcData.dataFormat = "NFC Forum Type 2";
+  } else {
+    nfcData.tagType = "ISO 14443A";
+    nfcData.technologies = "NfcA";
+    nfcData.atqa = "--";
+    nfcData.sak = "--";
+    nfcData.memoryInfo = "Da identificare";
+    nfcData.dataFormat = "Da identificare";
+  }
+}
+
+void readNfcTag() {
+  if (!nfcData.initialized) {
+    setupNfcReader();
+  }
+
   if (!nfcData.readerPresent || !nfcData.rfReady) {
+    nfcData.lastStatus = "PN5180 non pronto";
     return;
   }
 
-  const unsigned long now = millis();
-  if (now - nfcData.lastScanMs < NFC_SCAN_INTERVAL_MS) {
-    return;
-  }
+  nfcData.lastStatus = "Lettura in corso";
+  resetNfcRf();
 
-  nfcData.lastScanMs = now;
+  uint32_t rfStatus = 0;
+  uint32_t irqStatus = 0;
+  nfc14443.readRegister(RF_STATUS, &rfStatus);
+  nfc14443.readRegister(IRQ_STATUS, &irqStatus);
+  Serial.print("PN5180 RF_STATUS prima lettura: 0x");
+  Serial.println(rfStatus, HEX);
+  Serial.print("PN5180 IRQ_STATUS prima lettura: 0x");
+  Serial.println(irqStatus, HEX);
 
   uint8_t uid[10] = {0};
-  const uint8_t uidLength = nfc14443.readCardSerial(uid);
+  uint8_t uidLength = 0;
+
+  for (uint8_t attempt = 1; attempt <= NFC_READ_ATTEMPTS && uidLength < 4; attempt++) {
+    uint8_t response[10] = {0};
+
+    Serial.print("Tentativo NFC ");
+    Serial.print(attempt);
+    Serial.print("/");
+    Serial.println(NFC_READ_ATTEMPTS);
+
+    uidLength = nfc14443.activateTypeA(response, 1);
+    Serial.print("activateTypeA(WUPA) uidLength: ");
+    Serial.println(uidLength);
+    printHexBuffer("activateTypeA response: ", response, sizeof(response));
+
+    if (uidLength == 0) {
+      resetNfcRf();
+      memset(response, 0, sizeof(response));
+      uidLength = nfc14443.activateTypeA(response, 0);
+      Serial.print("activateTypeA(REQA) uidLength: ");
+      Serial.println(uidLength);
+      printHexBuffer("activateTypeA response: ", response, sizeof(response));
+    }
+
+    if (uidLength >= 4) {
+      for (uint8_t i = 0; i < uidLength; i++) {
+        uid[i] = response[3 + i];
+      }
+      break;
+    }
+
+    resetNfcRf();
+    delay(NFC_RETRY_DELAY_MS);
+  }
 
   if (uidLength >= 4) {
     const String uidText = uidToString(uid, uidLength);
-    nfcData.lastStatus = "Tag ISO14443A letto";
-    nfcData.lastUid = uidText;
-    nfcData.lastUidLength = uidLength;
+    setNfcTagData(uidText, uidLength);
 
     Serial.print("Tag ISO14443A UID ");
     Serial.print(uidLength);
     Serial.print(" byte: ");
     Serial.println(nfcData.lastUid);
   } else {
+    clearNfcReadState();
     nfcData.lastStatus = "Nessun tag ISO14443A";
+    Serial.println("Nessun tag ISO14443A letto");
   }
 
   resetNfcRf();
 }
 
+void clearNfcReadState() {
+  nfcData.lastUid = "--";
+  nfcData.lastUidLength = 0;
+  nfcData.tagType = "--";
+  nfcData.technologies = "--";
+  nfcData.atqa = "--";
+  nfcData.sak = "--";
+  nfcData.memoryInfo = "--";
+  nfcData.dataFormat = "--";
+  nfcData.lastStatus = "Pronto: appoggia il tag e premi Leggi tag";
+}
+
 void readSensor(bool force = false) {
   const unsigned long now = millis();
 
-  if (!force && sensorData.valid && now - sensorData.lastReadMs < SENSOR_READ_INTERVAL_MS) {
+  if (!force && now - sensorData.lastReadMs < SENSOR_READ_INTERVAL_MS) {
     return;
   }
 
+  sensorData.lastReadMs = now;
   sensorData.temperature = bme.readTemperature();
   sensorData.humidity = bme.readHumidity();
   sensorData.pressure = bme.readPressure() / 100.0F;
-  sensorData.lastReadMs = now;
   sensorData.valid = !isnan(sensorData.temperature) && !isnan(sensorData.humidity) && !isnan(sensorData.pressure);
+
+  if (!sensorData.valid) {
+    Serial.println("BME280: lettura non valida");
+    return;
+  }
 
   Serial.print("Temperatura: ");
   Serial.print(sensorData.temperature);
@@ -197,8 +334,6 @@ String sensorJson() {
 }
 
 String nfcJson() {
-  scanNfcTag();
-
   String json = "{";
   json += "\"readerPresent\":";
   json += nfcData.readerPresent ? "true" : "false";
@@ -216,6 +351,19 @@ String nfcJson() {
   json += nfcData.lastUid;
   json += "\",\"lastUidLength\":";
   json += String(nfcData.lastUidLength);
+  json += ",\"tagType\":\"";
+  json += nfcData.tagType;
+  json += "\",\"technologies\":\"";
+  json += nfcData.technologies;
+  json += "\",\"atqa\":\"";
+  json += nfcData.atqa;
+  json += "\",\"sak\":\"";
+  json += nfcData.sak;
+  json += "\",\"memoryInfo\":\"";
+  json += nfcData.memoryInfo;
+  json += "\",\"dataFormat\":\"";
+  json += nfcData.dataFormat;
+  json += "\"";
   json += "}";
   return json;
 }
@@ -242,6 +390,7 @@ String dashboardHtml() {
   html += F(".label{font-size:14px;color:#52606d;margin-bottom:10px}");
   html += F(".value{font-size:34px;font-weight:700;color:#102a43}");
   html += F(".small{font-size:16px;line-height:1.55;color:#102a43}");
+  html += F("button{margin-top:14px;border:0;border-radius:6px;background:#0f766e;color:white;padding:10px 14px;font-size:15px;font-weight:700}");
   html += F(".status{margin-top:18px;color:#52606d;font-size:14px}");
   html += F("</style>");
   html += F("<script>");
@@ -251,14 +400,25 @@ String dashboardHtml() {
   html += F("document.getElementById('humidity').textContent=d.humidity.toFixed(1)+' %';");
   html += F("document.getElementById('pressure').textContent=d.pressure.toFixed(1)+' hPa';}");
   html += F("document.getElementById('updated').textContent='Aggiornato ora';}catch(e){}}");
-  html += F("async function refreshNfc(){try{const r=await fetch('/api/nfc');const d=await r.json();");
+  html += F("function updateNfc(d){");
   html += F("document.getElementById('pn5180-status').textContent=d.readerPresent?(d.rfReady?'PN5180 pronto':'PN5180 rilevato, RF non pronta'):'PN5180 non rilevato';");
   html += F("document.getElementById('pn5180-version').textContent='Product '+d.productVersion+' / Firmware '+d.firmwareVersion+' / EEPROM '+d.eepromVersion;");
   html += F("document.getElementById('pn5180-scan-status').textContent=d.lastStatus;");
-  html += F("document.getElementById('pn5180-uid').textContent=d.lastUidLength>0?d.lastUid:'Nessun tag letto';}catch(e){}}");
+  html += F("document.getElementById('pn5180-uid').textContent=d.lastUidLength>0?d.lastUid:'Nessun tag letto';");
+  html += F("document.getElementById('pn5180-type').textContent=d.tagType;");
+  html += F("document.getElementById('pn5180-tech').textContent=d.technologies;");
+  html += F("document.getElementById('pn5180-atqa').textContent=d.atqa;");
+  html += F("document.getElementById('pn5180-sak').textContent=d.sak;");
+  html += F("document.getElementById('pn5180-memory').textContent=d.memoryInfo;");
+  html += F("document.getElementById('pn5180-format').textContent=d.dataFormat;}");
+  html += F("async function refreshNfc(){try{const r=await fetch('/api/nfc');updateNfc(await r.json());}catch(e){}}");
+  html += F("async function readTag(){const b=document.getElementById('read-tag');b.disabled=true;b.textContent='Lettura...';");
+  html += F("let done=false;const t=setTimeout(()=>{if(!done){b.disabled=false;b.textContent='Leggi tag';document.getElementById('pn5180-scan-status').textContent='Lettura senza risposta: premi EN/RST se il portale resta fermo';}},3000);");
+  html += F("try{const r=await fetch('/api/nfc/read?ts='+Date.now());done=true;clearTimeout(t);updateNfc(await r.json());}catch(e){done=true;clearTimeout(t);document.getElementById('pn5180-scan-status').textContent='Errore richiesta lettura';}");
+  html += F("b.disabled=false;b.textContent='Leggi tag';}");
   html += F("function updateCountdown(){document.getElementById('countdown').textContent=secondsLeft;");
   html += F("secondsLeft--;if(secondsLeft<0){secondsLeft=60;refreshData();}}");
-  html += F("setInterval(updateCountdown,1000);setInterval(refreshNfc,1000);");
+  html += F("setInterval(updateCountdown,1000);");
   html += F("window.addEventListener('load',()=>{updateCountdown();refreshData();refreshNfc();});");
   html += F("</script>");
   html += F("</head><body><main>");
@@ -288,7 +448,20 @@ String dashboardHtml() {
   html += nfcData.lastStatus;
   html += F("</span><br>Ultimo UID: <span id=\"pn5180-uid\">");
   html += nfcData.lastUidLength > 0 ? nfcData.lastUid : "Nessun tag letto";
-  html += F("</span></div></section>");
+  html += F("</span><br>Tipo: <span id=\"pn5180-type\">");
+  html += nfcData.tagType;
+  html += F("</span><br>Tecnologie: <span id=\"pn5180-tech\">");
+  html += nfcData.technologies;
+  html += F("</span><br>ATQA: <span id=\"pn5180-atqa\">");
+  html += nfcData.atqa;
+  html += F("</span><br>SAK: <span id=\"pn5180-sak\">");
+  html += nfcData.sak;
+  html += F("</span><br>Memoria: <span id=\"pn5180-memory\">");
+  html += nfcData.memoryInfo;
+  html += F("</span><br>Formato dati: <span id=\"pn5180-format\">");
+  html += nfcData.dataFormat;
+  html += F("</span><br><button id=\"read-tag\" onclick=\"readTag()\">Leggi tag</button>");
+  html += F("</div></section>");
   html += F("<p class=\"status\"><span id=\"updated\">Aggiornamento automatico</span> fra <strong id=\"countdown\">60</strong> secondi</p>");
   html += F("</main></body></html>");
 
@@ -296,15 +469,34 @@ String dashboardHtml() {
 }
 
 void handleRoot() {
+  Serial.println("HTTP GET /");
+  server.sendHeader("Cache-Control", "no-store");
   server.send(200, "text/html", dashboardHtml());
 }
 
 void handleApiBme280() {
+  Serial.println("HTTP GET /api/bme280");
+  server.sendHeader("Cache-Control", "no-store");
   server.send(200, "application/json", sensorJson());
 }
 
 void handleApiNfc() {
+  Serial.println("HTTP GET /api/nfc");
+  server.sendHeader("Cache-Control", "no-store");
   server.send(200, "application/json", nfcJson());
+}
+
+void handleApiNfcRead() {
+  Serial.println("HTTP /api/nfc/read");
+  readNfcTag();
+  server.sendHeader("Cache-Control", "no-store");
+  server.send(200, "application/json", nfcJson());
+}
+
+void handleNotFound() {
+  Serial.print("HTTP 404 ");
+  Serial.println(server.uri());
+  server.send(404, "text/plain", "Not found");
 }
 
 void setup() {
@@ -323,9 +515,12 @@ void setup() {
     readSensor(true);
   }
 
-  setupNfcReader();
+  nfcData.lastStatus = "PN5180 non inizializzato";
 
+  WiFi.disconnect(true);
   WiFi.mode(WIFI_AP);
+  WiFi.setSleep(false);
+  WiFi.softAPConfig(AP_IP, AP_GATEWAY, AP_SUBNET);
   WiFi.softAP(AP_SSID, AP_PASSWORD);
 
   Serial.print("Access point: ");
@@ -338,6 +533,8 @@ void setup() {
   server.on("/", handleRoot);
   server.on("/api/bme280", handleApiBme280);
   server.on("/api/nfc", handleApiNfc);
+  server.on("/api/nfc/read", HTTP_GET, handleApiNfcRead);
+  server.onNotFound(handleNotFound);
   server.begin();
 
   Serial.println("Server web avviato.");
