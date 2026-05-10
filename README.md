@@ -38,4 +38,6 @@ Repository inizializzato. La documentazione raccoglie le prime specifiche funzio
 
 ## Licenza
 
-Licenza da definire.
+Questo progetto e distribuito con licenza GNU Affero General Public License v3.0.
+
+SPDX-License-Identifier: AGPL-3.0-or-later
