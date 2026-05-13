@@ -5,6 +5,7 @@
 #include <WebServer.h>
 #include <WiFi.h>
 #include <Wire.h>
+#include <math.h>
 
 constexpr uint8_t I2C_SDA = 21;
 constexpr uint8_t I2C_SCL = 22;
@@ -14,6 +15,10 @@ constexpr uint8_t PN5180_NSS = 5;
 constexpr uint8_t PN5180_BUSY = 16;
 constexpr uint8_t PN5180_RST = 17;
 
+constexpr uint8_t HEATER_PIN = 25;
+constexpr bool HEATER_ACTIVE_LOW = true;
+constexpr uint8_t BED_THERMISTOR_PIN = 34;
+
 constexpr const char *AP_SSID = "Essiccatore";
 constexpr const char *AP_PASSWORD = "essiccatore";
 const IPAddress AP_IP(192, 168, 4, 1);
@@ -21,8 +26,14 @@ const IPAddress AP_GATEWAY(192, 168, 4, 1);
 const IPAddress AP_SUBNET(255, 255, 255, 0);
 
 constexpr unsigned long SENSOR_READ_INTERVAL_MS = 60000;
+constexpr unsigned long BED_READ_INTERVAL_MS = 2000;
 constexpr uint8_t NFC_READ_ATTEMPTS = 5;
 constexpr unsigned long NFC_RETRY_DELAY_MS = 80;
+constexpr float BED_PULLUP_OHMS = 100000.0F;
+constexpr float BED_NOMINAL_OHMS = 100000.0F;
+constexpr float BED_NOMINAL_TEMP_K = 298.15F;
+constexpr float BED_BETA = 3950.0F;
+constexpr float ADC_MAX_VALUE = 4095.0F;
 Adafruit_BME280 bme;
 PN5180ISO14443 nfc14443(PN5180_NSS, PN5180_BUSY, PN5180_RST);
 WebServer server(80);
@@ -54,8 +65,18 @@ struct NfcData {
   bool readArmed = true;
 };
 
+struct BedData {
+  float temperature = NAN;
+  float resistance = NAN;
+  uint16_t rawAdc = 0;
+  unsigned long lastReadMs = 0;
+  bool valid = false;
+};
+
 SensorData sensorData;
 NfcData nfcData;
+BedData bedData;
+bool heaterEnabled = false;
 
 void clearNfcReadState();
 
@@ -315,6 +336,45 @@ void readSensor(bool force = false) {
   Serial.println(" hPa");
 }
 
+void readBedTemperature(bool force = false) {
+  const unsigned long now = millis();
+
+  if (!force && now - bedData.lastReadMs < BED_READ_INTERVAL_MS) {
+    return;
+  }
+
+  bedData.lastReadMs = now;
+
+  uint32_t rawSum = 0;
+  for (uint8_t i = 0; i < 8; i++) {
+    rawSum += analogRead(BED_THERMISTOR_PIN);
+    delay(2);
+  }
+
+  bedData.rawAdc = rawSum / 8;
+  bedData.valid = bedData.rawAdc > 20 && bedData.rawAdc < 4075;
+
+  if (!bedData.valid) {
+    bedData.temperature = NAN;
+    bedData.resistance = NAN;
+    Serial.print("NTC piatto: lettura non valida, ADC ");
+    Serial.println(bedData.rawAdc);
+    return;
+  }
+
+  bedData.resistance = BED_PULLUP_OHMS * bedData.rawAdc / (ADC_MAX_VALUE - bedData.rawAdc);
+  const float steinhart = (1.0F / BED_NOMINAL_TEMP_K) + (log(bedData.resistance / BED_NOMINAL_OHMS) / BED_BETA);
+  bedData.temperature = (1.0F / steinhart) - 273.15F;
+
+  Serial.print("NTC piatto: ");
+  Serial.print(bedData.temperature, 1);
+  Serial.print(" C, ADC ");
+  Serial.print(bedData.rawAdc);
+  Serial.print(", R ");
+  Serial.print(bedData.resistance, 0);
+  Serial.println(" ohm");
+}
+
 String sensorJson() {
   readSensor();
 
@@ -329,6 +389,24 @@ String sensorJson() {
   json += sensorData.valid ? String(sensorData.pressure, 2) : "null";
   json += ",\"ageSeconds\":";
   json += sensorData.valid ? String((millis() - sensorData.lastReadMs) / 1000) : "null";
+  json += "}";
+  return json;
+}
+
+String bedJson() {
+  readBedTemperature();
+
+  String json = "{";
+  json += "\"valid\":";
+  json += bedData.valid ? "true" : "false";
+  json += ",\"temperature\":";
+  json += bedData.valid ? String(bedData.temperature, 2) : "null";
+  json += ",\"resistance\":";
+  json += bedData.valid ? String(bedData.resistance, 0) : "null";
+  json += ",\"rawAdc\":";
+  json += String(bedData.rawAdc);
+  json += ",\"pin\":";
+  json += String(BED_THERMISTOR_PIN);
   json += "}";
   return json;
 }
@@ -368,11 +446,29 @@ String nfcJson() {
   return json;
 }
 
+void setHeater(bool enabled) {
+  heaterEnabled = enabled;
+  digitalWrite(HEATER_PIN, enabled == HEATER_ACTIVE_LOW ? LOW : HIGH);
+  Serial.print("MOSFET riscaldatore: ");
+  Serial.println(enabled ? "ON" : "OFF");
+}
+
+String heaterJson() {
+  String json = "{";
+  json += "\"enabled\":";
+  json += heaterEnabled ? "true" : "false";
+  json += ",\"pin\":";
+  json += String(HEATER_PIN);
+  json += "}";
+  return json;
+}
+
 String dashboardHtml() {
   readSensor();
+  readBedTemperature();
 
   String html;
-  html.reserve(7000);
+  html.reserve(8200);
 
   html += F("<!doctype html><html lang=\"it\"><head>");
   html += F("<meta charset=\"utf-8\">");
@@ -391,6 +487,8 @@ String dashboardHtml() {
   html += F(".value{font-size:34px;font-weight:700;color:#102a43}");
   html += F(".small{font-size:16px;line-height:1.55;color:#102a43}");
   html += F("button{margin-top:14px;border:0;border-radius:6px;background:#0f766e;color:white;padding:10px 14px;font-size:15px;font-weight:700}");
+  html += F("button.secondary{background:#334e68;margin-left:8px}");
+  html += F("button.danger{background:#b91c1c}");
   html += F(".status{margin-top:18px;color:#52606d;font-size:14px}");
   html += F("</style>");
   html += F("<script>");
@@ -400,6 +498,10 @@ String dashboardHtml() {
   html += F("document.getElementById('humidity').textContent=d.humidity.toFixed(1)+' %';");
   html += F("document.getElementById('pressure').textContent=d.pressure.toFixed(1)+' hPa';}");
   html += F("document.getElementById('updated').textContent='Aggiornato ora';}catch(e){}}");
+  html += F("async function refreshBed(){try{const r=await fetch('/api/bed');const d=await r.json();");
+  html += F("document.getElementById('bed-temp').textContent=d.valid?d.temperature.toFixed(1)+' C':'--';");
+  html += F("document.getElementById('bed-raw').textContent=d.rawAdc;");
+  html += F("document.getElementById('bed-resistance').textContent=d.valid?Math.round(d.resistance)+' ohm':'--';}catch(e){}}");
   html += F("function updateNfc(d){");
   html += F("document.getElementById('pn5180-status').textContent=d.readerPresent?(d.rfReady?'PN5180 pronto':'PN5180 rilevato, RF non pronta'):'PN5180 non rilevato';");
   html += F("document.getElementById('pn5180-version').textContent='Product '+d.productVersion+' / Firmware '+d.firmwareVersion+' / EEPROM '+d.eepromVersion;");
@@ -416,10 +518,13 @@ String dashboardHtml() {
   html += F("let done=false;const t=setTimeout(()=>{if(!done){b.disabled=false;b.textContent='Leggi tag';document.getElementById('pn5180-scan-status').textContent='Lettura senza risposta: premi EN/RST se il portale resta fermo';}},3000);");
   html += F("try{const r=await fetch('/api/nfc/read?ts='+Date.now());done=true;clearTimeout(t);updateNfc(await r.json());}catch(e){done=true;clearTimeout(t);document.getElementById('pn5180-scan-status').textContent='Errore richiesta lettura';}");
   html += F("b.disabled=false;b.textContent='Leggi tag';}");
+  html += F("function updateHeater(d){document.getElementById('heater-state').textContent=d.enabled?'ON':'OFF';}");
+  html += F("async function refreshHeater(){try{const r=await fetch('/api/heater');updateHeater(await r.json());}catch(e){}}");
+  html += F("async function setHeaterState(v){try{const r=await fetch('/api/heater/'+(v?'on':'off')+'?ts='+Date.now());updateHeater(await r.json());}catch(e){document.getElementById('heater-state').textContent='Errore';}}");
   html += F("function updateCountdown(){document.getElementById('countdown').textContent=secondsLeft;");
-  html += F("secondsLeft--;if(secondsLeft<0){secondsLeft=60;refreshData();}}");
+  html += F("secondsLeft--;if(secondsLeft<0){secondsLeft=60;refreshData();refreshBed();}}");
   html += F("setInterval(updateCountdown,1000);");
-  html += F("window.addEventListener('load',()=>{updateCountdown();refreshData();refreshNfc();});");
+  html += F("window.addEventListener('load',()=>{updateCountdown();refreshData();refreshBed();refreshNfc();refreshHeater();});");
   html += F("</script>");
   html += F("</head><body><main>");
   html += F("<h1>Essiccatore</h1>");
@@ -434,6 +539,13 @@ String dashboardHtml() {
   html += F("<article class=\"card\"><div class=\"label\">Pressione</div><div class=\"value\" id=\"pressure\">");
   html += valueOrDash(sensorData.pressure, " hPa");
   html += F("</div></article>");
+  html += F("<article class=\"card\"><div class=\"label\">Piatto</div><div class=\"value\" id=\"bed-temp\">");
+  html += valueOrDash(bedData.temperature, " C");
+  html += F("</div><div class=\"status\">ADC <span id=\"bed-raw\">");
+  html += String(bedData.rawAdc);
+  html += F("</span> - R <span id=\"bed-resistance\">");
+  html += bedData.valid ? String(bedData.resistance, 0) + " ohm" : "--";
+  html += F("</span></div></article>");
   html += F("</section>");
   html += F("<section class=\"card wide\"><div class=\"label\">PN5180</div><div class=\"small\">");
   html += F("<strong id=\"pn5180-status\">");
@@ -462,6 +574,14 @@ String dashboardHtml() {
   html += nfcData.dataFormat;
   html += F("</span><br><button id=\"read-tag\" onclick=\"readTag()\">Leggi tag</button>");
   html += F("</div></section>");
+  html += F("<section class=\"card wide\"><div class=\"label\">MOSFET riscaldatore</div><div class=\"small\">");
+  html += F("GPIO ");
+  html += String(HEATER_PIN);
+  html += F(" - Stato: <strong id=\"heater-state\">");
+  html += heaterEnabled ? "ON" : "OFF";
+  html += F("</strong><br><button class=\"danger\" onclick=\"setHeaterState(true)\">ON</button>");
+  html += F("<button class=\"secondary\" onclick=\"setHeaterState(false)\">OFF</button>");
+  html += F("</div></section>");
   html += F("<p class=\"status\"><span id=\"updated\">Aggiornamento automatico</span> fra <strong id=\"countdown\">60</strong> secondi</p>");
   html += F("</main></body></html>");
 
@@ -480,6 +600,12 @@ void handleApiBme280() {
   server.send(200, "application/json", sensorJson());
 }
 
+void handleApiBed() {
+  Serial.println("HTTP GET /api/bed");
+  server.sendHeader("Cache-Control", "no-store");
+  server.send(200, "application/json", bedJson());
+}
+
 void handleApiNfc() {
   Serial.println("HTTP GET /api/nfc");
   server.sendHeader("Cache-Control", "no-store");
@@ -491,6 +617,26 @@ void handleApiNfcRead() {
   readNfcTag();
   server.sendHeader("Cache-Control", "no-store");
   server.send(200, "application/json", nfcJson());
+}
+
+void handleApiHeater() {
+  Serial.println("HTTP GET /api/heater");
+  server.sendHeader("Cache-Control", "no-store");
+  server.send(200, "application/json", heaterJson());
+}
+
+void handleApiHeaterOn() {
+  Serial.println("HTTP GET /api/heater/on");
+  setHeater(true);
+  server.sendHeader("Cache-Control", "no-store");
+  server.send(200, "application/json", heaterJson());
+}
+
+void handleApiHeaterOff() {
+  Serial.println("HTTP GET /api/heater/off");
+  setHeater(false);
+  server.sendHeader("Cache-Control", "no-store");
+  server.send(200, "application/json", heaterJson());
 }
 
 void handleNotFound() {
@@ -505,6 +651,12 @@ void setup() {
 
   Serial.println();
   Serial.println("Essiccatore - portale BME280 + PN5180 ISO14443A");
+
+  pinMode(HEATER_PIN, OUTPUT);
+  setHeater(false);
+  analogReadResolution(12);
+  analogSetPinAttenuation(BED_THERMISTOR_PIN, ADC_11db);
+  readBedTemperature(true);
 
   Wire.begin(I2C_SDA, I2C_SCL);
 
@@ -532,8 +684,12 @@ void setup() {
 
   server.on("/", handleRoot);
   server.on("/api/bme280", handleApiBme280);
+  server.on("/api/bed", HTTP_GET, handleApiBed);
   server.on("/api/nfc", handleApiNfc);
   server.on("/api/nfc/read", HTTP_GET, handleApiNfcRead);
+  server.on("/api/heater", HTTP_GET, handleApiHeater);
+  server.on("/api/heater/on", HTTP_GET, handleApiHeaterOn);
+  server.on("/api/heater/off", HTTP_GET, handleApiHeaterOff);
   server.onNotFound(handleNotFound);
   server.begin();
 
@@ -543,4 +699,5 @@ void setup() {
 void loop() {
   server.handleClient();
   readSensor();
+  readBedTemperature();
 }
