@@ -26,7 +26,8 @@ const IPAddress AP_GATEWAY(192, 168, 4, 1);
 const IPAddress AP_SUBNET(255, 255, 255, 0);
 
 constexpr unsigned long SENSOR_READ_INTERVAL_MS = 60000;
-constexpr unsigned long BED_READ_INTERVAL_MS = 2000;
+constexpr unsigned long BED_READ_INTERVAL_MS = 3000;
+constexpr uint8_t BED_ADC_SAMPLES = 32;
 constexpr uint8_t NFC_READ_ATTEMPTS = 5;
 constexpr unsigned long NFC_RETRY_DELAY_MS = 80;
 constexpr float BED_PULLUP_OHMS = 100000.0F;
@@ -34,6 +35,14 @@ constexpr float BED_NOMINAL_OHMS = 100000.0F;
 constexpr float BED_NOMINAL_TEMP_K = 298.15F;
 constexpr float BED_BETA = 3950.0F;
 constexpr float ADC_MAX_VALUE = 4095.0F;
+constexpr float BED_ADC_FILTER_ALPHA = 0.15F;
+constexpr float BED_MAX_ADC_STEP = 35.0F;
+constexpr float DEFAULT_BED_SETPOINT_C = 45.0F;
+constexpr float BED_SAFETY_LIMIT_C = 60.0F;
+constexpr float PI_KP = 8.0F;
+constexpr float PI_KI = 0.004F;
+constexpr unsigned long PI_UPDATE_INTERVAL_MS = 3000;
+constexpr unsigned long HEATER_WINDOW_MS = 10000;
 Adafruit_BME280 bme;
 PN5180ISO14443 nfc14443(PN5180_NSS, PN5180_BUSY, PN5180_RST);
 WebServer server(80);
@@ -68,14 +77,26 @@ struct NfcData {
 struct BedData {
   float temperature = NAN;
   float resistance = NAN;
+  float filteredAdc = NAN;
   uint16_t rawAdc = 0;
   unsigned long lastReadMs = 0;
   bool valid = false;
 };
 
+struct HeaterControlData {
+  bool automatic = false;
+  float setpoint = DEFAULT_BED_SETPOINT_C;
+  float outputPercent = 0.0F;
+  float integral = 0.0F;
+  String status = "Manuale";
+  unsigned long lastUpdateMs = 0;
+  unsigned long windowStartMs = 0;
+};
+
 SensorData sensorData;
 NfcData nfcData;
 BedData bedData;
+HeaterControlData heaterControl;
 bool heaterEnabled = false;
 
 void clearNfcReadState();
@@ -345,24 +366,47 @@ void readBedTemperature(bool force = false) {
 
   bedData.lastReadMs = now;
 
-  uint32_t rawSum = 0;
-  for (uint8_t i = 0; i < 8; i++) {
-    rawSum += analogRead(BED_THERMISTOR_PIN);
+  uint16_t samples[BED_ADC_SAMPLES];
+  for (uint8_t i = 0; i < BED_ADC_SAMPLES; i++) {
+    samples[i] = analogRead(BED_THERMISTOR_PIN);
     delay(2);
   }
 
-  bedData.rawAdc = rawSum / 8;
+  for (uint8_t i = 1; i < BED_ADC_SAMPLES; i++) {
+    const uint16_t value = samples[i];
+    int8_t j = i - 1;
+    while (j >= 0 && samples[j] > value) {
+      samples[j + 1] = samples[j];
+      j--;
+    }
+    samples[j + 1] = value;
+  }
+
+  uint32_t rawSum = 0;
+  for (uint8_t i = 4; i < BED_ADC_SAMPLES - 4; i++) {
+    rawSum += samples[i];
+  }
+
+  bedData.rawAdc = rawSum / (BED_ADC_SAMPLES - 8);
   bedData.valid = bedData.rawAdc > 20 && bedData.rawAdc < 4075;
 
   if (!bedData.valid) {
     bedData.temperature = NAN;
     bedData.resistance = NAN;
+    bedData.filteredAdc = NAN;
     Serial.print("NTC piatto: lettura non valida, ADC ");
     Serial.println(bedData.rawAdc);
     return;
   }
 
-  bedData.resistance = BED_PULLUP_OHMS * bedData.rawAdc / (ADC_MAX_VALUE - bedData.rawAdc);
+  if (isnan(bedData.filteredAdc)) {
+    bedData.filteredAdc = bedData.rawAdc;
+  } else {
+    const float filteredStep = (bedData.rawAdc - bedData.filteredAdc) * BED_ADC_FILTER_ALPHA;
+    bedData.filteredAdc += constrain(filteredStep, -BED_MAX_ADC_STEP, BED_MAX_ADC_STEP);
+  }
+
+  bedData.resistance = BED_PULLUP_OHMS * bedData.filteredAdc / (ADC_MAX_VALUE - bedData.filteredAdc);
   const float steinhart = (1.0F / BED_NOMINAL_TEMP_K) + (log(bedData.resistance / BED_NOMINAL_OHMS) / BED_BETA);
   bedData.temperature = (1.0F / steinhart) - 273.15F;
 
@@ -370,6 +414,8 @@ void readBedTemperature(bool force = false) {
   Serial.print(bedData.temperature, 1);
   Serial.print(" C, ADC ");
   Serial.print(bedData.rawAdc);
+  Serial.print(" -> ");
+  Serial.print(bedData.filteredAdc, 1);
   Serial.print(", R ");
   Serial.print(bedData.resistance, 0);
   Serial.println(" ohm");
@@ -405,6 +451,8 @@ String bedJson() {
   json += bedData.valid ? String(bedData.resistance, 0) : "null";
   json += ",\"rawAdc\":";
   json += String(bedData.rawAdc);
+  json += ",\"filteredAdc\":";
+  json += bedData.valid ? String(bedData.filteredAdc, 1) : "null";
   json += ",\"pin\":";
   json += String(BED_THERMISTOR_PIN);
   json += "}";
@@ -447,10 +495,81 @@ String nfcJson() {
 }
 
 void setHeater(bool enabled) {
+  if (heaterEnabled == enabled) {
+    digitalWrite(HEATER_PIN, enabled == HEATER_ACTIVE_LOW ? LOW : HIGH);
+    return;
+  }
+
   heaterEnabled = enabled;
   digitalWrite(HEATER_PIN, enabled == HEATER_ACTIVE_LOW ? LOW : HIGH);
   Serial.print("MOSFET riscaldatore: ");
   Serial.println(enabled ? "ON" : "OFF");
+}
+
+void stopHeaterAutomation(const String &status) {
+  heaterControl.automatic = false;
+  heaterControl.outputPercent = 0.0F;
+  heaterControl.integral = 0.0F;
+  heaterControl.status = status;
+  setHeater(false);
+}
+
+void startHeaterAutomation() {
+  const unsigned long now = millis();
+  heaterControl.automatic = true;
+  heaterControl.outputPercent = 0.0F;
+  heaterControl.integral = 0.0F;
+  heaterControl.lastUpdateMs = now > PI_UPDATE_INTERVAL_MS ? now - PI_UPDATE_INTERVAL_MS : 0;
+  heaterControl.windowStartMs = now;
+  heaterControl.status = "Automatico PI";
+  setHeater(false);
+}
+
+void updateHeaterControl() {
+  if (!heaterControl.automatic) {
+    return;
+  }
+
+  readBedTemperature();
+
+  if (!bedData.valid) {
+    stopHeaterAutomation("STOP: NTC non valida");
+    return;
+  }
+
+  if (bedData.temperature >= BED_SAFETY_LIMIT_C) {
+    stopHeaterAutomation("STOP: limite sicurezza");
+    return;
+  }
+
+  const unsigned long now = millis();
+  if (now - heaterControl.windowStartMs >= HEATER_WINDOW_MS) {
+    heaterControl.windowStartMs = now;
+  }
+
+  if (now - heaterControl.lastUpdateMs >= PI_UPDATE_INTERVAL_MS) {
+    const float dt = (now - heaterControl.lastUpdateMs) / 1000.0F;
+    heaterControl.lastUpdateMs = now;
+
+    const float error = heaterControl.setpoint - bedData.temperature;
+    heaterControl.integral += error * PI_KI * dt;
+    heaterControl.integral = constrain(heaterControl.integral, 0.0F, 100.0F);
+
+    heaterControl.outputPercent = (PI_KP * error) + heaterControl.integral;
+    heaterControl.outputPercent = constrain(heaterControl.outputPercent, 0.0F, 100.0F);
+    heaterControl.status = "Automatico PI";
+
+    Serial.print("PI piatto: T ");
+    Serial.print(bedData.temperature, 1);
+    Serial.print(" C, set ");
+    Serial.print(heaterControl.setpoint, 1);
+    Serial.print(" C, output ");
+    Serial.print(heaterControl.outputPercent, 1);
+    Serial.println(" %");
+  }
+
+  const unsigned long onTimeMs = (HEATER_WINDOW_MS * heaterControl.outputPercent) / 100.0F;
+  setHeater((now - heaterControl.windowStartMs) < onTimeMs);
 }
 
 String heaterJson() {
@@ -459,6 +578,17 @@ String heaterJson() {
   json += heaterEnabled ? "true" : "false";
   json += ",\"pin\":";
   json += String(HEATER_PIN);
+  json += ",\"automatic\":";
+  json += heaterControl.automatic ? "true" : "false";
+  json += ",\"setpoint\":";
+  json += String(heaterControl.setpoint, 1);
+  json += ",\"outputPercent\":";
+  json += String(heaterControl.outputPercent, 1);
+  json += ",\"safetyLimit\":";
+  json += String(BED_SAFETY_LIMIT_C, 1);
+  json += ",\"status\":\"";
+  json += heaterControl.status;
+  json += "\"";
   json += "}";
   return json;
 }
@@ -500,7 +630,7 @@ String dashboardHtml() {
   html += F("document.getElementById('updated').textContent='Aggiornato ora';}catch(e){}}");
   html += F("async function refreshBed(){try{const r=await fetch('/api/bed');const d=await r.json();");
   html += F("document.getElementById('bed-temp').textContent=d.valid?d.temperature.toFixed(1)+' C':'--';");
-  html += F("document.getElementById('bed-raw').textContent=d.rawAdc;");
+  html += F("document.getElementById('bed-raw').textContent=d.valid?d.rawAdc+' / '+d.filteredAdc.toFixed(1):d.rawAdc;");
   html += F("document.getElementById('bed-resistance').textContent=d.valid?Math.round(d.resistance)+' ohm':'--';}catch(e){}}");
   html += F("function updateNfc(d){");
   html += F("document.getElementById('pn5180-status').textContent=d.readerPresent?(d.rfReady?'PN5180 pronto':'PN5180 rilevato, RF non pronta'):'PN5180 non rilevato';");
@@ -518,12 +648,18 @@ String dashboardHtml() {
   html += F("let done=false;const t=setTimeout(()=>{if(!done){b.disabled=false;b.textContent='Leggi tag';document.getElementById('pn5180-scan-status').textContent='Lettura senza risposta: premi EN/RST se il portale resta fermo';}},3000);");
   html += F("try{const r=await fetch('/api/nfc/read?ts='+Date.now());done=true;clearTimeout(t);updateNfc(await r.json());}catch(e){done=true;clearTimeout(t);document.getElementById('pn5180-scan-status').textContent='Errore richiesta lettura';}");
   html += F("b.disabled=false;b.textContent='Leggi tag';}");
-  html += F("function updateHeater(d){document.getElementById('heater-state').textContent=d.enabled?'ON':'OFF';}");
+  html += F("function updateHeater(d){document.getElementById('heater-state').textContent=d.enabled?'ON':'OFF';");
+  html += F("document.getElementById('heater-mode').textContent=d.automatic?'AUTO':'Manuale';");
+  html += F("document.getElementById('heater-status').textContent=d.status;");
+  html += F("document.getElementById('heater-setpoint').textContent=d.setpoint.toFixed(1)+' C';");
+  html += F("document.getElementById('heater-output').textContent=d.outputPercent.toFixed(1)+' %';}");
   html += F("async function refreshHeater(){try{const r=await fetch('/api/heater');updateHeater(await r.json());}catch(e){}}");
   html += F("async function setHeaterState(v){try{const r=await fetch('/api/heater/'+(v?'on':'off')+'?ts='+Date.now());updateHeater(await r.json());}catch(e){document.getElementById('heater-state').textContent='Errore';}}");
+  html += F("async function setHeaterAuto(v){try{const r=await fetch('/api/heater/auto/'+(v?'on':'off')+'?ts='+Date.now());updateHeater(await r.json());}catch(e){document.getElementById('heater-status').textContent='Errore';}}");
   html += F("function updateCountdown(){document.getElementById('countdown').textContent=secondsLeft;");
   html += F("secondsLeft--;if(secondsLeft<0){secondsLeft=60;refreshData();refreshBed();}}");
   html += F("setInterval(updateCountdown,1000);");
+  html += F("setInterval(()=>{refreshBed();refreshHeater();},2000);");
   html += F("window.addEventListener('load',()=>{updateCountdown();refreshData();refreshBed();refreshNfc();refreshHeater();});");
   html += F("</script>");
   html += F("</head><body><main>");
@@ -541,8 +677,10 @@ String dashboardHtml() {
   html += F("</div></article>");
   html += F("<article class=\"card\"><div class=\"label\">Piatto</div><div class=\"value\" id=\"bed-temp\">");
   html += valueOrDash(bedData.temperature, " C");
-  html += F("</div><div class=\"status\">ADC <span id=\"bed-raw\">");
+  html += F("</div><div class=\"status\">ADC grezzo/filtrato <span id=\"bed-raw\">");
   html += String(bedData.rawAdc);
+  html += F(" / ");
+  html += bedData.valid ? String(bedData.filteredAdc, 1) : "--";
   html += F("</span> - R <span id=\"bed-resistance\">");
   html += bedData.valid ? String(bedData.resistance, 0) + " ohm" : "--";
   html += F("</span></div></article>");
@@ -579,7 +717,17 @@ String dashboardHtml() {
   html += String(HEATER_PIN);
   html += F(" - Stato: <strong id=\"heater-state\">");
   html += heaterEnabled ? "ON" : "OFF";
-  html += F("</strong><br><button class=\"danger\" onclick=\"setHeaterState(true)\">ON</button>");
+  html += F("</strong><br>Modo: <strong id=\"heater-mode\">");
+  html += heaterControl.automatic ? "AUTO" : "Manuale";
+  html += F("</strong><br>PI: <span id=\"heater-status\">");
+  html += heaterControl.status;
+  html += F("</span><br>Setpoint: <span id=\"heater-setpoint\">");
+  html += String(heaterControl.setpoint, 1);
+  html += F(" C</span> - Output: <span id=\"heater-output\">");
+  html += String(heaterControl.outputPercent, 1);
+  html += F(" %</span><br><button onclick=\"setHeaterAuto(true)\">AUTO</button>");
+  html += F("<button class=\"secondary\" onclick=\"setHeaterAuto(false)\">STOP AUTO</button>");
+  html += F("<br><button class=\"danger\" onclick=\"setHeaterState(true)\">ON manuale</button>");
   html += F("<button class=\"secondary\" onclick=\"setHeaterState(false)\">OFF</button>");
   html += F("</div></section>");
   html += F("<p class=\"status\"><span id=\"updated\">Aggiornamento automatico</span> fra <strong id=\"countdown\">60</strong> secondi</p>");
@@ -621,12 +769,16 @@ void handleApiNfcRead() {
 
 void handleApiHeater() {
   Serial.println("HTTP GET /api/heater");
+  updateHeaterControl();
   server.sendHeader("Cache-Control", "no-store");
   server.send(200, "application/json", heaterJson());
 }
 
 void handleApiHeaterOn() {
   Serial.println("HTTP GET /api/heater/on");
+  heaterControl.automatic = false;
+  heaterControl.outputPercent = 0.0F;
+  heaterControl.status = "Manuale";
   setHeater(true);
   server.sendHeader("Cache-Control", "no-store");
   server.send(200, "application/json", heaterJson());
@@ -634,7 +786,31 @@ void handleApiHeaterOn() {
 
 void handleApiHeaterOff() {
   Serial.println("HTTP GET /api/heater/off");
-  setHeater(false);
+  stopHeaterAutomation("Manuale");
+  server.sendHeader("Cache-Control", "no-store");
+  server.send(200, "application/json", heaterJson());
+}
+
+void handleApiHeaterAutoOn() {
+  Serial.println("HTTP GET /api/heater/auto/on");
+  readBedTemperature(true);
+
+  if (!bedData.valid) {
+    stopHeaterAutomation("STOP: NTC non valida");
+  } else if (bedData.temperature >= BED_SAFETY_LIMIT_C) {
+    stopHeaterAutomation("STOP: limite sicurezza");
+  } else {
+    startHeaterAutomation();
+    updateHeaterControl();
+  }
+
+  server.sendHeader("Cache-Control", "no-store");
+  server.send(200, "application/json", heaterJson());
+}
+
+void handleApiHeaterAutoOff() {
+  Serial.println("HTTP GET /api/heater/auto/off");
+  stopHeaterAutomation("Manuale");
   server.sendHeader("Cache-Control", "no-store");
   server.send(200, "application/json", heaterJson());
 }
@@ -690,6 +866,8 @@ void setup() {
   server.on("/api/heater", HTTP_GET, handleApiHeater);
   server.on("/api/heater/on", HTTP_GET, handleApiHeaterOn);
   server.on("/api/heater/off", HTTP_GET, handleApiHeaterOff);
+  server.on("/api/heater/auto/on", HTTP_GET, handleApiHeaterAutoOn);
+  server.on("/api/heater/auto/off", HTTP_GET, handleApiHeaterAutoOff);
   server.onNotFound(handleNotFound);
   server.begin();
 
@@ -700,4 +878,5 @@ void loop() {
   server.handleClient();
   readSensor();
   readBedTemperature();
+  updateHeaterControl();
 }
