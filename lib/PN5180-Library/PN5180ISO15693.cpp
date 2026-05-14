@@ -552,9 +552,14 @@ ISO15693ErrorCode PN5180ISO15693::issueISO15693Command(uint8_t *cmd, uint8_t cmd
   if (0 == (status & RX_SOF_DET_IRQ_STAT)) {
     return EC_NO_CARD;
   }
+  unsigned long started = millis();
   while (0 == (status & RX_IRQ_STAT)) {
     delay(10);
     status = getIRQStatus();
+    if (millis() - started > 300) {
+      clearIRQStatus(TX_IRQ_STAT | IDLE_IRQ_STAT | RX_SOF_DET_IRQ_STAT | RX_IRQ_STAT);
+      return EC_NO_CARD;
+    }
   }
 
   uint32_t rxStatus;
