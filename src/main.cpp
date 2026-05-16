@@ -104,6 +104,12 @@ HeaterControlData heaterControl;
 bool heaterEnabled = false;
 
 void clearNfcReadState();
+String dashboardHtml(bool tagPage = false);
+
+constexpr uint8_t OPENPRINTTAG_MIME_TYPE[] = {
+  'a', 'p', 'p', 'l', 'i', 'c', 'a', 't', 'i', 'o', 'n', '/',
+  'v', 'n', 'd', '.', 'o', 'p', 'e', 'n', 'p', 'r', 'i', 'n', 't', 't', 'a', 'g'
+};
 
 String bytesToVersion(const uint8_t *bytes) {
   return String(bytes[1]) + "." + String(bytes[0]);
@@ -141,6 +147,21 @@ String uidToStringReversed(const uint8_t *uid, uint8_t uidLength) {
 
   value.toUpperCase();
   return value;
+}
+
+String escapeJson(const String &value) {
+  String escaped;
+  escaped.reserve(value.length() + 8);
+
+  for (uint16_t i = 0; i < value.length(); i++) {
+    const char c = value[i];
+    if (c == '\\' || c == '"') {
+      escaped += '\\';
+    }
+    escaped += c;
+  }
+
+  return escaped;
 }
 
 String valueOrDash(float value, const char *suffix) {
@@ -224,6 +245,200 @@ void resetNfcRf() {
 void resetNfc15693Rf() {
   nfc15693.reset();
   nfc15693.setupRF();
+}
+
+uint16_t appendCborUInt(uint8_t *buffer, uint16_t pos, uint32_t value) {
+  if (value < 24) {
+    buffer[pos++] = value;
+  } else if (value <= 0xff) {
+    buffer[pos++] = 0x18;
+    buffer[pos++] = value;
+  } else if (value <= 0xffff) {
+    buffer[pos++] = 0x19;
+    buffer[pos++] = value >> 8;
+    buffer[pos++] = value & 0xff;
+  } else {
+    buffer[pos++] = 0x1A;
+    buffer[pos++] = (value >> 24) & 0xff;
+    buffer[pos++] = (value >> 16) & 0xff;
+    buffer[pos++] = (value >> 8) & 0xff;
+    buffer[pos++] = value & 0xff;
+  }
+
+  return pos;
+}
+
+uint16_t appendCborFloat32(uint8_t *buffer, uint16_t pos, float value) {
+  union {
+    float f;
+    uint32_t u;
+  } data;
+  data.f = value;
+
+  buffer[pos++] = 0xFA;
+  buffer[pos++] = (data.u >> 24) & 0xff;
+  buffer[pos++] = (data.u >> 16) & 0xff;
+  buffer[pos++] = (data.u >> 8) & 0xff;
+  buffer[pos++] = data.u & 0xff;
+  return pos;
+}
+
+uint16_t appendCborText(uint8_t *buffer, uint16_t pos, String value) {
+  value.trim();
+  if (value.length() > 31) {
+    value = value.substring(0, 31);
+  }
+
+  const uint8_t len = value.length();
+  if (len < 24) {
+    buffer[pos++] = 0x60 | len;
+  } else {
+    buffer[pos++] = 0x78;
+    buffer[pos++] = len;
+  }
+
+  for (uint8_t i = 0; i < len; i++) {
+    buffer[pos++] = value[i];
+  }
+
+  return pos;
+}
+
+uint8_t hexNibble(char c) {
+  if (c >= '0' && c <= '9') {
+    return c - '0';
+  }
+  if (c >= 'a' && c <= 'f') {
+    return c - 'a' + 10;
+  }
+  if (c >= 'A' && c <= 'F') {
+    return c - 'A' + 10;
+  }
+  return 0;
+}
+
+uint16_t appendCborColor(uint8_t *buffer, uint16_t pos, String color) {
+  color.trim();
+  color.replace("#", "");
+  if (color.length() != 6 && color.length() != 8) {
+    color = "FFFFFF";
+  }
+
+  const uint8_t bytes = color.length() == 8 ? 4 : 3;
+  buffer[pos++] = 0x40 | bytes;
+  for (uint8_t i = 0; i < bytes; i++) {
+    buffer[pos++] = (hexNibble(color[i * 2]) << 4) | hexNibble(color[(i * 2) + 1]);
+  }
+
+  return pos;
+}
+
+uint16_t buildOpenPrintTagPayload(uint8_t *payload, uint16_t payloadSize, const String &brandName,
+                                  const String &materialName, uint8_t materialType, uint16_t minPrintTemp,
+                                  uint16_t maxPrintTemp, uint16_t minBedTemp, uint16_t maxBedTemp,
+                                  uint16_t dryingTemp, uint16_t dryingTime, const String &primaryColor,
+                                  uint16_t nominalWeight, uint16_t actualWeight, uint16_t emptyWeight,
+                                  float density, float filamentDiameter, uint32_t nominalLength,
+                                  uint32_t actualLength, uint32_t manufacturedDate, const String &country,
+                                  uint16_t spoolWidth, uint16_t spoolOuterDiameter, uint16_t spoolInnerDiameter,
+                                  uint16_t spoolHoleDiameter) {
+  uint16_t pos = 0;
+  payload[pos++] = 0xA0;  // Meta section: empty CBOR map.
+  payload[pos++] = 0xB8;  // Main section: CBOR map with 24 pairs.
+  payload[pos++] = 0x18;
+
+  pos = appendCborUInt(payload, pos, 8);
+  pos = appendCborUInt(payload, pos, 0);  // material_class = FFF
+  pos = appendCborUInt(payload, pos, 9);
+  pos = appendCborUInt(payload, pos, materialType);
+  pos = appendCborUInt(payload, pos, 10);
+  pos = appendCborText(payload, pos, materialName);
+  pos = appendCborUInt(payload, pos, 11);
+  pos = appendCborText(payload, pos, brandName);
+  pos = appendCborUInt(payload, pos, 14);
+  pos = appendCborUInt(payload, pos, manufacturedDate);
+  pos = appendCborUInt(payload, pos, 16);
+  pos = appendCborUInt(payload, pos, nominalWeight);
+  pos = appendCborUInt(payload, pos, 17);
+  pos = appendCborUInt(payload, pos, actualWeight);
+  pos = appendCborUInt(payload, pos, 18);
+  pos = appendCborUInt(payload, pos, emptyWeight);
+  pos = appendCborUInt(payload, pos, 19);
+  pos = appendCborColor(payload, pos, primaryColor);
+  pos = appendCborUInt(payload, pos, 29);
+  pos = appendCborFloat32(payload, pos, density);
+  pos = appendCborUInt(payload, pos, 30);
+  pos = appendCborFloat32(payload, pos, filamentDiameter);
+  pos = appendCborUInt(payload, pos, 34);
+  pos = appendCborUInt(payload, pos, minPrintTemp);
+  pos = appendCborUInt(payload, pos, 35);
+  pos = appendCborUInt(payload, pos, maxPrintTemp);
+  pos = appendCborUInt(payload, pos, 37);
+  pos = appendCborUInt(payload, pos, minBedTemp);
+  pos = appendCborUInt(payload, pos, 38);
+  pos = appendCborUInt(payload, pos, maxBedTemp);
+  pos = appendCborUInt(payload, pos, 42);
+  pos = appendCborUInt(payload, pos, spoolWidth);
+  pos = appendCborUInt(payload, pos, 43);
+  pos = appendCborUInt(payload, pos, spoolOuterDiameter);
+  pos = appendCborUInt(payload, pos, 44);
+  pos = appendCborUInt(payload, pos, spoolInnerDiameter);
+  pos = appendCborUInt(payload, pos, 45);
+  pos = appendCborUInt(payload, pos, spoolHoleDiameter);
+  pos = appendCborUInt(payload, pos, 53);
+  pos = appendCborUInt(payload, pos, nominalLength);
+  pos = appendCborUInt(payload, pos, 54);
+  pos = appendCborUInt(payload, pos, actualLength);
+  pos = appendCborUInt(payload, pos, 55);
+  pos = appendCborText(payload, pos, country);
+  pos = appendCborUInt(payload, pos, 57);
+  pos = appendCborUInt(payload, pos, dryingTemp);
+  pos = appendCborUInt(payload, pos, 58);
+  pos = appendCborUInt(payload, pos, dryingTime);
+
+  return min<uint16_t>(pos, payloadSize);
+}
+
+uint16_t buildOpenPrintTagMemory(uint8_t *memory, uint16_t memorySize, const String &brandName,
+                                 const String &materialName, uint8_t materialType, uint16_t minPrintTemp,
+                                 uint16_t maxPrintTemp, uint16_t minBedTemp, uint16_t maxBedTemp,
+                                 uint16_t dryingTemp, uint16_t dryingTime, const String &primaryColor,
+                                 uint16_t nominalWeight, uint16_t actualWeight, uint16_t emptyWeight,
+                                 float density, float filamentDiameter, uint32_t nominalLength,
+                                 uint32_t actualLength, uint32_t manufacturedDate, const String &country,
+                                 uint16_t spoolWidth, uint16_t spoolOuterDiameter, uint16_t spoolInnerDiameter,
+                                 uint16_t spoolHoleDiameter) {
+  memset(memory, 0, memorySize);
+
+  uint8_t payload[220] = {0};
+  const uint16_t payloadLength = buildOpenPrintTagPayload(payload, sizeof(payload), brandName, materialName,
+                                                          materialType, minPrintTemp, maxPrintTemp, minBedTemp,
+                                                          maxBedTemp, dryingTemp, dryingTime, primaryColor,
+                                                          nominalWeight, actualWeight, emptyWeight, density,
+                                                          filamentDiameter, nominalLength, actualLength,
+                                                          manufacturedDate, country, spoolWidth,
+                                                          spoolOuterDiameter, spoolInnerDiameter,
+                                                          spoolHoleDiameter);
+
+  memory[0] = 0xE1;  // NFC-V capability container.
+  memory[1] = 0x40;
+  memory[2] = 0x27;  // 312 bytes available after the CC record.
+  memory[3] = 0x01;
+
+  uint16_t pos = 4;
+  const uint8_t ndefLength = 3 + sizeof(OPENPRINTTAG_MIME_TYPE) + payloadLength;
+  memory[pos++] = 0x03;  // NDEF Message TLV.
+  memory[pos++] = ndefLength;
+  memory[pos++] = 0xD2;  // MB + ME + SR + TNF MIME media.
+  memory[pos++] = sizeof(OPENPRINTTAG_MIME_TYPE);
+  memory[pos++] = payloadLength;
+  memcpy(&memory[pos], OPENPRINTTAG_MIME_TYPE, sizeof(OPENPRINTTAG_MIME_TYPE));
+  pos += sizeof(OPENPRINTTAG_MIME_TYPE);
+  memcpy(&memory[pos], payload, payloadLength);
+  pos += payloadLength;
+  memory[pos++] = 0xFE;  // TLV terminator.
+
+  return pos;
 }
 
 String hexByte(uint8_t value) {
@@ -376,6 +591,64 @@ bool readIso15693Tag() {
   Serial.println(nfcData.lastUid);
   Serial.print("Memoria ISO15693: ");
   Serial.println(nfcData.memoryInfo);
+  return true;
+}
+
+bool writeOpenPrintTag(uint8_t materialType, const String &brandName, const String &materialName,
+                       uint16_t minPrintTemp, uint16_t maxPrintTemp, uint16_t minBedTemp,
+                       uint16_t maxBedTemp, uint16_t dryingTemp, uint16_t dryingTime,
+                       const String &primaryColor, uint16_t nominalWeight, uint16_t actualWeight,
+                       uint16_t emptyWeight, float density, float filamentDiameter, uint32_t nominalLength,
+                       uint32_t actualLength, uint32_t manufacturedDate, const String &country,
+                       uint16_t spoolWidth, uint16_t spoolOuterDiameter, uint16_t spoolInnerDiameter,
+                       uint16_t spoolHoleDiameter) {
+  resetNfc15693Rf();
+
+  uint8_t uid[8] = {0};
+  ISO15693ErrorCode rc = EC_NO_CARD;
+  for (uint8_t attempt = 1; attempt <= NFC_READ_ATTEMPTS; attempt++) {
+    rc = nfc15693.getInventory(uid);
+    if (rc == ISO15693_EC_OK) {
+      break;
+    }
+
+    resetNfc15693Rf();
+    delay(NFC_RETRY_DELAY_MS);
+  }
+
+  if (rc != ISO15693_EC_OK) {
+    clearNfcReadState();
+    nfcData.lastStatus = "Scrittura annullata: nessun tag ISO15693";
+    return false;
+  }
+
+  uint8_t memory[256] = {0};
+  const uint16_t usedBytes = buildOpenPrintTagMemory(memory, sizeof(memory), brandName, materialName, materialType,
+                                                     minPrintTemp, maxPrintTemp, minBedTemp, maxBedTemp,
+                                                     dryingTemp, dryingTime, primaryColor, nominalWeight,
+                                                     actualWeight, emptyWeight, density, filamentDiameter,
+                                                     nominalLength, actualLength, manufacturedDate, country,
+                                                     spoolWidth, spoolOuterDiameter, spoolInnerDiameter,
+                                                     spoolHoleDiameter);
+  const uint8_t blocksToWrite = (usedBytes + 3) / 4;
+
+  for (uint8_t blockNo = 0; blockNo < blocksToWrite; blockNo++) {
+    rc = nfc15693.writeSingleBlock(uid, blockNo, &memory[blockNo * 4], 4);
+    if (rc != ISO15693_EC_OK) {
+      nfcData.lastStatus = "Errore scrittura blocco " + String(blockNo);
+      Serial.print("Errore scrittura ISO15693 blocco ");
+      Serial.print(blockNo);
+      Serial.print(": ");
+      Serial.println(rc);
+      return false;
+    }
+    delay(20);
+  }
+
+  nfcData.lastStatus = "OpenPrintTag scritto";
+  Serial.print("OpenPrintTag scritto, blocchi: ");
+  Serial.println(blocksToWrite);
+  readIso15693Tag();
   return true;
 }
 
@@ -629,9 +902,9 @@ String nfcJson() {
   json += "\",\"memoryInfo\":\"";
   json += nfcData.memoryInfo;
   json += "\",\"dataFormat\":\"";
-  json += nfcData.dataFormat;
+  json += escapeJson(nfcData.dataFormat);
   json += "\",\"memoryDump\":\"";
-  json += nfcData.memoryDump;
+  json += escapeJson(nfcData.memoryDump);
   json += "\"";
   json += "}";
   return json;
@@ -736,7 +1009,7 @@ String heaterJson() {
   return json;
 }
 
-String dashboardHtml() {
+String dashboardHtml(bool tagPage) {
   readSensor();
   readBedTemperature();
 
@@ -750,15 +1023,25 @@ String dashboardHtml() {
   html += F("<style>");
   html += F(":root{font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#1f2933;background:#f4f7f8}");
   html += F("body{margin:0;padding:24px}");
-  html += F("main{max-width:820px;margin:auto}");
+  html += F("main{max-width:1180px;margin:auto}");
   html += F("h1{font-size:32px;margin:0 0 6px}");
   html += F(".sub{color:#52606d;margin:0 0 24px}");
+  html += F("nav{display:flex;gap:10px;margin:0 0 18px}");
+  html += F("nav a{border-radius:6px;background:#d9e2ec;color:#102a43;text-decoration:none;padding:9px 12px;font-weight:700}");
+  html += F("nav a.active{background:#0f766e;color:white}");
+  html += F(".tags .temperature-panel,.tags .heater-panel,.temperature .tag-panel{display:none}");
   html += F(".grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px}");
   html += F(".card{background:white;border:1px solid #d9e2ec;border-radius:8px;padding:18px}");
   html += F(".wide{margin-top:14px}");
   html += F(".label{font-size:14px;color:#52606d;margin-bottom:10px}");
   html += F(".value{font-size:34px;font-weight:700;color:#102a43}");
   html += F(".small{font-size:16px;line-height:1.55;color:#102a43}");
+  html += F(".formgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-top:16px}");
+  html += F("label{display:grid;gap:6px;font-size:13px;color:#52606d;font-weight:700}");
+  html += F("input,select{border:1px solid #bcccdc;border-radius:6px;padding:9px 10px;font:inherit;color:#102a43;background:white}");
+  html += F("input[type=color]{width:100%;height:42px;padding:3px;cursor:pointer}");
+  html += F(".colorline{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}");
+  html += F(".hex{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#102a43;background:#f0f4f8;border:1px solid #d9e2ec;border-radius:6px;padding:9px 10px}");
   html += F("code{display:block;margin-top:6px;white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;line-height:1.45}");
   html += F("button{margin-top:14px;border:0;border-radius:6px;background:#0f766e;color:white;padding:10px 14px;font-size:15px;font-weight:700}");
   html += F("button.secondary{background:#334e68;margin-left:8px}");
@@ -786,13 +1069,19 @@ String dashboardHtml() {
   html += F("document.getElementById('pn5180-atqa').textContent=d.atqa;");
   html += F("document.getElementById('pn5180-sak').textContent=d.sak;");
   html += F("document.getElementById('pn5180-memory').textContent=d.memoryInfo;");
-  html += F("document.getElementById('pn5180-format').textContent=d.dataFormat;");
-  html += F("document.getElementById('pn5180-dump').innerHTML=d.memoryDump;}");
+  html += F("document.getElementById('pn5180-format').textContent=d.dataFormat;}");
   html += F("async function refreshNfc(){try{const r=await fetch('/api/nfc');updateNfc(await r.json());}catch(e){}}");
   html += F("async function readTag(){const b=document.getElementById('read-tag');b.disabled=true;b.textContent='Lettura...';");
   html += F("let done=false;const t=setTimeout(()=>{if(!done){b.disabled=false;b.textContent='Leggi tag';document.getElementById('pn5180-scan-status').textContent='Lettura senza risposta: premi EN/RST se il portale resta fermo';}},3000);");
   html += F("try{const r=await fetch('/api/nfc/read?ts='+Date.now());done=true;clearTimeout(t);updateNfc(await r.json());}catch(e){done=true;clearTimeout(t);document.getElementById('pn5180-scan-status').textContent='Errore richiesta lettura';}");
   html += F("b.disabled=false;b.textContent='Leggi tag';}");
+  html += F("async function writeOpenPrintTag(){if(!confirm('Scrivo questi dati sul tag appoggiato. Continuo?'))return;");
+  html += F("const b=document.getElementById('write-tag');const f=document.getElementById('tag-form');const q=new URLSearchParams(new FormData(f));");
+  html += F("const md=f.elements['mdate'].value;if(md){q.set('mdate',Math.floor(new Date(md+'T00:00:00Z').getTime()/1000));}");
+  html += F("b.disabled=true;b.textContent='Scrittura...';");
+  html += F("try{const r=await fetch('/api/nfc/write?'+q.toString()+'&ts='+Date.now());updateNfc(await r.json());}catch(e){document.getElementById('pn5180-scan-status').textContent='Errore scrittura';}");
+  html += F("b.disabled=false;b.textContent='Scrivi OpenPrintTag';}");
+  html += F("function syncColor(){const c=document.getElementById('tag-color');document.getElementById('tag-color-hex').textContent=c.value.toUpperCase();}");
   html += F("function updateHeater(d){document.getElementById('heater-state').textContent=d.enabled?'ON':'OFF';");
   html += F("document.getElementById('heater-mode').textContent=d.automatic?'AUTO':'Manuale';");
   html += F("document.getElementById('heater-status').textContent=d.status;");
@@ -805,12 +1094,15 @@ String dashboardHtml() {
   html += F("secondsLeft--;if(secondsLeft<0){secondsLeft=60;refreshData();refreshBed();}}");
   html += F("setInterval(updateCountdown,1000);");
   html += F("setInterval(()=>{refreshBed();refreshHeater();},2000);");
-  html += F("window.addEventListener('load',()=>{updateCountdown();refreshData();refreshBed();refreshNfc();refreshHeater();});");
+  html += F("window.addEventListener('load',()=>{updateCountdown();syncColor();refreshData();refreshBed();refreshNfc();refreshHeater();});");
   html += F("</script>");
-  html += F("</head><body><main>");
+  html += tagPage ? F("</head><body class=\"tags\"><main>") : F("</head><body class=\"temperature\"><main>");
   html += F("<h1>Essiccatore</h1>");
   html += F("<p class=\"sub\">Dati camera da BME280 e lettura PN5180 NFC</p>");
-  html += F("<section class=\"grid\">");
+  html += F("<nav><a href=\"/temperature\"");
+  html += tagPage ? F(">Temperatura</a><a class=\"active\" href=\"/tags\">Tag NFC</a></nav>") :
+                    F(" class=\"active\">Temperatura</a><a href=\"/tags\">Tag NFC</a></nav>");
+  html += F("<section class=\"grid temperature-panel\">");
   html += F("<article class=\"card\"><div class=\"label\">Temperatura</div><div class=\"value\" id=\"temperature\">");
   html += valueOrDash(sensorData.temperature, " C");
   html += F("</div></article>");
@@ -830,7 +1122,7 @@ String dashboardHtml() {
   html += bedData.valid ? String(bedData.resistance, 0) + " ohm" : "--";
   html += F("</span></div></article>");
   html += F("</section>");
-  html += F("<section class=\"card wide\"><div class=\"label\">PN5180</div><div class=\"small\">");
+  html += F("<section class=\"card wide tag-panel\"><div class=\"label\">PN5180</div><div class=\"small\">");
   html += F("<strong id=\"pn5180-status\">");
   html += nfcData.readerPresent ? (nfcData.rfReady ? "PN5180 pronto" : "PN5180 rilevato, RF non pronta") : "PN5180 non rilevato";
   html += F("</strong><br><span id=\"pn5180-version\">Product ");
@@ -855,11 +1147,34 @@ String dashboardHtml() {
   html += nfcData.memoryInfo;
   html += F("</span><br>Formato dati: <span id=\"pn5180-format\">");
   html += nfcData.dataFormat;
-  html += F("</span><br>Dump memoria:<br><code id=\"pn5180-dump\">");
-  html += nfcData.memoryDump;
-  html += F("</code><br><button id=\"read-tag\" onclick=\"readTag()\">Leggi tag</button>");
+  html += F("</span><br><button id=\"read-tag\" onclick=\"readTag()\">Leggi tag</button>");
+  html += F("<form id=\"tag-form\" class=\"formgrid\" onsubmit=\"event.preventDefault();writeOpenPrintTag();\">");
+  html += F("<label>Brand<input name=\"brand\" maxlength=\"31\" value=\"Essiccatore\"></label>");
+  html += F("<label>Materiale<input name=\"name\" maxlength=\"31\" value=\"Test PLA\"></label>");
+  html += F("<label>Tipo<select name=\"type\"><option value=\"0\">PLA</option><option value=\"1\">PETG</option><option value=\"2\">TPU</option><option value=\"3\">ABS</option><option value=\"4\">ASA</option><option value=\"5\">PC</option></select></label>");
+  html += F("<label>Colore<div class=\"colorline\"><input id=\"tag-color\" name=\"color\" type=\"color\" value=\"#ffffff\" oninput=\"syncColor()\"><span class=\"hex\" id=\"tag-color-hex\">#FFFFFF</span></div></label>");
+  html += F("<label>Peso nominale g<input name=\"nomw\" type=\"number\" min=\"0\" max=\"9999\" value=\"1000\"></label>");
+  html += F("<label>Peso reale g<input name=\"actw\" type=\"number\" min=\"0\" max=\"9999\" value=\"1000\"></label>");
+  html += F("<label>Bobina vuota g<input name=\"emptyw\" type=\"number\" min=\"0\" max=\"9999\" value=\"250\"></label>");
+  html += F("<label>Densita g/cm3<input name=\"density\" type=\"number\" min=\"0\" max=\"5\" step=\"0.01\" value=\"1.24\"></label>");
+  html += F("<label>Diametro filo mm<input name=\"diameter\" type=\"number\" min=\"0\" max=\"5\" step=\"0.01\" value=\"1.75\"></label>");
+  html += F("<label>Lunghezza nominale mm<input name=\"nomlen\" type=\"number\" min=\"0\" max=\"999999\" value=\"330000\"></label>");
+  html += F("<label>Lunghezza reale mm<input name=\"actlen\" type=\"number\" min=\"0\" max=\"999999\" value=\"330000\"></label>");
+  html += F("<label>Data produzione<input name=\"mdate\" type=\"date\"></label>");
+  html += F("<label>Paese origine<input name=\"country\" maxlength=\"2\" value=\"IT\"></label>");
+  html += F("<label>Nozzle min C<input name=\"nmin\" type=\"number\" min=\"0\" max=\"350\" value=\"205\"></label>");
+  html += F("<label>Nozzle max C<input name=\"nmax\" type=\"number\" min=\"0\" max=\"350\" value=\"215\"></label>");
+  html += F("<label>Piatto min C<input name=\"bmin\" type=\"number\" min=\"0\" max=\"140\" value=\"55\"></label>");
+  html += F("<label>Piatto max C<input name=\"bmax\" type=\"number\" min=\"0\" max=\"140\" value=\"60\"></label>");
+  html += F("<label>Essiccazione C<input name=\"drytemp\" type=\"number\" min=\"0\" max=\"120\" value=\"45\"></label>");
+  html += F("<label>Essiccazione min<input name=\"drytime\" type=\"number\" min=\"0\" max=\"9999\" value=\"240\"></label>");
+  html += F("<label>Larghezza bobina mm<input name=\"spoolw\" type=\"number\" min=\"0\" max=\"999\" value=\"68\"></label>");
+  html += F("<label>Diametro esterno mm<input name=\"spoolod\" type=\"number\" min=\"0\" max=\"999\" value=\"200\"></label>");
+  html += F("<label>Diametro interno mm<input name=\"spoolid\" type=\"number\" min=\"0\" max=\"999\" value=\"100\"></label>");
+  html += F("<label>Foro centrale mm<input name=\"spoolhole\" type=\"number\" min=\"0\" max=\"999\" value=\"52\"></label>");
+  html += F("</form><button id=\"write-tag\" onclick=\"writeOpenPrintTag()\">Scrivi OpenPrintTag</button>");
   html += F("</div></section>");
-  html += F("<section class=\"card wide\"><div class=\"label\">MOSFET riscaldatore</div><div class=\"small\">");
+  html += F("<section class=\"card wide heater-panel\"><div class=\"label\">MOSFET riscaldatore</div><div class=\"small\">");
   html += F("GPIO ");
   html += String(HEATER_PIN);
   html += F(" - Stato: <strong id=\"heater-state\">");
@@ -886,7 +1201,19 @@ String dashboardHtml() {
 void handleRoot() {
   Serial.println("HTTP GET /");
   server.sendHeader("Cache-Control", "no-store");
-  server.send(200, "text/html", dashboardHtml());
+  server.send(200, "text/html", dashboardHtml(false));
+}
+
+void handleTemperaturePage() {
+  Serial.println("HTTP GET /temperature");
+  server.sendHeader("Cache-Control", "no-store");
+  server.send(200, "text/html", dashboardHtml(false));
+}
+
+void handleTagsPage() {
+  Serial.println("HTTP GET /tags");
+  server.sendHeader("Cache-Control", "no-store");
+  server.send(200, "text/html", dashboardHtml(true));
 }
 
 void handleApiBme280() {
@@ -910,6 +1237,34 @@ void handleApiNfc() {
 void handleApiNfcRead() {
   Serial.println("HTTP /api/nfc/read");
   readNfcTag();
+  server.sendHeader("Cache-Control", "no-store");
+  server.send(200, "application/json", nfcJson());
+}
+
+void handleApiNfcWriteTest() {
+  Serial.println("HTTP /api/nfc/write");
+  const uint8_t materialType = constrain(server.arg("type").toInt(), 0, 255);
+  String brandName = server.arg("brand");
+  String materialName = server.arg("name");
+  if (brandName.length() == 0) {
+    brandName = "Essiccatore";
+  }
+  if (materialName.length() == 0) {
+    materialName = "Test PLA";
+  }
+
+  writeOpenPrintTag(materialType, brandName, materialName, constrain(server.arg("nmin").toInt(), 0, 350),
+                    constrain(server.arg("nmax").toInt(), 0, 350), constrain(server.arg("bmin").toInt(), 0, 140),
+                    constrain(server.arg("bmax").toInt(), 0, 140), constrain(server.arg("drytemp").toInt(), 0, 120),
+                    constrain(server.arg("drytime").toInt(), 0, 9999), server.arg("color"),
+                    constrain(server.arg("nomw").toInt(), 0, 9999), constrain(server.arg("actw").toInt(), 0, 9999),
+                    constrain(server.arg("emptyw").toInt(), 0, 9999), constrain(server.arg("density").toFloat(), 0.0F, 5.0F),
+                    constrain(server.arg("diameter").toFloat(), 0.0F, 5.0F),
+                    constrain((uint32_t)server.arg("nomlen").toInt(), (uint32_t)0, (uint32_t)999999),
+                    constrain((uint32_t)server.arg("actlen").toInt(), (uint32_t)0, (uint32_t)999999),
+                    server.arg("mdate").toInt() > 0 ? (uint32_t)server.arg("mdate").toInt() : 0, server.arg("country"),
+                    constrain(server.arg("spoolw").toInt(), 0, 999), constrain(server.arg("spoolod").toInt(), 0, 999),
+                    constrain(server.arg("spoolid").toInt(), 0, 999), constrain(server.arg("spoolhole").toInt(), 0, 999));
   server.sendHeader("Cache-Control", "no-store");
   server.send(200, "application/json", nfcJson());
 }
@@ -1006,10 +1361,13 @@ void setup() {
   Serial.println(WiFi.softAPIP());
 
   server.on("/", handleRoot);
+  server.on("/temperature", handleTemperaturePage);
+  server.on("/tags", handleTagsPage);
   server.on("/api/bme280", handleApiBme280);
   server.on("/api/bed", HTTP_GET, handleApiBed);
   server.on("/api/nfc", handleApiNfc);
   server.on("/api/nfc/read", HTTP_GET, handleApiNfcRead);
+  server.on("/api/nfc/write", HTTP_GET, handleApiNfcWriteTest);
   server.on("/api/heater", HTTP_GET, handleApiHeater);
   server.on("/api/heater/on", HTTP_GET, handleApiHeaterOn);
   server.on("/api/heater/off", HTTP_GET, handleApiHeaterOff);
