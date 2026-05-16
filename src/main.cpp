@@ -42,7 +42,7 @@ constexpr float BED_TEMP_OFFSET_C = -2.5F;
 constexpr float DEFAULT_BED_SETPOINT_C = 45.0F;
 constexpr float BED_SAFETY_LIMIT_C = 60.0F;
 constexpr float PI_KP = 8.0F;
-constexpr float PI_KI = 0.006F;
+constexpr float PI_KI = 0.010F;
 constexpr unsigned long PI_UPDATE_INTERVAL_MS = 3000;
 constexpr unsigned long HEATER_WINDOW_MS = 10000;
 Adafruit_BME280 bme;
