@@ -40,9 +40,9 @@ constexpr float BED_ADC_FILTER_ALPHA = 0.15F;
 constexpr float BED_MAX_ADC_STEP = 35.0F;
 constexpr float BED_TEMP_OFFSET_C = -2.5F;
 constexpr float DEFAULT_BED_SETPOINT_C = 45.0F;
-constexpr float BED_SAFETY_LIMIT_C = 60.0F;
-constexpr float PI_KP = 8.0F;
-constexpr float PI_KI = 0.010F;
+constexpr float BED_SAFETY_LIMIT_C = 90.0F;
+constexpr float PI_KP = 10.0F;
+constexpr float PI_KI = 0.028F;
 constexpr unsigned long PI_UPDATE_INTERVAL_MS = 3000;
 constexpr unsigned long HEATER_WINDOW_MS = 10000;
 Adafruit_BME280 bme;
@@ -53,7 +53,6 @@ WebServer server(80);
 struct SensorData {
   float temperature = NAN;
   float humidity = NAN;
-  float pressure = NAN;
   unsigned long lastReadMs = 0;
   bool valid = false;
 };
@@ -95,6 +94,22 @@ struct HeaterControlData {
   String status = "Manuale";
   unsigned long lastUpdateMs = 0;
   unsigned long windowStartMs = 0;
+  uint32_t cycleDurationSeconds = 360UL * 60UL;
+  uint32_t cycleRemainingSeconds = 360UL * 60UL;
+  unsigned long cycleEndMs = 0;
+  bool cycleRunning = false;
+};
+
+struct MaterialDryProfile {
+  const char *name;
+  float recommendedTemp;
+  uint16_t recommendedMinutes;
+};
+
+struct CustomMaterialProfile {
+  String name;
+  float recommendedTemp = 0.0F;
+  uint16_t recommendedMinutes = 0;
 };
 
 SensorData sensorData;
@@ -102,9 +117,101 @@ NfcData nfcData;
 BedData bedData;
 HeaterControlData heaterControl;
 bool heaterEnabled = false;
+uint8_t selectedMaterialProfile = 0;
+
+constexpr MaterialDryProfile MATERIAL_PROFILES[] = {
+  {"PLA", 45.0F, 360},
+  {"PETG", 55.0F, 360},
+  {"TPU", 60.0F, 240},
+  {"ASA", 80.0F, 240},
+  {"ABS", 80.0F, 240},
+  {"PC", 85.0F, 300},
+};
+constexpr uint8_t MATERIAL_PROFILE_COUNT = sizeof(MATERIAL_PROFILES) / sizeof(MATERIAL_PROFILES[0]);
+constexpr uint8_t MAX_CUSTOM_PROFILES = 8;
+CustomMaterialProfile customProfiles[MAX_CUSTOM_PROFILES];
+uint8_t customProfileCount = 0;
 
 void clearNfcReadState();
-String dashboardHtml(bool tagPage = false);
+enum PageMode : uint8_t { PAGE_TEMPERATURE, PAGE_TAGS, PAGE_SETTINGS };
+String dashboardHtml(PageMode pageMode = PAGE_TEMPERATURE);
+
+uint8_t totalMaterialProfileCount() {
+  return MATERIAL_PROFILE_COUNT + customProfileCount;
+}
+
+bool materialProfileExists(uint8_t id) {
+  return id < totalMaterialProfileCount();
+}
+
+String materialProfileName(uint8_t id) {
+  if (id < MATERIAL_PROFILE_COUNT) {
+    return MATERIAL_PROFILES[id].name;
+  }
+
+  const uint8_t customIndex = id - MATERIAL_PROFILE_COUNT;
+  if (customIndex < customProfileCount) {
+    return customProfiles[customIndex].name;
+  }
+
+  return "Sconosciuto";
+}
+
+float materialProfileTemp(uint8_t id) {
+  if (id < MATERIAL_PROFILE_COUNT) {
+    return MATERIAL_PROFILES[id].recommendedTemp;
+  }
+
+  const uint8_t customIndex = id - MATERIAL_PROFILE_COUNT;
+  if (customIndex < customProfileCount) {
+    return customProfiles[customIndex].recommendedTemp;
+  }
+
+  return DEFAULT_BED_SETPOINT_C;
+}
+
+uint16_t materialProfileMinutes(uint8_t id) {
+  if (id < MATERIAL_PROFILE_COUNT) {
+    return MATERIAL_PROFILES[id].recommendedMinutes;
+  }
+
+  const uint8_t customIndex = id - MATERIAL_PROFILE_COUNT;
+  if (customIndex < customProfileCount) {
+    return customProfiles[customIndex].recommendedMinutes;
+  }
+
+  return 360;
+}
+
+bool addCustomMaterialProfile(String name, float temperature, uint16_t minutes, uint8_t &newId) {
+  name.trim();
+  if (name.length() == 0 || customProfileCount >= MAX_CUSTOM_PROFILES) {
+    return false;
+  }
+
+  if (name.length() > 24) {
+    name = name.substring(0, 24);
+  }
+
+  for (uint8_t i = 0; i < name.length(); i++) {
+    const char c = name[i];
+    const bool allowed = isAlphaNumeric(c) || c == ' ' || c == '.' || c == '_' || c == '-';
+    if (!allowed) {
+      name.setCharAt(i, ' ');
+    }
+  }
+  name.trim();
+  if (name.length() == 0) {
+    return false;
+  }
+
+  customProfiles[customProfileCount].name = name;
+  customProfiles[customProfileCount].recommendedTemp = constrain(temperature, 20.0F, BED_SAFETY_LIMIT_C);
+  customProfiles[customProfileCount].recommendedMinutes = constrain(minutes, (uint16_t)1, (uint16_t)9999);
+  newId = MATERIAL_PROFILE_COUNT + customProfileCount;
+  customProfileCount++;
+  return true;
+}
 
 constexpr uint8_t OPENPRINTTAG_MIME_TYPE[] = {
   'a', 'p', 'p', 'l', 'i', 'c', 'a', 't', 'i', 'o', 'n', '/',
@@ -754,8 +861,7 @@ void readSensor(bool force = false) {
   sensorData.lastReadMs = now;
   sensorData.temperature = bme.readTemperature();
   sensorData.humidity = bme.readHumidity();
-  sensorData.pressure = bme.readPressure() / 100.0F;
-  sensorData.valid = !isnan(sensorData.temperature) && !isnan(sensorData.humidity) && !isnan(sensorData.pressure);
+  sensorData.valid = !isnan(sensorData.temperature) && !isnan(sensorData.humidity);
 
   if (!sensorData.valid) {
     Serial.println("BME280: lettura non valida");
@@ -766,9 +872,7 @@ void readSensor(bool force = false) {
   Serial.print(sensorData.temperature);
   Serial.print(" C, Umidita: ");
   Serial.print(sensorData.humidity);
-  Serial.print(" %, Pressione: ");
-  Serial.print(sensorData.pressure);
-  Serial.println(" hPa");
+  Serial.println(" %");
 }
 
 void readBedTemperature(bool force = false) {
@@ -845,8 +949,6 @@ String sensorJson() {
   json += sensorData.valid ? String(sensorData.temperature, 2) : "null";
   json += ",\"humidity\":";
   json += sensorData.valid ? String(sensorData.humidity, 2) : "null";
-  json += ",\"pressure\":";
-  json += sensorData.valid ? String(sensorData.pressure, 2) : "null";
   json += ",\"ageSeconds\":";
   json += sensorData.valid ? String((millis() - sensorData.lastReadMs) / 1000) : "null";
   json += "}";
@@ -870,6 +972,45 @@ String bedJson() {
   json += ",\"pin\":";
   json += String(BED_THERMISTOR_PIN);
   json += "}";
+  return json;
+}
+
+String settingsJson() {
+  String json = "{";
+  json += "\"selected\":";
+  json += String(selectedMaterialProfile);
+  json += ",\"setpoint\":";
+  json += String(heaterControl.setpoint, 1);
+  json += ",\"cycleDurationSeconds\":";
+  json += String(heaterControl.cycleDurationSeconds);
+  json += ",\"cycleRemainingSeconds\":";
+  json += String(heaterControl.cycleRunning ? heaterControl.cycleRemainingSeconds : heaterControl.cycleDurationSeconds);
+  json += ",\"cycleRunning\":";
+  json += heaterControl.cycleRunning ? "true" : "false";
+  json += ",\"safetyLimit\":";
+  json += String(BED_SAFETY_LIMIT_C, 1);
+  json += ",\"profiles\":[";
+
+  for (uint8_t i = 0; i < totalMaterialProfileCount(); i++) {
+    if (i > 0) {
+      json += ",";
+    }
+    json += "{\"id\":";
+    json += String(i);
+    json += ",\"name\":\"";
+    json += escapeJson(materialProfileName(i));
+    json += "\",\"temperature\":";
+    json += String(materialProfileTemp(i), 1);
+    json += ",\"minutes\":";
+    json += String(materialProfileMinutes(i));
+    json += ",\"available\":";
+    json += (materialProfileTemp(i) <= BED_SAFETY_LIMIT_C) ? "true" : "false";
+    json += ",\"custom\":";
+    json += (i >= MATERIAL_PROFILE_COUNT) ? "true" : "false";
+    json += "}";
+  }
+
+  json += "]}";
   return json;
 }
 
@@ -926,6 +1067,7 @@ void stopHeaterAutomation(const String &status) {
   heaterControl.automatic = false;
   heaterControl.outputPercent = 0.0F;
   heaterControl.integral = 0.0F;
+  heaterControl.cycleRunning = false;
   heaterControl.status = status;
   setHeater(false);
 }
@@ -937,6 +1079,9 @@ void startHeaterAutomation() {
   heaterControl.integral = 0.0F;
   heaterControl.lastUpdateMs = now > PI_UPDATE_INTERVAL_MS ? now - PI_UPDATE_INTERVAL_MS : 0;
   heaterControl.windowStartMs = now;
+  heaterControl.cycleEndMs = now + (heaterControl.cycleDurationSeconds * 1000UL);
+  heaterControl.cycleRemainingSeconds = heaterControl.cycleDurationSeconds;
+  heaterControl.cycleRunning = heaterControl.cycleDurationSeconds > 0;
   heaterControl.status = "Automatico PI";
   setHeater(false);
 }
@@ -959,6 +1104,17 @@ void updateHeaterControl() {
   }
 
   const unsigned long now = millis();
+
+  if (heaterControl.cycleRunning) {
+    const long remainingMs = (long)(heaterControl.cycleEndMs - now);
+    if (remainingMs <= 0) {
+      heaterControl.cycleRemainingSeconds = 0;
+      stopHeaterAutomation("Ciclo completato");
+      return;
+    }
+    heaterControl.cycleRemainingSeconds = (remainingMs + 999L) / 1000L;
+  }
+
   if (now - heaterControl.windowStartMs >= HEATER_WINDOW_MS) {
     heaterControl.windowStartMs = now;
   }
@@ -1000,6 +1156,12 @@ String heaterJson() {
   json += String(heaterControl.setpoint, 1);
   json += ",\"outputPercent\":";
   json += String(heaterControl.outputPercent, 1);
+  json += ",\"cycleDurationSeconds\":";
+  json += String(heaterControl.cycleDurationSeconds);
+  json += ",\"cycleRemainingSeconds\":";
+  json += String(heaterControl.cycleRunning ? heaterControl.cycleRemainingSeconds : heaterControl.cycleDurationSeconds);
+  json += ",\"cycleRunning\":";
+  json += heaterControl.cycleRunning ? "true" : "false";
   json += ",\"safetyLimit\":";
   json += String(BED_SAFETY_LIMIT_C, 1);
   json += ",\"status\":\"";
@@ -1009,7 +1171,7 @@ String heaterJson() {
   return json;
 }
 
-String dashboardHtml(bool tagPage) {
+String dashboardHtml(PageMode pageMode) {
   readSensor();
   readBedTemperature();
 
@@ -1026,10 +1188,11 @@ String dashboardHtml(bool tagPage) {
   html += F("main{max-width:1180px;margin:auto}");
   html += F("h1{font-size:32px;margin:0 0 6px}");
   html += F(".sub{color:#52606d;margin:0 0 24px}");
-  html += F("nav{display:flex;gap:10px;margin:0 0 18px}");
+  html += F("nav{display:flex;gap:10px;margin:0 0 18px;align-items:center}");
   html += F("nav a{border-radius:6px;background:#d9e2ec;color:#102a43;text-decoration:none;padding:9px 12px;font-weight:700}");
   html += F("nav a.active{background:#0f766e;color:white}");
-  html += F(".tags .temperature-panel,.tags .heater-panel,.temperature .tag-panel{display:none}");
+  html += F(".gear{margin-left:auto;font-size:18px;line-height:1}");
+  html += F(".tags .temperature-panel,.tags .heater-panel,.tags .settings-panel,.temperature .tag-panel,.temperature .settings-panel,.settings .temperature-panel,.settings .tag-panel,.settings .heater-panel{display:none}");
   html += F(".grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px}");
   html += F(".card{background:white;border:1px solid #d9e2ec;border-radius:8px;padding:18px}");
   html += F(".wide{margin-top:14px}");
@@ -1039,6 +1202,7 @@ String dashboardHtml(bool tagPage) {
   html += F(".formgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-top:16px}");
   html += F("label{display:grid;gap:6px;font-size:13px;color:#52606d;font-weight:700}");
   html += F("input,select{border:1px solid #bcccdc;border-radius:6px;padding:9px 10px;font:inherit;color:#102a43;background:white}");
+  html += F("input[readonly]{background:#f0f4f8;color:#52606d}");
   html += F("input[type=color]{width:100%;height:42px;padding:3px;cursor:pointer}");
   html += F(".colorline{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}");
   html += F(".hex{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#102a43;background:#f0f4f8;border:1px solid #d9e2ec;border-radius:6px;padding:9px 10px}");
@@ -1047,18 +1211,23 @@ String dashboardHtml(bool tagPage) {
   html += F("button.secondary{background:#334e68;margin-left:8px}");
   html += F("button.danger{background:#b91c1c}");
   html += F(".status{margin-top:18px;color:#52606d;font-size:14px}");
+  html += F(".warn{color:#b91c1c;font-weight:700}.ok{color:#0f766e;font-weight:700}");
+  html += F("table{width:100%;border-collapse:collapse;margin-top:12px}th,td{text-align:left;border-bottom:1px solid #d9e2ec;padding:9px 6px}th{font-size:13px;color:#52606d}");
+  html += F(".inline-control{display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-top:12px}.inline-control label{min-width:190px}.inline-control button{margin-top:0}");
+  html += F(".profile-control{display:grid;grid-template-columns:1.2fr 1fr 1fr auto auto;gap:14px;align-items:end;margin-top:18px}");
+  html += F(".profile-control label{font-size:15px;min-width:0}.profile-control select,.profile-control input,.profile-control .hex{height:46px;font-size:18px;font-weight:800;box-sizing:border-box}.profile-control button{height:46px;margin-top:0;padding:0 18px}");
+  html += F(".heater-summary{display:flex;gap:22px;align-items:center;flex-wrap:wrap;margin:4px 0 12px}.metric{display:grid;gap:3px}.metric span{font-size:13px;color:#52606d;font-weight:700}.metric strong{font-size:22px;color:#102a43}");
+  html += F(".button-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px}.button-row button{margin-top:0}.output-inline{margin-left:auto;color:#52606d;font-size:14px}.output-inline strong{color:#102a43}");
+  html += F(".cycle-timer{display:inline-block;margin:10px 0 6px;padding:12px 18px;border-radius:8px;background:#102a43;color:white;font-size:42px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:0}");
+  html += F(".cycle-caption{font-size:13px;color:#52606d;font-weight:700;margin-top:12px}");
   html += F("</style>");
   html += F("<script>");
-  html += F("let secondsLeft=60;");
   html += F("async function refreshData(){try{const r=await fetch('/api/bme280');const d=await r.json();");
   html += F("if(d.valid){document.getElementById('temperature').textContent=d.temperature.toFixed(1)+' C';");
-  html += F("document.getElementById('humidity').textContent=d.humidity.toFixed(1)+' %';");
-  html += F("document.getElementById('pressure').textContent=d.pressure.toFixed(1)+' hPa';}");
-  html += F("document.getElementById('updated').textContent='Aggiornato ora';}catch(e){}}");
+  html += F("document.getElementById('humidity').textContent=d.humidity.toFixed(1)+' %';}");
+  html += F("}catch(e){}}");
   html += F("async function refreshBed(){try{const r=await fetch('/api/bed');const d=await r.json();");
-  html += F("document.getElementById('bed-temp').textContent=d.valid?d.temperature.toFixed(1)+' C':'--';");
-  html += F("document.getElementById('bed-raw').textContent=d.valid?d.rawAdc+' / '+d.filteredAdc.toFixed(1):d.rawAdc;");
-  html += F("document.getElementById('bed-resistance').textContent=d.valid?Math.round(d.resistance)+' ohm':'--';}catch(e){}}");
+  html += F("document.getElementById('bed-temp').textContent=d.valid?d.temperature.toFixed(1)+' C':'--';}catch(e){}}");
   html += F("function updateNfc(d){");
   html += F("document.getElementById('pn5180-status').textContent=d.readerPresent?(d.rfReady?'PN5180 pronto':'PN5180 rilevato, RF non pronta'):'PN5180 non rilevato';");
   html += F("document.getElementById('pn5180-version').textContent='Product '+d.productVersion+' / Firmware '+d.firmwareVersion+' / EEPROM '+d.eepromVersion;");
@@ -1081,27 +1250,79 @@ String dashboardHtml(bool tagPage) {
   html += F("b.disabled=true;b.textContent='Scrittura...';");
   html += F("try{const r=await fetch('/api/nfc/write?'+q.toString()+'&ts='+Date.now());updateNfc(await r.json());}catch(e){document.getElementById('pn5180-scan-status').textContent='Errore scrittura';}");
   html += F("b.disabled=false;b.textContent='Scrivi OpenPrintTag';}");
-  html += F("function syncColor(){const c=document.getElementById('tag-color');document.getElementById('tag-color-hex').textContent=c.value.toUpperCase();}");
+  html += F("function syncColor(){const c=document.getElementById('tag-color');const h=document.getElementById('tag-color-hex');if(c&&h)h.textContent=c.value.toUpperCase();}");
   html += F("function updateHeater(d){document.getElementById('heater-state').textContent=d.enabled?'ON':'OFF';");
   html += F("document.getElementById('heater-mode').textContent=d.automatic?'AUTO':'Manuale';");
-  html += F("document.getElementById('heater-status').textContent=d.status;");
   html += F("document.getElementById('heater-setpoint').textContent=d.setpoint.toFixed(1)+' C';");
-  html += F("document.getElementById('heater-output').textContent=d.outputPercent.toFixed(1)+' %';}");
+  html += F("document.getElementById('heater-output').textContent=d.outputPercent.toFixed(1)+' %';");
+  html += F("const c=document.getElementById('cycle-countdown');if(c)c.textContent=formatDuration(d.cycleRemainingSeconds);");
+  html += F("const ht=document.getElementById('home-profile-temp');if(ht&&document.activeElement!==ht&&!d.automatic&&!manualHomeEdit)ht.value=d.setpoint.toFixed(1);");
+  html += F("const pt=document.getElementById('profile-temp');if(pt&&document.activeElement!==pt&&!d.automatic)pt.value=d.setpoint.toFixed(1);");
+  html += F("const hm=document.getElementById('home-cycle-minutes');if(hm&&document.activeElement!==hm&&!d.automatic&&!manualHomeEdit)hm.value=Math.round(d.cycleDurationSeconds/60);");
+  html += F("const pm=document.getElementById('profile-minutes');if(pm&&document.activeElement!==pm&&!d.automatic)pm.value=Math.round(d.cycleDurationSeconds/60);");
+  html += F("const hp=document.getElementById('home-profile');if(hp)hp.disabled=d.automatic;}");
+  html += F("function formatDuration(s){s=Number(s)||0;const h=Math.floor(s/3600);const m=Math.floor((s%3600)/60);const sec=s%60;return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0');}");
   html += F("async function refreshHeater(){try{const r=await fetch('/api/heater');updateHeater(await r.json());}catch(e){}}");
   html += F("async function setHeaterState(v){try{const r=await fetch('/api/heater/'+(v?'on':'off')+'?ts='+Date.now());updateHeater(await r.json());}catch(e){document.getElementById('heater-state').textContent='Errore';}}");
-  html += F("async function setHeaterAuto(v){try{const r=await fetch('/api/heater/auto/'+(v?'on':'off')+'?ts='+Date.now());updateHeater(await r.json());}catch(e){document.getElementById('heater-status').textContent='Errore';}}");
-  html += F("function updateCountdown(){document.getElementById('countdown').textContent=secondsLeft;");
-  html += F("secondsLeft--;if(secondsLeft<0){secondsLeft=60;refreshData();refreshBed();}}");
-  html += F("setInterval(updateCountdown,1000);");
+  html += F("async function setHeaterAuto(v){try{if(v&&!(await applyHomeProfile(false)))return;const r=await fetch('/api/heater/auto/'+(v?'on':'off')+'?ts='+Date.now());updateHeater(await r.json());}catch(e){const n=document.getElementById('home-profile-note');if(n){n.className='warn';n.textContent='Errore comando AUTO';}}}");
+  html += F("let manualHomeEdit=false;");
+  html += F("const profiles=[");
+  for (uint8_t i = 0; i < totalMaterialProfileCount(); i++) {
+    if (i > 0) {
+      html += F(",");
+    }
+    html += F("[\"");
+    html += escapeJson(materialProfileName(i));
+    html += F("\",");
+    html += String(materialProfileTemp(i), 1);
+    html += F(",");
+    html += String(materialProfileMinutes(i));
+    html += F("]");
+  }
+  html += F("];");
+  html += F("const safetyLimit=");
+  html += String(BED_SAFETY_LIMIT_C, 1);
+  html += F(";");
+  html += F("function readNumber(id,fallback){const e=document.getElementById(id);if(!e)return fallback;const v=String(e.value).replace(',','.');const n=parseFloat(v);return Number.isFinite(n)?n:fallback;}");
+  html += F("function selectedProfile(){return profiles[Number(document.getElementById('material-profile').value)||0];}");
+  html += F("function syncSetpointWarning(){const p=selectedProfile();const v=readNumber('profile-temp',p[1]);const n=document.getElementById('profile-note');");
+  html += F("if(v>safetyLimit){n.className='warn';n.textContent='Sopra il limite sicurezza attuale: non applicabile.';return false;}");
+  html += F("if(v>p[1]){n.className='warn';n.textContent='Temperatura superiore al profilo consigliato.';return true;}");
+  html += F("n.className='ok';n.textContent='Valore nel profilo consigliato.';return true;}");
+  html += F("function fillProfile(){const p=selectedProfile();document.getElementById('profile-recommended').textContent=p[1].toFixed(1)+' C / '+Math.round(p[2]/60)+' h';syncSetpointWarning();}");
+  html += F("function loadRecommendedProfile(){const p=selectedProfile();document.getElementById('profile-temp').value=p[1];document.getElementById('profile-minutes').value=p[2];syncSetpointWarning();}");
+  html += F("async function applySetpoint(){if(!syncSetpointWarning())return;const p=selectedProfile();const v=readNumber('profile-temp',p[1]);");
+  html += F("if(v>p[1]&&!confirm('Temperatura superiore al profilo consigliato. Procedo comunque?'))return;");
+  html += F("const minutes=Math.round(readNumber('profile-minutes',p[2]));");
+  html += F("const r=await fetch('/api/settings/material?id='+document.getElementById('material-profile').value+'&setpoint='+v+'&minutes='+minutes+'&ts='+Date.now());const d=await r.json();document.getElementById('settings-status').textContent='Setpoint aggiornato a '+d.setpoint.toFixed(1)+' C, durata '+Math.round(d.cycleDurationSeconds/60)+' min';refreshHeater();}");
+  html += F("async function addCustomProfile(ev){if(ev)ev.preventDefault();const name=document.getElementById('custom-profile-name').value.trim();const temp=readNumber('custom-profile-temp',NaN);const minutes=Math.round(readNumber('custom-profile-minutes',NaN));const s=document.getElementById('settings-status');");
+  html += F("s.className='status';if(!name){s.textContent='Nome profilo mancante.';return;}if(!Number.isFinite(temp)||!Number.isFinite(minutes)||minutes<1){s.textContent='Temperatura o durata non validi.';return;}if(temp>safetyLimit){s.className='warn';s.textContent='Temperatura oltre il limite sicurezza.';return;}s.textContent='Aggiungo profilo...';");
+  html += F("try{const q=new URLSearchParams({name:name,setpoint:temp,minutes:minutes,ts:Date.now()});const r=await fetch('/api/settings/profile/add?'+q.toString());const t=await r.text();if(!r.ok){s.className='warn';s.textContent='Profilo non aggiunto: '+t;return;}location.href='/settings?ts='+Date.now();}catch(e){s.className='warn';s.textContent='Errore rete mentre aggiungevo il profilo.';}}");
+  html += F("function setManualHomeEdit(v){manualHomeEdit=v;const t=document.getElementById('home-profile-temp');const m=document.getElementById('home-cycle-minutes');const b=document.getElementById('home-manual-edit');if(t)t.readOnly=!v;if(m)m.readOnly=!v;if(b)b.textContent=v?'Blocca modifica':'Modifica manuale';}");
+  html += F("function toggleManualHomeEdit(){setManualHomeEdit(!manualHomeEdit);const n=document.getElementById('home-profile-note');if(n&&manualHomeEdit){n.className='ok';n.textContent='Modifica manuale attiva: puoi cambiare temperatura e durata.';}}");
+  html += F("function fillHomeProfile(){const s=document.getElementById('home-profile');if(!s)return;const p=profiles[Number(s.value)||0];const n=document.getElementById('home-profile-note');");
+  html += F("if(!manualHomeEdit){document.getElementById('home-profile-temp').value=p[1].toFixed(1);document.getElementById('home-cycle-minutes').value=p[2];}");
+  html += F("document.getElementById('home-profile-recommended').textContent=p[1].toFixed(1)+' C / '+Math.round(p[2]/60)+' h';");
+  html += F("if(p[1]>safetyLimit){n.className='warn';n.textContent='Profilo oltre il limite sicurezza attuale.';}else{n.className='ok';n.textContent='Profilo applicabile.';}}");
+  html += F("async function applyHomeProfile(showMessage=true){const s=document.getElementById('home-profile');const p=profiles[Number(s.value)||0];");
+  html += F("const setpoint=readNumber('home-profile-temp',p[1]);");
+  html += F("if(setpoint>safetyLimit){document.getElementById('home-profile-note').className='warn';document.getElementById('home-profile-note').textContent='Non applicato: oltre il limite sicurezza.';return;}");
+  html += F("const minutes=Math.round(readNumber('home-cycle-minutes',p[2]));");
+  html += F("const r=await fetch('/api/settings/material?id='+s.value+'&setpoint='+setpoint+'&minutes='+minutes+'&ts='+Date.now());const d=await r.json();document.getElementById('home-profile-note').className='ok';document.getElementById('home-profile-note').textContent=showMessage?('Ciclo '+p[0]+' applicato: '+d.setpoint.toFixed(1)+' C, '+Math.round(d.cycleDurationSeconds/60)+' min'):'Ciclo '+p[0]+' pronto';document.getElementById('heater-setpoint').textContent=d.setpoint.toFixed(1)+' C';document.getElementById('cycle-countdown').textContent=formatDuration(d.cycleRemainingSeconds);refreshHeater();return true;}");
+  html += F("setInterval(()=>{refreshData();refreshBed();},60000);");
   html += F("setInterval(()=>{refreshBed();refreshHeater();},2000);");
-  html += F("window.addEventListener('load',()=>{updateCountdown();syncColor();refreshData();refreshBed();refreshNfc();refreshHeater();});");
+  html += F("window.addEventListener('load',()=>{syncColor();if(document.getElementById('material-profile'))fillProfile();fillHomeProfile();refreshData();refreshBed();refreshNfc();refreshHeater();});");
   html += F("</script>");
-  html += tagPage ? F("</head><body class=\"tags\"><main>") : F("</head><body class=\"temperature\"><main>");
+  html += pageMode == PAGE_TAGS ? F("</head><body class=\"tags\"><main>") :
+          (pageMode == PAGE_SETTINGS ? F("</head><body class=\"settings\"><main>") : F("</head><body class=\"temperature\"><main>"));
   html += F("<h1>Essiccatore</h1>");
-  html += F("<p class=\"sub\">Dati camera da BME280 e lettura PN5180 NFC</p>");
+  html += F("<p class=\"sub\">Temperatura, umidita e gestione tag NFC</p>");
   html += F("<nav><a href=\"/temperature\"");
-  html += tagPage ? F(">Temperatura</a><a class=\"active\" href=\"/tags\">Tag NFC</a></nav>") :
-                    F(" class=\"active\">Temperatura</a><a href=\"/tags\">Tag NFC</a></nav>");
+  html += pageMode == PAGE_TEMPERATURE ? F(" class=\"active\">Temperatura</a>") : F(">Temperatura</a>");
+  html += F("<a href=\"/tags\"");
+  html += pageMode == PAGE_TAGS ? F(" class=\"active\">Tag NFC</a>") : F(">Tag NFC</a>");
+  html += F("<a class=\"gear");
+  html += pageMode == PAGE_SETTINGS ? F(" active\" href=\"/settings\">&#9881;</a></nav>") : F("\" href=\"/settings\">&#9881;</a></nav>");
   html += F("<section class=\"grid temperature-panel\">");
   html += F("<article class=\"card\"><div class=\"label\">Temperatura</div><div class=\"value\" id=\"temperature\">");
   html += valueOrDash(sensorData.temperature, " C");
@@ -1109,18 +1330,9 @@ String dashboardHtml(bool tagPage) {
   html += F("<article class=\"card\"><div class=\"label\">Umidita</div><div class=\"value\" id=\"humidity\">");
   html += valueOrDash(sensorData.humidity, " %");
   html += F("</div></article>");
-  html += F("<article class=\"card\"><div class=\"label\">Pressione</div><div class=\"value\" id=\"pressure\">");
-  html += valueOrDash(sensorData.pressure, " hPa");
-  html += F("</div></article>");
   html += F("<article class=\"card\"><div class=\"label\">Piatto</div><div class=\"value\" id=\"bed-temp\">");
   html += valueOrDash(bedData.temperature, " C");
-  html += F("</div><div class=\"status\">ADC grezzo/filtrato <span id=\"bed-raw\">");
-  html += String(bedData.rawAdc);
-  html += F(" / ");
-  html += bedData.valid ? String(bedData.filteredAdc, 1) : "--";
-  html += F("</span> - R <span id=\"bed-resistance\">");
-  html += bedData.valid ? String(bedData.resistance, 0) + " ohm" : "--";
-  html += F("</span></div></article>");
+  html += F("</div></article>");
   html += F("</section>");
   html += F("<section class=\"card wide tag-panel\"><div class=\"label\">PN5180</div><div class=\"small\">");
   html += F("<strong id=\"pn5180-status\">");
@@ -1174,25 +1386,87 @@ String dashboardHtml(bool tagPage) {
   html += F("<label>Foro centrale mm<input name=\"spoolhole\" type=\"number\" min=\"0\" max=\"999\" value=\"52\"></label>");
   html += F("</form><button id=\"write-tag\" onclick=\"writeOpenPrintTag()\">Scrivi OpenPrintTag</button>");
   html += F("</div></section>");
-  html += F("<section class=\"card wide heater-panel\"><div class=\"label\">MOSFET riscaldatore</div><div class=\"small\">");
-  html += F("GPIO ");
-  html += String(HEATER_PIN);
-  html += F(" - Stato: <strong id=\"heater-state\">");
+  html += F("<section class=\"card wide heater-panel\"><div class=\"label\">Riscaldatore</div><div class=\"small\">");
+  html += F("<div class=\"heater-summary\"><div class=\"metric\"><span>Stato</span><strong id=\"heater-state\">");
   html += heaterEnabled ? "ON" : "OFF";
-  html += F("</strong><br>Modo: <strong id=\"heater-mode\">");
+  html += F("</strong></div><div class=\"metric\"><span>Modo</span><strong id=\"heater-mode\">");
   html += heaterControl.automatic ? "AUTO" : "Manuale";
-  html += F("</strong><br>PI: <span id=\"heater-status\">");
-  html += heaterControl.status;
-  html += F("</span><br>Setpoint: <span id=\"heater-setpoint\">");
+  html += F("</strong></div><div class=\"metric\"><span>Setpoint</span><strong id=\"heater-setpoint\">");
   html += String(heaterControl.setpoint, 1);
-  html += F(" C</span> - Output: <span id=\"heater-output\">");
-  html += String(heaterControl.outputPercent, 1);
-  html += F(" %</span><br><button onclick=\"setHeaterAuto(true)\">AUTO</button>");
+  html += F(" C</strong></div></div>");
+  html += F("<div class=\"profile-control\"><label>Profilo materiale<select id=\"home-profile\" onchange=\"fillHomeProfile()\">");
+  for (uint8_t i = 0; i < totalMaterialProfileCount(); i++) {
+    html += F("<option value=\"");
+    html += String(i);
+    html += F("\"");
+    if (i == selectedMaterialProfile) {
+      html += F(" selected");
+    }
+    html += F(">");
+    html += materialProfileName(i);
+    html += F("</option>");
+  }
+  html += F("</select></label><label>Setpoint ciclo C<input id=\"home-profile-temp\" type=\"number\" min=\"20\" max=\"120\" step=\"0.5\" readonly value=\"");
+  html += String(heaterControl.setpoint, 1);
+  html += F("\"></label><label>Durata ciclo min<input id=\"home-cycle-minutes\" type=\"number\" min=\"1\" max=\"9999\" step=\"1\" readonly value=\"");
+  html += String(heaterControl.cycleDurationSeconds / 60UL);
+  html += F("\"></label><button type=\"button\" onclick=\"applyHomeProfile()\">Applica ciclo</button><button type=\"button\" class=\"secondary\" id=\"home-manual-edit\" onclick=\"toggleManualHomeEdit()\">Modifica manuale</button></div>");
+  html += F("<p class=\"status\">Consigliato: <span id=\"home-profile-recommended\">--</span></p>");
+  html += F("<p class=\"status\" id=\"home-profile-note\">--</p>");
+  html += F("<div class=\"cycle-caption\">Countdown ciclo</div><div class=\"cycle-timer\" id=\"cycle-countdown\">--:--:--</div>");
+  html += F("<div class=\"button-row\"><button onclick=\"setHeaterAuto(true)\">AUTO</button>");
   html += F("<button class=\"secondary\" onclick=\"setHeaterAuto(false)\">STOP AUTO</button>");
-  html += F("<br><button class=\"danger\" onclick=\"setHeaterState(true)\">ON manuale</button>");
+  html += F("<button class=\"danger\" onclick=\"setHeaterState(true)\">ON manuale</button>");
   html += F("<button class=\"secondary\" onclick=\"setHeaterState(false)\">OFF</button>");
+  html += F("<span class=\"output-inline\">Output <strong id=\"heater-output\">");
+  html += String(heaterControl.outputPercent, 1);
+  html += F(" %</strong></span></div>");
   html += F("</div></section>");
-  html += F("<p class=\"status\"><span id=\"updated\">Aggiornamento automatico</span> fra <strong id=\"countdown\">60</strong> secondi</p>");
+  html += F("<section class=\"card wide settings-panel\"><div class=\"label\">Impostazioni materiale</div><div class=\"small\">");
+  html += F("<div class=\"formgrid\"><label>Materiale<select id=\"material-profile\" onchange=\"loadRecommendedProfile()\">");
+  for (uint8_t i = 0; i < totalMaterialProfileCount(); i++) {
+    html += F("<option value=\"");
+    html += String(i);
+    html += F("\"");
+    if (i == selectedMaterialProfile) {
+      html += F(" selected");
+    }
+    html += F(">");
+    html += materialProfileName(i);
+    html += F("</option>");
+  }
+  html += F("</select></label>");
+  html += F("<label>Setpoint essiccatore C<input id=\"profile-temp\" type=\"number\" min=\"20\" max=\"120\" step=\"0.5\" value=\"");
+  html += String(heaterControl.setpoint, 1);
+  html += F("\" oninput=\"syncSetpointWarning()\"></label>");
+  html += F("<label>Durata ciclo min<input id=\"profile-minutes\" type=\"number\" min=\"1\" max=\"9999\" step=\"1\" value=\"");
+  html += String(heaterControl.cycleDurationSeconds / 60UL);
+  html += F("\"></label><label>Profilo consigliato<div class=\"hex\" id=\"profile-recommended\">--</div></label></div>");
+  html += F("<p class=\"status\" id=\"profile-note\">--</p>");
+  html += F("<button type=\"button\" onclick=\"applySetpoint()\">Applica setpoint</button>");
+  html += F("<p class=\"status\" id=\"settings-status\">Scegli un materiale per caricare setpoint e durata consigliata.</p>");
+  html += F("<div class=\"label\" style=\"margin-top:24px\">Nuovo profilo personalizzato</div>");
+  html += F("<div class=\"formgrid\"><label>Nome profilo<input id=\"custom-profile-name\" maxlength=\"24\" placeholder=\"PLA 0.5KG\"></label>");
+  html += F("<label>Setpoint C<input id=\"custom-profile-temp\" type=\"number\" min=\"20\" max=\"120\" step=\"0.5\" value=\"45\"></label>");
+  html += F("<label>Durata min<input id=\"custom-profile-minutes\" type=\"number\" min=\"1\" max=\"9999\" step=\"1\" value=\"180\"></label>");
+  html += F("<label>&nbsp;<button type=\"button\" onclick=\"addCustomProfile(event)\">Aggiungi profilo</button></label></div>");
+  html += F("<table><thead><tr><th>Materiale</th><th>Temp.</th><th>Tempo</th><th>Stato</th></tr></thead><tbody>");
+  for (uint8_t i = 0; i < totalMaterialProfileCount(); i++) {
+    const bool available = materialProfileTemp(i) <= BED_SAFETY_LIMIT_C;
+    html += F("<tr><td>");
+    html += materialProfileName(i);
+    html += F("</td><td>");
+    html += String(materialProfileTemp(i), 0);
+    html += F(" C</td><td>");
+    html += String(materialProfileMinutes(i) / 60.0F, 1);
+    html += F(" h</td><td class=\"");
+    html += (available ? F("ok") : F("warn"));
+    html += F("\">");
+    html += (available ? F("Applicabile") : F("Oltre limite sicurezza"));
+    html += F("</td></tr>");
+  }
+  html += F("</tbody></table>");
+  html += F("</div></section>");
   html += F("</main></body></html>");
 
   return html;
@@ -1201,19 +1475,25 @@ String dashboardHtml(bool tagPage) {
 void handleRoot() {
   Serial.println("HTTP GET /");
   server.sendHeader("Cache-Control", "no-store");
-  server.send(200, "text/html", dashboardHtml(false));
+  server.send(200, "text/html", dashboardHtml(PAGE_TEMPERATURE));
 }
 
 void handleTemperaturePage() {
   Serial.println("HTTP GET /temperature");
   server.sendHeader("Cache-Control", "no-store");
-  server.send(200, "text/html", dashboardHtml(false));
+  server.send(200, "text/html", dashboardHtml(PAGE_TEMPERATURE));
 }
 
 void handleTagsPage() {
   Serial.println("HTTP GET /tags");
   server.sendHeader("Cache-Control", "no-store");
-  server.send(200, "text/html", dashboardHtml(true));
+  server.send(200, "text/html", dashboardHtml(PAGE_TAGS));
+}
+
+void handleSettingsPage() {
+  Serial.println("HTTP GET /settings");
+  server.sendHeader("Cache-Control", "no-store");
+  server.send(200, "text/html", dashboardHtml(PAGE_SETTINGS));
 }
 
 void handleApiBme280() {
@@ -1226,6 +1506,72 @@ void handleApiBed() {
   Serial.println("HTTP GET /api/bed");
   server.sendHeader("Cache-Control", "no-store");
   server.send(200, "application/json", bedJson());
+}
+
+void handleApiSettingsMaterial() {
+  Serial.println("HTTP GET /api/settings/material");
+  if (server.hasArg("id")) {
+    const int profileId = server.arg("id").toInt();
+    if (profileId >= 0 && profileId < totalMaterialProfileCount()) {
+      selectedMaterialProfile = (uint8_t)profileId;
+      heaterControl.cycleDurationSeconds = (uint32_t)materialProfileMinutes(selectedMaterialProfile) * 60UL;
+      if (!heaterControl.cycleRunning) {
+        heaterControl.cycleRemainingSeconds = heaterControl.cycleDurationSeconds;
+      }
+    }
+  }
+
+  if (server.hasArg("setpoint")) {
+    float requestedSetpoint = server.arg("setpoint").toFloat();
+    requestedSetpoint = constrain(requestedSetpoint, 20.0F, BED_SAFETY_LIMIT_C);
+    heaterControl.setpoint = requestedSetpoint;
+    heaterControl.integral = 0.0F;
+  }
+
+  if (server.hasArg("minutes")) {
+    const uint32_t requestedMinutes = constrain((uint32_t)server.arg("minutes").toInt(), (uint32_t)1, (uint32_t)9999);
+    heaterControl.cycleDurationSeconds = requestedMinutes * 60UL;
+    if (!heaterControl.cycleRunning) {
+      heaterControl.cycleRemainingSeconds = heaterControl.cycleDurationSeconds;
+    }
+  }
+
+  server.sendHeader("Cache-Control", "no-store");
+  server.send(200, "application/json", settingsJson());
+}
+
+void handleApiSettingsProfileAdd() {
+  Serial.println("HTTP GET /api/settings/profile/add");
+  if (!server.hasArg("name") || !server.hasArg("setpoint") || !server.hasArg("minutes")) {
+    server.send(400, "application/json", "{\"error\":\"missing_args\"}");
+    return;
+  }
+
+  uint8_t newProfileId = 0;
+  const float requestedSetpoint = server.arg("setpoint").toFloat();
+  const uint16_t requestedMinutes = constrain((uint16_t)server.arg("minutes").toInt(), (uint16_t)1, (uint16_t)9999);
+
+  if (isnan(requestedSetpoint) || requestedSetpoint < 20.0F || requestedSetpoint > BED_SAFETY_LIMIT_C ||
+      requestedMinutes < 1) {
+    server.send(400, "application/json", "{\"error\":\"invalid_args\"}");
+    return;
+  }
+
+  if (!addCustomMaterialProfile(server.arg("name"), requestedSetpoint, requestedMinutes, newProfileId)) {
+    server.send(400, "application/json", "{\"error\":\"profile_not_added\"}");
+    return;
+  }
+
+  selectedMaterialProfile = newProfileId;
+  heaterControl.setpoint = materialProfileTemp(selectedMaterialProfile);
+  heaterControl.integral = 0.0F;
+  heaterControl.cycleDurationSeconds = (uint32_t)materialProfileMinutes(selectedMaterialProfile) * 60UL;
+  if (!heaterControl.cycleRunning) {
+    heaterControl.cycleRemainingSeconds = heaterControl.cycleDurationSeconds;
+  }
+
+  server.sendHeader("Cache-Control", "no-store");
+  server.send(200, "application/json", settingsJson());
 }
 
 void handleApiNfc() {
@@ -1363,8 +1709,11 @@ void setup() {
   server.on("/", handleRoot);
   server.on("/temperature", handleTemperaturePage);
   server.on("/tags", handleTagsPage);
+  server.on("/settings", handleSettingsPage);
   server.on("/api/bme280", handleApiBme280);
   server.on("/api/bed", HTTP_GET, handleApiBed);
+  server.on("/api/settings/material", HTTP_GET, handleApiSettingsMaterial);
+  server.on("/api/settings/profile/add", HTTP_GET, handleApiSettingsProfileAdd);
   server.on("/api/nfc", handleApiNfc);
   server.on("/api/nfc/read", HTTP_GET, handleApiNfcRead);
   server.on("/api/nfc/write", HTTP_GET, handleApiNfcWriteTest);
