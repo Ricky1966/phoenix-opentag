@@ -1,0 +1,25 @@
+{
+  "locale": "en",
+  "name": "English",
+  "strings": {
+    "app_title": "Dryer",
+    "app_subtitle": "Temperature, humidity and NFC tag management",
+    "nav_home": "Home",
+    "nav_home_tip": "Home: live chamber, humidity and bed readings",
+    "nav_tag": "Tag Reader",
+    "nav_tag_tip": "Tag Reader: read and write NFC OpenPrintTag data",
+    "nav_setpoint": "Material Setpoints",
+    "nav_setpoint_tip": "Material Setpoints: heater, cycles and material profiles",
+    "nav_settings": "Settings",
+    "nav_settings_tip": "Settings: language, WiFi network and general options",
+    "settings_network": "Network and interface",
+    "settings_language": "Firmware language",
+    "settings_wifi_ssid": "WiFi SSID",
+    "settings_wifi_password": "WiFi password",
+    "settings_wifi_mode": "Router WiFi connection",
+    "settings_wifi_disabled": "Disabled",
+    "settings_wifi_saved": "Saved, not active",
+    "settings_save": "Save settings",
+    "settings_note": "Credentials are only saved. The portal stays on the Essiccatore access point until router connection is enabled."
+  }
+}

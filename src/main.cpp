@@ -3,6 +3,7 @@
 #include <PN5180.h>
 #include <PN5180ISO14443.h>
 #include <PN5180ISO15693.h>
+#include <Preferences.h>
 #include <WebServer.h>
 #include <WiFi.h>
 #include <Wire.h>
@@ -45,10 +46,29 @@ constexpr float PI_KP = 10.0F;
 constexpr float PI_KI = 0.028F;
 constexpr unsigned long PI_UPDATE_INTERVAL_MS = 3000;
 constexpr unsigned long HEATER_WINDOW_MS = 10000;
+
+#if defined(UI_LOCALE_DE)
+constexpr const char *UI_LOCALE_CODE = "de";
+constexpr const char *UI_LOCALE_NAME = "Deutsch";
+#elif defined(UI_LOCALE_ES)
+constexpr const char *UI_LOCALE_CODE = "es";
+constexpr const char *UI_LOCALE_NAME = "Espanol";
+#elif defined(UI_LOCALE_FR)
+constexpr const char *UI_LOCALE_CODE = "fr";
+constexpr const char *UI_LOCALE_NAME = "Francais";
+#elif defined(UI_LOCALE_PT)
+constexpr const char *UI_LOCALE_CODE = "pt";
+constexpr const char *UI_LOCALE_NAME = "Portugues";
+#else
+constexpr const char *UI_LOCALE_CODE = "it";
+constexpr const char *UI_LOCALE_NAME = "Italiano";
+#endif
+
 Adafruit_BME280 bme;
 PN5180ISO14443 nfc14443(PN5180_NSS, PN5180_BUSY, PN5180_RST);
 PN5180ISO15693 nfc15693(PN5180_NSS, PN5180_BUSY, PN5180_RST);
 WebServer server(80);
+Preferences preferences;
 
 struct SensorData {
   float temperature = NAN;
@@ -112,10 +132,18 @@ struct CustomMaterialProfile {
   uint16_t recommendedMinutes = 0;
 };
 
+struct AppSettings {
+  String wifiSsid = "";
+  String wifiPassword = "";
+  String language = UI_LOCALE_CODE;
+  bool wifiClientEnabled = false;
+};
+
 SensorData sensorData;
 NfcData nfcData;
 BedData bedData;
 HeaterControlData heaterControl;
+AppSettings appSettings;
 bool heaterEnabled = false;
 uint8_t selectedMaterialProfile = 0;
 
@@ -133,8 +161,95 @@ CustomMaterialProfile customProfiles[MAX_CUSTOM_PROFILES];
 uint8_t customProfileCount = 0;
 
 void clearNfcReadState();
-enum PageMode : uint8_t { PAGE_TEMPERATURE, PAGE_TAGS, PAGE_SETTINGS };
-String dashboardHtml(PageMode pageMode = PAGE_TEMPERATURE);
+enum PageMode : uint8_t { PAGE_HOME, PAGE_TAGS, PAGE_SETPOINT, PAGE_SETTINGS };
+String dashboardHtml(PageMode pageMode = PAGE_HOME);
+
+enum TextKey : uint8_t {
+  TK_APP_TITLE,
+  TK_APP_SUBTITLE,
+  TK_NAV_HOME,
+  TK_NAV_HOME_TIP,
+  TK_NAV_TAG,
+  TK_NAV_TAG_TIP,
+  TK_NAV_SETPOINT,
+  TK_NAV_SETPOINT_TIP,
+  TK_NAV_SETTINGS,
+  TK_NAV_SETTINGS_TIP,
+  TK_SETTINGS_NETWORK,
+  TK_SETTINGS_LANGUAGE,
+  TK_SETTINGS_WIFI_SSID,
+  TK_SETTINGS_WIFI_PASSWORD,
+  TK_SETTINGS_WIFI_MODE,
+  TK_SETTINGS_WIFI_DISABLED,
+  TK_SETTINGS_WIFI_SAVED,
+  TK_SETTINGS_SAVE,
+  TK_SETTINGS_NOTE,
+  TK_FIRMWARE_LOCALE,
+  TK_FALLBACK_LOCALE
+};
+
+const __FlashStringHelper *textEn(TextKey key) {
+  switch (key) {
+    case TK_APP_TITLE: return F("Dryer");
+    case TK_APP_SUBTITLE: return F("Temperature, humidity and NFC tag management");
+    case TK_NAV_HOME: return F("Home");
+    case TK_NAV_HOME_TIP: return F("Home: live chamber, humidity and bed readings");
+    case TK_NAV_TAG: return F("Tag Reader");
+    case TK_NAV_TAG_TIP: return F("Tag Reader: read and write NFC OpenPrintTag data");
+    case TK_NAV_SETPOINT: return F("Material Setpoints");
+    case TK_NAV_SETPOINT_TIP: return F("Material Setpoints: heater, cycles and material profiles");
+    case TK_NAV_SETTINGS: return F("Settings");
+    case TK_NAV_SETTINGS_TIP: return F("Settings: language, WiFi network and general options");
+    case TK_SETTINGS_NETWORK: return F("Network and interface");
+    case TK_SETTINGS_LANGUAGE: return F("Firmware language");
+    case TK_SETTINGS_WIFI_SSID: return F("WiFi SSID");
+    case TK_SETTINGS_WIFI_PASSWORD: return F("WiFi password");
+    case TK_SETTINGS_WIFI_MODE: return F("Router WiFi connection");
+    case TK_SETTINGS_WIFI_DISABLED: return F("Disabled");
+    case TK_SETTINGS_WIFI_SAVED: return F("Saved, not active");
+    case TK_SETTINGS_SAVE: return F("Save settings");
+    case TK_SETTINGS_NOTE: return F("Credentials are only saved. The portal stays on the Essiccatore access point until router connection is enabled.");
+    case TK_FIRMWARE_LOCALE: return F("Compiled language");
+    case TK_FALLBACK_LOCALE: return F("Fallback language");
+  }
+  return F("");
+}
+
+const __FlashStringHelper *textLocal(TextKey key) {
+#if defined(UI_LOCALE_IT)
+  switch (key) {
+    case TK_APP_TITLE: return F("Essiccatore");
+    case TK_APP_SUBTITLE: return F("Temperatura, umidita e gestione tag NFC");
+    case TK_NAV_HOME: return F("Home");
+    case TK_NAV_HOME_TIP: return F("Home: mostra le letture live di camera, umidita e piatto");
+    case TK_NAV_TAG: return F("Lettura TAG");
+    case TK_NAV_TAG_TIP: return F("Lettura TAG: legge e scrive i tag NFC OpenPrintTag");
+    case TK_NAV_SETPOINT: return F("SetPoint Materiali");
+    case TK_NAV_SETPOINT_TIP: return F("SetPoint Materiali: gestisce riscaldatore, cicli e profili materiale");
+    case TK_NAV_SETTINGS: return F("Settings");
+    case TK_NAV_SETTINGS_TIP: return F("Settings: lingua, rete WiFi e impostazioni generali");
+    case TK_SETTINGS_NETWORK: return F("Rete e interfaccia");
+    case TK_SETTINGS_LANGUAGE: return F("Lingua firmware");
+    case TK_SETTINGS_WIFI_SSID: return F("SSID WiFi");
+    case TK_SETTINGS_WIFI_PASSWORD: return F("Password WiFi");
+    case TK_SETTINGS_WIFI_MODE: return F("Connessione a router WiFi");
+    case TK_SETTINGS_WIFI_DISABLED: return F("Disattivato");
+    case TK_SETTINGS_WIFI_SAVED: return F("Salvata, non attiva");
+    case TK_SETTINGS_SAVE: return F("Salva impostazioni");
+    case TK_SETTINGS_NOTE: return F("Le credenziali vengono solo salvate. Il portale resta su Access Point Essiccatore finche non abilitiamo la connessione al router.");
+    case TK_FIRMWARE_LOCALE: return F("Lingua compilata");
+    case TK_FALLBACK_LOCALE: return F("Lingua fallback");
+  }
+#endif
+  return textEn(key);
+}
+
+const __FlashStringHelper *tr(TextKey key) {
+  if (appSettings.language == "en") {
+    return textEn(key);
+  }
+  return textLocal(key);
+}
 
 uint8_t totalMaterialProfileCount() {
   return MATERIAL_PROFILE_COUNT + customProfileCount;
@@ -205,12 +320,79 @@ bool addCustomMaterialProfile(String name, float temperature, uint16_t minutes, 
     return false;
   }
 
+  for (uint8_t i = 0; i < totalMaterialProfileCount(); i++) {
+    if (materialProfileName(i).equalsIgnoreCase(name)) {
+      return false;
+    }
+  }
+
   customProfiles[customProfileCount].name = name;
   customProfiles[customProfileCount].recommendedTemp = constrain(temperature, 20.0F, BED_SAFETY_LIMIT_C);
   customProfiles[customProfileCount].recommendedMinutes = constrain(minutes, (uint16_t)1, (uint16_t)9999);
   newId = MATERIAL_PROFILE_COUNT + customProfileCount;
   customProfileCount++;
   return true;
+}
+
+void saveCustomProfiles() {
+  preferences.begin("essicc", false);
+  preferences.putUChar("profileCount", customProfileCount);
+
+  for (uint8_t i = 0; i < MAX_CUSTOM_PROFILES; i++) {
+    const String prefix = "p" + String(i);
+    if (i < customProfileCount) {
+      preferences.putString((prefix + "Name").c_str(), customProfiles[i].name);
+      preferences.putFloat((prefix + "Temp").c_str(), customProfiles[i].recommendedTemp);
+      preferences.putUShort((prefix + "Min").c_str(), customProfiles[i].recommendedMinutes);
+    } else {
+      preferences.remove((prefix + "Name").c_str());
+      preferences.remove((prefix + "Temp").c_str());
+      preferences.remove((prefix + "Min").c_str());
+    }
+  }
+
+  preferences.end();
+}
+
+void loadCustomProfiles() {
+  preferences.begin("essicc", true);
+  customProfileCount = min<uint8_t>(preferences.getUChar("profileCount", 0), MAX_CUSTOM_PROFILES);
+
+  for (uint8_t i = 0; i < customProfileCount; i++) {
+    const String prefix = "p" + String(i);
+    customProfiles[i].name = preferences.getString((prefix + "Name").c_str(), "");
+    customProfiles[i].recommendedTemp = preferences.getFloat((prefix + "Temp").c_str(), DEFAULT_BED_SETPOINT_C);
+    customProfiles[i].recommendedMinutes = preferences.getUShort((prefix + "Min").c_str(), 360);
+
+    if (customProfiles[i].name.length() == 0) {
+      customProfileCount = i;
+      break;
+    }
+  }
+
+  preferences.end();
+}
+
+void saveAppSettings() {
+  preferences.begin("essicc", false);
+  preferences.putString("wifiSsid", appSettings.wifiSsid);
+  preferences.putString("wifiPass", appSettings.wifiPassword);
+  preferences.putString("lang", appSettings.language);
+  preferences.putBool("wifiClient", appSettings.wifiClientEnabled);
+  preferences.end();
+}
+
+void loadAppSettings() {
+  preferences.begin("essicc", true);
+  appSettings.wifiSsid = preferences.getString("wifiSsid", "");
+  appSettings.wifiPassword = preferences.getString("wifiPass", "");
+  appSettings.language = preferences.getString("lang", UI_LOCALE_CODE);
+  appSettings.wifiClientEnabled = preferences.getBool("wifiClient", false);
+  preferences.end();
+
+  if (appSettings.language != UI_LOCALE_CODE && appSettings.language != "en") {
+    appSettings.language = UI_LOCALE_CODE;
+  }
 }
 
 constexpr uint8_t OPENPRINTTAG_MIME_TYPE[] = {
@@ -266,6 +448,28 @@ String escapeJson(const String &value) {
       escaped += '\\';
     }
     escaped += c;
+  }
+
+  return escaped;
+}
+
+String escapeHtml(const String &value) {
+  String escaped;
+  escaped.reserve(value.length() + 8);
+
+  for (uint16_t i = 0; i < value.length(); i++) {
+    const char c = value[i];
+    if (c == '&') {
+      escaped += F("&amp;");
+    } else if (c == '"') {
+      escaped += F("&quot;");
+    } else if (c == '<') {
+      escaped += F("&lt;");
+    } else if (c == '>') {
+      escaped += F("&gt;");
+    } else {
+      escaped += c;
+    }
   }
 
   return escaped;
@@ -989,6 +1193,18 @@ String settingsJson() {
   json += heaterControl.cycleRunning ? "true" : "false";
   json += ",\"safetyLimit\":";
   json += String(BED_SAFETY_LIMIT_C, 1);
+  json += ",\"language\":\"";
+  json += escapeJson(appSettings.language);
+  json += "\",\"compiledLocale\":\"";
+  json += UI_LOCALE_CODE;
+  json += "\",\"compiledLocaleName\":\"";
+  json += UI_LOCALE_NAME;
+  json += "\",\"wifiSsid\":\"";
+  json += escapeJson(appSettings.wifiSsid);
+  json += "\",\"wifiConfigured\":";
+  json += appSettings.wifiSsid.length() > 0 ? "true" : "false";
+  json += ",\"wifiClientEnabled\":";
+  json += appSettings.wifiClientEnabled ? "true" : "false";
   json += ",\"profiles\":[";
 
   for (uint8_t i = 0; i < totalMaterialProfileCount(); i++) {
@@ -1176,23 +1392,26 @@ String dashboardHtml(PageMode pageMode) {
   readBedTemperature();
 
   String html;
-  html.reserve(8200);
+  html.reserve(10000);
 
-  html += F("<!doctype html><html lang=\"it\"><head>");
+  html += F("<!doctype html><html lang=\"");
+  html += appSettings.language;
+  html += F("\"><head>");
   html += F("<meta charset=\"utf-8\">");
   html += F("<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">");
-  html += F("<title>Essiccatore</title>");
+  html += F("<title>");
+  html += tr(TK_APP_TITLE);
+  html += F("</title>");
   html += F("<style>");
   html += F(":root{font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#1f2933;background:#f4f7f8}");
   html += F("body{margin:0;padding:24px}");
   html += F("main{max-width:1180px;margin:auto}");
   html += F("h1{font-size:32px;margin:0 0 6px}");
   html += F(".sub{color:#52606d;margin:0 0 24px}");
-  html += F("nav{display:flex;gap:10px;margin:0 0 18px;align-items:center}");
+  html += F("nav{display:flex;gap:10px;margin:0 0 10px;align-items:center;flex-wrap:wrap}");
   html += F("nav a{border-radius:6px;background:#d9e2ec;color:#102a43;text-decoration:none;padding:9px 12px;font-weight:700}");
   html += F("nav a.active{background:#0f766e;color:white}");
-  html += F(".gear{margin-left:auto;font-size:18px;line-height:1}");
-  html += F(".tags .temperature-panel,.tags .heater-panel,.tags .settings-panel,.temperature .tag-panel,.temperature .settings-panel,.settings .temperature-panel,.settings .tag-panel,.settings .heater-panel{display:none}");
+  html += F(".tags .home-panel,.tags .heater-panel,.tags .setpoint-panel,.tags .settings-panel,.home .tag-panel,.home .heater-panel,.home .setpoint-panel,.home .settings-panel,.setpoint .home-panel,.setpoint .tag-panel,.setpoint .settings-panel,.settings .home-panel,.settings .tag-panel,.settings .heater-panel,.settings .setpoint-panel{display:none}");
   html += F(".grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px}");
   html += F(".card{background:white;border:1px solid #d9e2ec;border-radius:8px;padding:18px}");
   html += F(".wide{margin-top:14px}");
@@ -1298,6 +1517,9 @@ String dashboardHtml(PageMode pageMode) {
   html += F("async function addCustomProfile(ev){if(ev)ev.preventDefault();const name=document.getElementById('custom-profile-name').value.trim();const temp=readNumber('custom-profile-temp',NaN);const minutes=Math.round(readNumber('custom-profile-minutes',NaN));const s=document.getElementById('settings-status');");
   html += F("s.className='status';if(!name){s.textContent='Nome profilo mancante.';return;}if(!Number.isFinite(temp)||!Number.isFinite(minutes)||minutes<1){s.textContent='Temperatura o durata non validi.';return;}if(temp>safetyLimit){s.className='warn';s.textContent='Temperatura oltre il limite sicurezza.';return;}s.textContent='Aggiungo profilo...';");
   html += F("try{const q=new URLSearchParams({name:name,setpoint:temp,minutes:minutes,ts:Date.now()});const r=await fetch('/api/settings/profile/add?'+q.toString());const t=await r.text();if(!r.ok){s.className='warn';s.textContent='Profilo non aggiunto: '+t;return;}location.href='/settings?ts='+Date.now();}catch(e){s.className='warn';s.textContent='Errore rete mentre aggiungevo il profilo.';}}");
+  html += F("async function saveGeneralSettings(){const s=document.getElementById('general-settings-status');s.className='status';s.textContent='Salvo impostazioni...';");
+  html += F("const q=new URLSearchParams({language:document.getElementById('ui-language').value,wifiSsid:document.getElementById('wifi-ssid').value,wifiPassword:document.getElementById('wifi-password').value,wifiClient:document.getElementById('wifi-client').value,ts:Date.now()});");
+  html += F("try{const r=await fetch('/api/settings/general?'+q.toString());if(!r.ok){s.className='warn';s.textContent='Impostazioni non salvate.';return;}s.className='ok';s.textContent='Impostazioni salvate. Il WiFi operativo resta in modalita AP per ora.';}catch(e){s.className='warn';s.textContent='Errore rete durante il salvataggio.';}}");
   html += F("function setManualHomeEdit(v){manualHomeEdit=v;const t=document.getElementById('home-profile-temp');const m=document.getElementById('home-cycle-minutes');const b=document.getElementById('home-manual-edit');if(t)t.readOnly=!v;if(m)m.readOnly=!v;if(b)b.textContent=v?'Blocca modifica':'Modifica manuale';}");
   html += F("function toggleManualHomeEdit(){setManualHomeEdit(!manualHomeEdit);const n=document.getElementById('home-profile-note');if(n&&manualHomeEdit){n.className='ok';n.textContent='Modifica manuale attiva: puoi cambiare temperatura e durata.';}}");
   html += F("function fillHomeProfile(){const s=document.getElementById('home-profile');if(!s)return;const p=profiles[Number(s.value)||0];const n=document.getElementById('home-profile-note');");
@@ -1314,16 +1536,39 @@ String dashboardHtml(PageMode pageMode) {
   html += F("window.addEventListener('load',()=>{syncColor();if(document.getElementById('material-profile'))fillProfile();fillHomeProfile();refreshData();refreshBed();refreshNfc();refreshHeater();});");
   html += F("</script>");
   html += pageMode == PAGE_TAGS ? F("</head><body class=\"tags\"><main>") :
-          (pageMode == PAGE_SETTINGS ? F("</head><body class=\"settings\"><main>") : F("</head><body class=\"temperature\"><main>"));
-  html += F("<h1>Essiccatore</h1>");
-  html += F("<p class=\"sub\">Temperatura, umidita e gestione tag NFC</p>");
-  html += F("<nav><a href=\"/temperature\"");
-  html += pageMode == PAGE_TEMPERATURE ? F(" class=\"active\">Temperatura</a>") : F(">Temperatura</a>");
-  html += F("<a href=\"/tags\"");
-  html += pageMode == PAGE_TAGS ? F(" class=\"active\">Tag NFC</a>") : F(">Tag NFC</a>");
-  html += F("<a class=\"gear");
-  html += pageMode == PAGE_SETTINGS ? F(" active\" href=\"/settings\">&#9881;</a></nav>") : F("\" href=\"/settings\">&#9881;</a></nav>");
-  html += F("<section class=\"grid temperature-panel\">");
+          (pageMode == PAGE_SETPOINT ? F("</head><body class=\"setpoint\"><main>") :
+           (pageMode == PAGE_SETTINGS ? F("</head><body class=\"settings\"><main>") : F("</head><body class=\"home\"><main>")));
+  html += F("<h1>");
+  html += tr(TK_APP_TITLE);
+  html += F("</h1>");
+  html += F("<p class=\"sub\">");
+  html += tr(TK_APP_SUBTITLE);
+  html += F("</p>");
+  html += F("<nav><a href=\"/temperature\" title=\"");
+  html += tr(TK_NAV_HOME_TIP);
+  html += F("\"");
+  html += pageMode == PAGE_HOME ? F(" class=\"active\">") : F(">");
+  html += tr(TK_NAV_HOME);
+  html += F("</a>");
+  html += F("<a href=\"/tags\" title=\"");
+  html += tr(TK_NAV_TAG_TIP);
+  html += F("\"");
+  html += pageMode == PAGE_TAGS ? F(" class=\"active\">") : F(">");
+  html += tr(TK_NAV_TAG);
+  html += F("</a>");
+  html += F("<a href=\"/setpoint\" title=\"");
+  html += tr(TK_NAV_SETPOINT_TIP);
+  html += F("\"");
+  html += pageMode == PAGE_SETPOINT ? F(" class=\"active\">") : F(">");
+  html += tr(TK_NAV_SETPOINT);
+  html += F("</a>");
+  html += F("<a href=\"/settings\" title=\"");
+  html += tr(TK_NAV_SETTINGS_TIP);
+  html += F("\"");
+  html += pageMode == PAGE_SETTINGS ? F(" class=\"active\">") : F(">");
+  html += tr(TK_NAV_SETTINGS);
+  html += F("</a></nav>");
+  html += F("<section class=\"grid home-panel\">");
   html += F("<article class=\"card\"><div class=\"label\">Temperatura</div><div class=\"value\" id=\"temperature\">");
   html += valueOrDash(sensorData.temperature, " C");
   html += F("</div></article>");
@@ -1422,7 +1667,7 @@ String dashboardHtml(PageMode pageMode) {
   html += String(heaterControl.outputPercent, 1);
   html += F(" %</strong></span></div>");
   html += F("</div></section>");
-  html += F("<section class=\"card wide settings-panel\"><div class=\"label\">Impostazioni materiale</div><div class=\"small\">");
+  html += F("<section class=\"card wide setpoint-panel\"><div class=\"label\">Impostazioni materiale</div><div class=\"small\">");
   html += F("<div class=\"formgrid\"><label>Materiale<select id=\"material-profile\" onchange=\"loadRecommendedProfile()\">");
   for (uint8_t i = 0; i < totalMaterialProfileCount(); i++) {
     html += F("<option value=\"");
@@ -1467,6 +1712,55 @@ String dashboardHtml(PageMode pageMode) {
   }
   html += F("</tbody></table>");
   html += F("</div></section>");
+  html += F("<section class=\"card wide settings-panel\"><div class=\"label\">");
+  html += tr(TK_SETTINGS_NETWORK);
+  html += F("</div><div class=\"small\">");
+  html += F("<div class=\"formgrid\"><label>");
+  html += tr(TK_SETTINGS_LANGUAGE);
+  html += F("<select id=\"ui-language\"><option value=\"");
+  html += UI_LOCALE_CODE;
+  html += F("\"");
+  html += appSettings.language == UI_LOCALE_CODE ? F(" selected") : F("");
+  html += F(">");
+  html += UI_LOCALE_NAME;
+  html += F("</option><option value=\"en\"");
+  html += appSettings.language == "en" ? F(" selected") : F("");
+  html += F(">English</option></select></label>");
+  html += F("<label>");
+  html += tr(TK_SETTINGS_WIFI_SSID);
+  html += F("<input id=\"wifi-ssid\" maxlength=\"32\" value=\"");
+  html += escapeHtml(appSettings.wifiSsid);
+  html += F("\"></label>");
+  html += F("<label>");
+  html += tr(TK_SETTINGS_WIFI_PASSWORD);
+  html += F("<input id=\"wifi-password\" type=\"password\" maxlength=\"64\" value=\"");
+  html += escapeHtml(appSettings.wifiPassword);
+  html += F("\"></label>");
+  html += F("<label>");
+  html += tr(TK_SETTINGS_WIFI_MODE);
+  html += F("<select id=\"wifi-client\"><option value=\"0\"");
+  html += appSettings.wifiClientEnabled ? F("") : F(" selected");
+  html += F(">");
+  html += tr(TK_SETTINGS_WIFI_DISABLED);
+  html += F("</option><option value=\"1\"");
+  html += appSettings.wifiClientEnabled ? F(" selected") : F("");
+  html += F(">");
+  html += tr(TK_SETTINGS_WIFI_SAVED);
+  html += F("</option></select></label></div>");
+  html += F("<div class=\"status\"><strong>");
+  html += tr(TK_FIRMWARE_LOCALE);
+  html += F(":</strong> ");
+  html += UI_LOCALE_NAME;
+  html += F(" / <strong>");
+  html += tr(TK_FALLBACK_LOCALE);
+  html += F(":</strong> English</div>");
+  html += F("<button type=\"button\" onclick=\"saveGeneralSettings()\">");
+  html += tr(TK_SETTINGS_SAVE);
+  html += F("</button>");
+  html += F("<p class=\"status\" id=\"general-settings-status\">");
+  html += tr(TK_SETTINGS_NOTE);
+  html += F("</p>");
+  html += F("</div></section>");
   html += F("</main></body></html>");
 
   return html;
@@ -1475,19 +1769,25 @@ String dashboardHtml(PageMode pageMode) {
 void handleRoot() {
   Serial.println("HTTP GET /");
   server.sendHeader("Cache-Control", "no-store");
-  server.send(200, "text/html", dashboardHtml(PAGE_TEMPERATURE));
+  server.send(200, "text/html", dashboardHtml(PAGE_HOME));
 }
 
 void handleTemperaturePage() {
   Serial.println("HTTP GET /temperature");
   server.sendHeader("Cache-Control", "no-store");
-  server.send(200, "text/html", dashboardHtml(PAGE_TEMPERATURE));
+  server.send(200, "text/html", dashboardHtml(PAGE_HOME));
 }
 
 void handleTagsPage() {
   Serial.println("HTTP GET /tags");
   server.sendHeader("Cache-Control", "no-store");
   server.send(200, "text/html", dashboardHtml(PAGE_TAGS));
+}
+
+void handleSetpointPage() {
+  Serial.println("HTTP GET /setpoint");
+  server.sendHeader("Cache-Control", "no-store");
+  server.send(200, "text/html", dashboardHtml(PAGE_SETPOINT));
 }
 
 void handleSettingsPage() {
@@ -1561,6 +1861,7 @@ void handleApiSettingsProfileAdd() {
     server.send(400, "application/json", "{\"error\":\"profile_not_added\"}");
     return;
   }
+  saveCustomProfiles();
 
   selectedMaterialProfile = newProfileId;
   heaterControl.setpoint = materialProfileTemp(selectedMaterialProfile);
@@ -1570,6 +1871,38 @@ void handleApiSettingsProfileAdd() {
     heaterControl.cycleRemainingSeconds = heaterControl.cycleDurationSeconds;
   }
 
+  server.sendHeader("Cache-Control", "no-store");
+  server.send(200, "application/json", settingsJson());
+}
+
+void handleApiSettingsGeneral() {
+  Serial.println("HTTP GET /api/settings/general");
+
+  if (server.hasArg("language")) {
+    const String language = server.arg("language");
+    appSettings.language = (language == "en") ? "en" : UI_LOCALE_CODE;
+  }
+
+  if (server.hasArg("wifiSsid")) {
+    appSettings.wifiSsid = server.arg("wifiSsid");
+    appSettings.wifiSsid.trim();
+    if (appSettings.wifiSsid.length() > 32) {
+      appSettings.wifiSsid = appSettings.wifiSsid.substring(0, 32);
+    }
+  }
+
+  if (server.hasArg("wifiPassword")) {
+    appSettings.wifiPassword = server.arg("wifiPassword");
+    if (appSettings.wifiPassword.length() > 64) {
+      appSettings.wifiPassword = appSettings.wifiPassword.substring(0, 64);
+    }
+  }
+
+  if (server.hasArg("wifiClient")) {
+    appSettings.wifiClientEnabled = server.arg("wifiClient") == "1";
+  }
+
+  saveAppSettings();
   server.sendHeader("Cache-Control", "no-store");
   server.send(200, "application/json", settingsJson());
 }
@@ -1675,6 +2008,10 @@ void setup() {
 
   Serial.println();
   Serial.println("Essiccatore - portale BME280 + PN5180");
+  loadAppSettings();
+  loadCustomProfiles();
+  Serial.print("Profili personalizzati caricati: ");
+  Serial.println(customProfileCount);
 
   pinMode(HEATER_PIN, OUTPUT);
   setHeater(false);
@@ -1709,11 +2046,13 @@ void setup() {
   server.on("/", handleRoot);
   server.on("/temperature", handleTemperaturePage);
   server.on("/tags", handleTagsPage);
+  server.on("/setpoint", handleSetpointPage);
   server.on("/settings", handleSettingsPage);
   server.on("/api/bme280", handleApiBme280);
   server.on("/api/bed", HTTP_GET, handleApiBed);
   server.on("/api/settings/material", HTTP_GET, handleApiSettingsMaterial);
   server.on("/api/settings/profile/add", HTTP_GET, handleApiSettingsProfileAdd);
+  server.on("/api/settings/general", HTTP_GET, handleApiSettingsGeneral);
   server.on("/api/nfc", handleApiNfc);
   server.on("/api/nfc/read", HTTP_GET, handleApiNfcRead);
   server.on("/api/nfc/write", HTTP_GET, handleApiNfcWriteTest);

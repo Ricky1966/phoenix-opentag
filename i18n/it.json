@@ -1,0 +1,25 @@
+{
+  "locale": "it",
+  "name": "Italiano",
+  "strings": {
+    "app_title": "Essiccatore",
+    "app_subtitle": "Temperatura, umidita e gestione tag NFC",
+    "nav_home": "Home",
+    "nav_home_tip": "Home: mostra le letture live di camera, umidita e piatto",
+    "nav_tag": "Lettura TAG",
+    "nav_tag_tip": "Lettura TAG: legge e scrive i tag NFC OpenPrintTag",
+    "nav_setpoint": "SetPoint Materiali",
+    "nav_setpoint_tip": "SetPoint Materiali: gestisce riscaldatore, cicli e profili materiale",
+    "nav_settings": "Settings",
+    "nav_settings_tip": "Settings: lingua, rete WiFi e impostazioni generali",
+    "settings_network": "Rete e interfaccia",
+    "settings_language": "Lingua firmware",
+    "settings_wifi_ssid": "SSID WiFi",
+    "settings_wifi_password": "Password WiFi",
+    "settings_wifi_mode": "Connessione a router WiFi",
+    "settings_wifi_disabled": "Disattivato",
+    "settings_wifi_saved": "Salvata, non attiva",
+    "settings_save": "Salva impostazioni",
+    "settings_note": "Le credenziali vengono solo salvate. Il portale resta su Access Point Essiccatore finche non abilitiamo la connessione al router."
+  }
+}
