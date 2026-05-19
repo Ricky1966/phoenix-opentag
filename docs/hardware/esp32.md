@@ -68,6 +68,7 @@ Da sinistra verso destra:
 
 - I2C BME280: GPIO 21 SDA, GPIO 22 SCL.
 - SPI PN5180: GPIO 18 SCK, GPIO 19 MISO, GPIO 23 MOSI, GPIO 5 CS/SS.
+- Controllo PN5180: GPIO 16 BUSY, GPIO 17 RST.
 - Stepper driver: GPIO 25 STEP, GPIO 26 DIR, GPIO 27 ENABLE.
 - Controllo riscaldatore/PID: GPIO 32 o GPIO 33 verso driver/MOSFET/SSR, non direttamente al piatto.
 

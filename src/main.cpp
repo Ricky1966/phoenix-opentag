@@ -93,6 +93,7 @@ struct NfcData {
   String memoryInfo = "--";
   String dataFormat = "--";
   String memoryDump = "--";
+  String openPrintTagColor = "#ffffff";
   uint8_t lastUidLength = 0;
   bool readArmed = true;
 };
@@ -137,6 +138,7 @@ struct AppSettings {
   String wifiPassword = "";
   String language = UI_LOCALE_CODE;
   bool wifiClientEnabled = false;
+  bool debugEnabled = false;
 };
 
 SensorData sensorData;
@@ -146,6 +148,8 @@ HeaterControlData heaterControl;
 AppSettings appSettings;
 bool heaterEnabled = false;
 uint8_t selectedMaterialProfile = 0;
+bool wifiReconnectPending = false;
+unsigned long wifiReconnectAtMs = 0;
 
 constexpr MaterialDryProfile MATERIAL_PROFILES[] = {
   {"PLA", 45.0F, 360},
@@ -182,10 +186,99 @@ enum TextKey : uint8_t {
   TK_SETTINGS_WIFI_MODE,
   TK_SETTINGS_WIFI_DISABLED,
   TK_SETTINGS_WIFI_SAVED,
+  TK_SETTINGS_WIFI_SCAN,
+  TK_SETTINGS_WIFI_NETWORKS,
+  TK_SETTINGS_WIFI_STATUS,
+  TK_SETTINGS_WIFI_CONNECTED,
+  TK_SETTINGS_WIFI_NOT_CONNECTED,
+  TK_SETTINGS_SAVING,
+  TK_SETTINGS_SAVED,
+  TK_SETTINGS_SAVE_FAILED,
+  TK_SETTINGS_SAVE_ERROR,
+  TK_SETTINGS_AP_FALLBACK,
+  TK_SETTINGS_SCAN_START,
+  TK_SETTINGS_SCAN_NONE,
+  TK_SETTINGS_SCAN_FOUND,
+  TK_SETTINGS_SCAN_ERROR,
+  TK_SETTINGS_SECURED,
   TK_SETTINGS_SAVE,
   TK_SETTINGS_NOTE,
   TK_FIRMWARE_LOCALE,
-  TK_FALLBACK_LOCALE
+  TK_FALLBACK_LOCALE,
+  TK_CARD_TEMPERATURE,
+  TK_CARD_HUMIDITY,
+  TK_CARD_BED,
+  TK_HEATER,
+  TK_STATE,
+  TK_MODE,
+  TK_MANUAL,
+  TK_SETPOINT,
+  TK_PROFILE_MATERIAL,
+  TK_CYCLE_SETPOINT,
+  TK_CYCLE_DURATION_MIN,
+  TK_APPLY_CYCLE,
+  TK_MANUAL_EDIT,
+  TK_LOCK_EDIT,
+  TK_RECOMMENDED,
+  TK_CYCLE_COUNTDOWN,
+  TK_MANUAL_ON,
+  TK_OUTPUT,
+  TK_SETPOINT_SETTINGS,
+  TK_DRYER_SETPOINT_C,
+  TK_RECOMMENDED_PROFILE,
+  TK_APPLY_SETPOINT,
+  TK_SETPOINT_HELP,
+  TK_CUSTOM_PROFILE,
+  TK_PROFILE_NAME,
+  TK_DURATION_MIN,
+  TK_ADD_PROFILE,
+  TK_TABLE_MATERIAL,
+  TK_TABLE_TEMP,
+  TK_TABLE_TIME,
+  TK_TABLE_STATUS,
+  TK_APPLICABLE,
+  TK_OVER_LIMIT,
+  TK_PROFILE_APPLICABLE,
+  TK_PROFILE_WITHIN_RECOMMENDED,
+  TK_SETTINGS_DEBUG,
+  TK_SETTINGS_DEBUG_OFF,
+  TK_SETTINGS_DEBUG_ON,
+  TK_TAG_STATUS,
+  TK_TAG_UID,
+  TK_TAG_LAST_READ,
+  TK_TAG_NO_UID,
+  TK_NFC_READY,
+  TK_NFC_RF_NOT_READY,
+  TK_NFC_NOT_DETECTED,
+  TK_TAG_TECH,
+  TK_TAG_MEMORY,
+  TK_TAG_FORMAT,
+  TK_TAG_DEBUG,
+  TK_TAG_READ,
+  TK_TAG_WRITE,
+  TK_TAG_BRAND,
+  TK_TAG_MATERIAL,
+  TK_TAG_TYPE,
+  TK_TAG_COLOR,
+  TK_TAG_NOMINAL_WEIGHT,
+  TK_TAG_ACTUAL_WEIGHT,
+  TK_TAG_EMPTY_WEIGHT,
+  TK_TAG_DENSITY,
+  TK_TAG_DIAMETER,
+  TK_TAG_NOMINAL_LENGTH,
+  TK_TAG_ACTUAL_LENGTH,
+  TK_TAG_MANUFACTURE_DATE,
+  TK_TAG_COUNTRY,
+  TK_TAG_NOZZLE_MIN,
+  TK_TAG_NOZZLE_MAX,
+  TK_TAG_BED_MIN,
+  TK_TAG_BED_MAX,
+  TK_TAG_DRY_TEMP,
+  TK_TAG_DRY_TIME,
+  TK_TAG_SPOOL_WIDTH,
+  TK_TAG_SPOOL_OD,
+  TK_TAG_SPOOL_ID,
+  TK_TAG_SPOOL_HOLE
 };
 
 const __FlashStringHelper *textEn(TextKey key) {
@@ -206,11 +299,100 @@ const __FlashStringHelper *textEn(TextKey key) {
     case TK_SETTINGS_WIFI_PASSWORD: return F("WiFi password");
     case TK_SETTINGS_WIFI_MODE: return F("Router WiFi connection");
     case TK_SETTINGS_WIFI_DISABLED: return F("Disabled");
-    case TK_SETTINGS_WIFI_SAVED: return F("Saved, not active");
+    case TK_SETTINGS_WIFI_SAVED: return F("Connect to router");
+    case TK_SETTINGS_WIFI_SCAN: return F("Scan networks");
+    case TK_SETTINGS_WIFI_NETWORKS: return F("Available networks");
+    case TK_SETTINGS_WIFI_STATUS: return F("WiFi status");
+    case TK_SETTINGS_WIFI_CONNECTED: return F("Connected");
+    case TK_SETTINGS_WIFI_NOT_CONNECTED: return F("Not connected");
+    case TK_SETTINGS_SAVING: return F("Saving settings...");
+    case TK_SETTINGS_SAVED: return F("Settings saved.");
+    case TK_SETTINGS_SAVE_FAILED: return F("Settings not saved.");
+    case TK_SETTINGS_SAVE_ERROR: return F("Network error while saving.");
+    case TK_SETTINGS_AP_FALLBACK: return F("Essiccatore AP stays active as fallback.");
+    case TK_SETTINGS_SCAN_START: return F("Scanning WiFi networks...");
+    case TK_SETTINGS_SCAN_NONE: return F("No networks found.");
+    case TK_SETTINGS_SCAN_FOUND: return F("Networks found");
+    case TK_SETTINGS_SCAN_ERROR: return F("WiFi scan error.");
+    case TK_SETTINGS_SECURED: return F("secured");
     case TK_SETTINGS_SAVE: return F("Save settings");
-    case TK_SETTINGS_NOTE: return F("Credentials are only saved. The portal stays on the Essiccatore access point until router connection is enabled.");
+    case TK_SETTINGS_NOTE: return F("Scan networks, enter the password and save. The Essiccatore access point stays active as fallback.");
     case TK_FIRMWARE_LOCALE: return F("Compiled language");
     case TK_FALLBACK_LOCALE: return F("Fallback language");
+    case TK_CARD_TEMPERATURE: return F("Temperature");
+    case TK_CARD_HUMIDITY: return F("Humidity");
+    case TK_CARD_BED: return F("Bed");
+    case TK_HEATER: return F("Heater");
+    case TK_STATE: return F("State");
+    case TK_MODE: return F("Mode");
+    case TK_MANUAL: return F("Manual");
+    case TK_SETPOINT: return F("Setpoint");
+    case TK_PROFILE_MATERIAL: return F("Material profile");
+    case TK_CYCLE_SETPOINT: return F("Cycle setpoint C");
+    case TK_CYCLE_DURATION_MIN: return F("Cycle duration min");
+    case TK_APPLY_CYCLE: return F("Apply cycle");
+    case TK_MANUAL_EDIT: return F("Manual edit");
+    case TK_LOCK_EDIT: return F("Lock edit");
+    case TK_RECOMMENDED: return F("Recommended");
+    case TK_CYCLE_COUNTDOWN: return F("Cycle countdown");
+    case TK_MANUAL_ON: return F("Manual ON");
+    case TK_OUTPUT: return F("Output");
+    case TK_SETPOINT_SETTINGS: return F("Material settings");
+    case TK_DRYER_SETPOINT_C: return F("Dryer setpoint C");
+    case TK_RECOMMENDED_PROFILE: return F("Recommended profile");
+    case TK_APPLY_SETPOINT: return F("Apply setpoint");
+    case TK_SETPOINT_HELP: return F("Choose a material to load recommended setpoint and duration.");
+    case TK_CUSTOM_PROFILE: return F("New custom profile");
+    case TK_PROFILE_NAME: return F("Profile name");
+    case TK_DURATION_MIN: return F("Duration min");
+    case TK_ADD_PROFILE: return F("Add profile");
+    case TK_TABLE_MATERIAL: return F("Material");
+    case TK_TABLE_TEMP: return F("Temp.");
+    case TK_TABLE_TIME: return F("Time");
+    case TK_TABLE_STATUS: return F("Status");
+    case TK_APPLICABLE: return F("Applicable");
+    case TK_OVER_LIMIT: return F("Over safety limit");
+    case TK_PROFILE_APPLICABLE: return F("Profile applicable.");
+    case TK_PROFILE_WITHIN_RECOMMENDED: return F("Value within the recommended profile.");
+    case TK_SETTINGS_DEBUG: return F("Hardware debug");
+    case TK_SETTINGS_DEBUG_OFF: return F("Hidden");
+    case TK_SETTINGS_DEBUG_ON: return F("Visible");
+    case TK_TAG_STATUS: return F("Status");
+    case TK_TAG_UID: return F("Last UID");
+    case TK_TAG_LAST_READ: return F("Last read");
+    case TK_TAG_NO_UID: return F("No tag read");
+    case TK_NFC_READY: return F("PN5180 ready");
+    case TK_NFC_RF_NOT_READY: return F("PN5180 detected, RF not ready");
+    case TK_NFC_NOT_DETECTED: return F("PN5180 not detected");
+    case TK_TAG_TECH: return F("Technologies");
+    case TK_TAG_MEMORY: return F("Memory");
+    case TK_TAG_FORMAT: return F("Data format");
+    case TK_TAG_DEBUG: return F("PN5180 debug");
+    case TK_TAG_READ: return F("Read tag");
+    case TK_TAG_WRITE: return F("Write OpenPrintTag");
+    case TK_TAG_BRAND: return F("Brand");
+    case TK_TAG_MATERIAL: return F("Material");
+    case TK_TAG_TYPE: return F("Type");
+    case TK_TAG_COLOR: return F("Color");
+    case TK_TAG_NOMINAL_WEIGHT: return F("Nominal weight g");
+    case TK_TAG_ACTUAL_WEIGHT: return F("Actual weight g");
+    case TK_TAG_EMPTY_WEIGHT: return F("Empty spool g");
+    case TK_TAG_DENSITY: return F("Density g/cm3");
+    case TK_TAG_DIAMETER: return F("Filament diameter mm");
+    case TK_TAG_NOMINAL_LENGTH: return F("Nominal length mm");
+    case TK_TAG_ACTUAL_LENGTH: return F("Actual length mm");
+    case TK_TAG_MANUFACTURE_DATE: return F("Manufacture date");
+    case TK_TAG_COUNTRY: return F("Origin country");
+    case TK_TAG_NOZZLE_MIN: return F("Nozzle min C");
+    case TK_TAG_NOZZLE_MAX: return F("Nozzle max C");
+    case TK_TAG_BED_MIN: return F("Bed min C");
+    case TK_TAG_BED_MAX: return F("Bed max C");
+    case TK_TAG_DRY_TEMP: return F("Drying C");
+    case TK_TAG_DRY_TIME: return F("Drying min");
+    case TK_TAG_SPOOL_WIDTH: return F("Spool width mm");
+    case TK_TAG_SPOOL_OD: return F("Outer diameter mm");
+    case TK_TAG_SPOOL_ID: return F("Inner diameter mm");
+    case TK_TAG_SPOOL_HOLE: return F("Hub hole mm");
   }
   return F("");
 }
@@ -234,11 +416,100 @@ const __FlashStringHelper *textLocal(TextKey key) {
     case TK_SETTINGS_WIFI_PASSWORD: return F("Password WiFi");
     case TK_SETTINGS_WIFI_MODE: return F("Connessione a router WiFi");
     case TK_SETTINGS_WIFI_DISABLED: return F("Disattivato");
-    case TK_SETTINGS_WIFI_SAVED: return F("Salvata, non attiva");
+    case TK_SETTINGS_WIFI_SAVED: return F("Connetti al router");
+    case TK_SETTINGS_WIFI_SCAN: return F("Scansiona reti");
+    case TK_SETTINGS_WIFI_NETWORKS: return F("Reti disponibili");
+    case TK_SETTINGS_WIFI_STATUS: return F("Stato WiFi");
+    case TK_SETTINGS_WIFI_CONNECTED: return F("Connesso");
+    case TK_SETTINGS_WIFI_NOT_CONNECTED: return F("Non connesso");
+    case TK_SETTINGS_SAVING: return F("Salvo impostazioni...");
+    case TK_SETTINGS_SAVED: return F("Impostazioni salvate.");
+    case TK_SETTINGS_SAVE_FAILED: return F("Impostazioni non salvate.");
+    case TK_SETTINGS_SAVE_ERROR: return F("Errore rete durante il salvataggio.");
+    case TK_SETTINGS_AP_FALLBACK: return F("AP Essiccatore resta attivo come fallback.");
+    case TK_SETTINGS_SCAN_START: return F("Scansione reti WiFi...");
+    case TK_SETTINGS_SCAN_NONE: return F("Nessuna rete trovata.");
+    case TK_SETTINGS_SCAN_FOUND: return F("Reti trovate");
+    case TK_SETTINGS_SCAN_ERROR: return F("Errore scansione WiFi.");
+    case TK_SETTINGS_SECURED: return F("protetta");
     case TK_SETTINGS_SAVE: return F("Salva impostazioni");
-    case TK_SETTINGS_NOTE: return F("Le credenziali vengono solo salvate. Il portale resta su Access Point Essiccatore finche non abilitiamo la connessione al router.");
+    case TK_SETTINGS_NOTE: return F("Scansiona le reti, inserisci la password e salva. L'access point Essiccatore resta attivo come fallback.");
     case TK_FIRMWARE_LOCALE: return F("Lingua compilata");
     case TK_FALLBACK_LOCALE: return F("Lingua fallback");
+    case TK_CARD_TEMPERATURE: return F("Temperatura");
+    case TK_CARD_HUMIDITY: return F("Umidita");
+    case TK_CARD_BED: return F("Piatto");
+    case TK_HEATER: return F("Riscaldatore");
+    case TK_STATE: return F("Stato");
+    case TK_MODE: return F("Modo");
+    case TK_MANUAL: return F("Manuale");
+    case TK_SETPOINT: return F("Setpoint");
+    case TK_PROFILE_MATERIAL: return F("Profilo materiale");
+    case TK_CYCLE_SETPOINT: return F("Setpoint ciclo C");
+    case TK_CYCLE_DURATION_MIN: return F("Durata ciclo min");
+    case TK_APPLY_CYCLE: return F("Applica ciclo");
+    case TK_MANUAL_EDIT: return F("Modifica manuale");
+    case TK_LOCK_EDIT: return F("Blocca modifica");
+    case TK_RECOMMENDED: return F("Consigliato");
+    case TK_CYCLE_COUNTDOWN: return F("Countdown ciclo");
+    case TK_MANUAL_ON: return F("ON manuale");
+    case TK_OUTPUT: return F("Output");
+    case TK_SETPOINT_SETTINGS: return F("Impostazioni materiale");
+    case TK_DRYER_SETPOINT_C: return F("Setpoint essiccatore C");
+    case TK_RECOMMENDED_PROFILE: return F("Profilo consigliato");
+    case TK_APPLY_SETPOINT: return F("Applica setpoint");
+    case TK_SETPOINT_HELP: return F("Scegli un materiale per caricare setpoint e durata consigliata.");
+    case TK_CUSTOM_PROFILE: return F("Nuovo profilo personalizzato");
+    case TK_PROFILE_NAME: return F("Nome profilo");
+    case TK_DURATION_MIN: return F("Durata min");
+    case TK_ADD_PROFILE: return F("Aggiungi profilo");
+    case TK_TABLE_MATERIAL: return F("Materiale");
+    case TK_TABLE_TEMP: return F("Temp.");
+    case TK_TABLE_TIME: return F("Tempo");
+    case TK_TABLE_STATUS: return F("Stato");
+    case TK_APPLICABLE: return F("Applicabile");
+    case TK_OVER_LIMIT: return F("Oltre limite sicurezza");
+    case TK_PROFILE_APPLICABLE: return F("Profilo applicabile.");
+    case TK_PROFILE_WITHIN_RECOMMENDED: return F("Valore nel profilo consigliato.");
+    case TK_SETTINGS_DEBUG: return F("Debug hardware");
+    case TK_SETTINGS_DEBUG_OFF: return F("Nascosto");
+    case TK_SETTINGS_DEBUG_ON: return F("Visibile");
+    case TK_TAG_STATUS: return F("Stato");
+    case TK_TAG_UID: return F("Ultimo UID");
+    case TK_TAG_LAST_READ: return F("Ultima lettura");
+    case TK_TAG_NO_UID: return F("Nessun tag letto");
+    case TK_NFC_READY: return F("PN5180 pronto");
+    case TK_NFC_RF_NOT_READY: return F("PN5180 rilevato, RF non pronta");
+    case TK_NFC_NOT_DETECTED: return F("PN5180 non rilevato");
+    case TK_TAG_TECH: return F("Tecnologie");
+    case TK_TAG_MEMORY: return F("Memoria");
+    case TK_TAG_FORMAT: return F("Formato dati");
+    case TK_TAG_DEBUG: return F("Debug PN5180");
+    case TK_TAG_READ: return F("Leggi tag");
+    case TK_TAG_WRITE: return F("Scrivi OpenPrintTag");
+    case TK_TAG_BRAND: return F("Brand");
+    case TK_TAG_MATERIAL: return F("Materiale");
+    case TK_TAG_TYPE: return F("Tipo");
+    case TK_TAG_COLOR: return F("Colore");
+    case TK_TAG_NOMINAL_WEIGHT: return F("Peso nominale g");
+    case TK_TAG_ACTUAL_WEIGHT: return F("Peso reale g");
+    case TK_TAG_EMPTY_WEIGHT: return F("Bobina vuota g");
+    case TK_TAG_DENSITY: return F("Densita g/cm3");
+    case TK_TAG_DIAMETER: return F("Diametro filo mm");
+    case TK_TAG_NOMINAL_LENGTH: return F("Lunghezza nominale mm");
+    case TK_TAG_ACTUAL_LENGTH: return F("Lunghezza reale mm");
+    case TK_TAG_MANUFACTURE_DATE: return F("Data produzione");
+    case TK_TAG_COUNTRY: return F("Paese origine");
+    case TK_TAG_NOZZLE_MIN: return F("Nozzle min C");
+    case TK_TAG_NOZZLE_MAX: return F("Nozzle max C");
+    case TK_TAG_BED_MIN: return F("Piatto min C");
+    case TK_TAG_BED_MAX: return F("Piatto max C");
+    case TK_TAG_DRY_TEMP: return F("Essiccazione C");
+    case TK_TAG_DRY_TIME: return F("Essiccazione min");
+    case TK_TAG_SPOOL_WIDTH: return F("Larghezza bobina mm");
+    case TK_TAG_SPOOL_OD: return F("Diametro esterno mm");
+    case TK_TAG_SPOOL_ID: return F("Diametro interno mm");
+    case TK_TAG_SPOOL_HOLE: return F("Foro centrale mm");
   }
 #endif
   return textEn(key);
@@ -379,6 +650,7 @@ void saveAppSettings() {
   preferences.putString("wifiPass", appSettings.wifiPassword);
   preferences.putString("lang", appSettings.language);
   preferences.putBool("wifiClient", appSettings.wifiClientEnabled);
+  preferences.putBool("debug", appSettings.debugEnabled);
   preferences.end();
 }
 
@@ -388,6 +660,7 @@ void loadAppSettings() {
   appSettings.wifiPassword = preferences.getString("wifiPass", "");
   appSettings.language = preferences.getString("lang", UI_LOCALE_CODE);
   appSettings.wifiClientEnabled = preferences.getBool("wifiClient", false);
+  appSettings.debugEnabled = preferences.getBool("debug", false);
   preferences.end();
 
   if (appSettings.language != UI_LOCALE_CODE && appSettings.language != "en") {
@@ -782,6 +1055,42 @@ void printHexBuffer(const char *label, const uint8_t *buffer, uint8_t length) {
   Serial.println();
 }
 
+bool extractOpenPrintTagColor(const uint8_t *memory, uint16_t memoryLength, String &color) {
+  const uint16_t mimeLength = sizeof(OPENPRINTTAG_MIME_TYPE);
+  if (memoryLength <= mimeLength + 4) {
+    return false;
+  }
+
+  for (uint16_t mimePos = 0; mimePos + mimeLength < memoryLength; mimePos++) {
+    if (memcmp(&memory[mimePos], OPENPRINTTAG_MIME_TYPE, mimeLength) != 0) {
+      continue;
+    }
+
+    const uint16_t payloadPos = mimePos + mimeLength;
+    const uint16_t payloadEnd = memoryLength;
+
+    for (uint16_t pos = payloadPos; pos + 2 < payloadEnd; pos++) {
+      if (memory[pos] != 0x13 || (memory[pos + 1] & 0xE0) != 0x40) {
+        continue;
+      }
+
+      const uint8_t byteCount = memory[pos + 1] & 0x1F;
+      if ((byteCount != 3 && byteCount != 4) || pos + 2 + byteCount > payloadEnd) {
+        continue;
+      }
+
+      color = "#";
+      for (uint8_t i = 0; i < 3; i++) {
+        color += hexByte(memory[pos + 2 + i]);
+      }
+      color.toLowerCase();
+      return true;
+    }
+  }
+
+  return false;
+}
+
 void setNfcTagData(const String &uidText, uint8_t uidLength) {
   nfcData.lastStatus = "Tag ISO14443A letto";
   nfcData.lastUid = uidText;
@@ -859,6 +1168,8 @@ bool readIso15693Tag() {
   nfcData.memoryDump = "";
   if (blockSize > 0) {
     const uint8_t blocksToRead = min<uint8_t>(numBlocks, 32);
+    uint8_t tagMemory[128] = {0};
+    uint16_t tagMemoryLength = 0;
     uint8_t blockData[32] = {0};
 
     for (uint8_t blockNo = 0; blockNo < blocksToRead; blockNo++) {
@@ -882,6 +1193,11 @@ bool readIso15693Tag() {
         continue;
       }
 
+      if (tagMemoryLength + blockSize <= sizeof(tagMemory)) {
+        memcpy(&tagMemory[tagMemoryLength], blockData, blockSize);
+        tagMemoryLength += blockSize;
+      }
+
       for (uint8_t i = 0; i < blockSize; i++) {
         if (i > 0) {
           nfcData.memoryDump += " ";
@@ -894,8 +1210,18 @@ bool readIso15693Tag() {
         nfcData.memoryDump += printableAscii(blockData[i]);
       }
     }
+
+    String parsedColor;
+    if (extractOpenPrintTagColor(tagMemory, tagMemoryLength, parsedColor)) {
+      nfcData.openPrintTagColor = parsedColor;
+      Serial.print("OpenPrintTag colore: ");
+      Serial.println(nfcData.openPrintTagColor);
+    } else {
+      nfcData.openPrintTagColor = "#ffffff";
+    }
   } else {
     nfcData.memoryDump = "Memoria non identificata";
+    nfcData.openPrintTagColor = "#ffffff";
   }
 
   Serial.print("Tag ISO15693 UID: ");
@@ -1052,6 +1378,7 @@ void clearNfcReadState() {
   nfcData.memoryInfo = "--";
   nfcData.dataFormat = "--";
   nfcData.memoryDump = "--";
+  nfcData.openPrintTagColor = "#ffffff";
   nfcData.lastStatus = "Pronto: appoggia il tag e premi Leggi tag";
 }
 
@@ -1179,6 +1506,47 @@ String bedJson() {
   return json;
 }
 
+bool wifiClientConnected() {
+  return appSettings.wifiClientEnabled && WiFi.status() == WL_CONNECTED;
+}
+
+String wifiClientIp() {
+  return wifiClientConnected() ? WiFi.localIP().toString() : String("--");
+}
+
+void connectWifiClient(uint16_t timeoutMs = 8000) {
+  if (!appSettings.wifiClientEnabled || appSettings.wifiSsid.length() == 0) {
+    WiFi.disconnect(false);
+    return;
+  }
+
+  WiFi.mode(WIFI_AP_STA);
+  WiFi.setSleep(false);
+  Serial.print("Connessione WiFi a ");
+  Serial.println(appSettings.wifiSsid);
+  WiFi.begin(appSettings.wifiSsid.c_str(), appSettings.wifiPassword.c_str());
+
+  const unsigned long startMs = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - startMs < timeoutMs) {
+    delay(250);
+    Serial.print(".");
+  }
+  Serial.println();
+
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.print("WiFi connesso, IP: ");
+    Serial.println(WiFi.localIP());
+  } else {
+    Serial.println("WiFi non connesso: AP di emergenza resta attivo.");
+  }
+}
+
+void scheduleWifiReconnect(uint16_t delayMs = 1500) {
+  wifiReconnectPending = true;
+  wifiReconnectAtMs = millis() + delayMs;
+  Serial.println("WiFi reconnect pianificato dopo risposta HTTP.");
+}
+
 String settingsJson() {
   String json = "{";
   json += "\"selected\":";
@@ -1205,6 +1573,14 @@ String settingsJson() {
   json += appSettings.wifiSsid.length() > 0 ? "true" : "false";
   json += ",\"wifiClientEnabled\":";
   json += appSettings.wifiClientEnabled ? "true" : "false";
+  json += ",\"wifiConnected\":";
+  json += wifiClientConnected() ? "true" : "false";
+  json += ",\"wifiIp\":\"";
+  json += wifiClientIp();
+  json += "\",\"wifiRssi\":";
+  json += wifiClientConnected() ? String(WiFi.RSSI()) : "null";
+  json += ",\"debugEnabled\":";
+  json += appSettings.debugEnabled ? "true" : "false";
   json += ",\"profiles\":[";
 
   for (uint8_t i = 0; i < totalMaterialProfileCount(); i++) {
@@ -1262,6 +1638,8 @@ String nfcJson() {
   json += escapeJson(nfcData.dataFormat);
   json += "\",\"memoryDump\":\"";
   json += escapeJson(nfcData.memoryDump);
+  json += "\",\"openPrintTagColor\":\"";
+  json += escapeJson(nfcData.openPrintTagColor);
   json += "\"";
   json += "}";
   return json;
@@ -1439,6 +1817,9 @@ String dashboardHtml(PageMode pageMode) {
   html += F(".button-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px}.button-row button{margin-top:0}.output-inline{margin-left:auto;color:#52606d;font-size:14px}.output-inline strong{color:#102a43}");
   html += F(".cycle-timer{display:inline-block;margin:10px 0 6px;padding:12px 18px;border-radius:8px;background:#102a43;color:white;font-size:42px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:0}");
   html += F(".cycle-caption{font-size:13px;color:#52606d;font-weight:700;margin-top:12px}");
+  html += F(".tag-summary{display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin-bottom:14px}.tag-summary span{font-size:15px}");
+  html += F(".debug-box{background:#f8fafc;border:1px solid #d9e2ec;border-radius:6px;padding:12px;margin:0 0 14px}.debug-box .label{margin-bottom:6px}");
+  html += F(".tag-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:14px}.tag-actions button{margin-top:0}");
   html += F("</style>");
   html += F("<script>");
   html += F("async function refreshData(){try{const r=await fetch('/api/bme280');const d=await r.json();");
@@ -1447,31 +1828,43 @@ String dashboardHtml(PageMode pageMode) {
   html += F("}catch(e){}}");
   html += F("async function refreshBed(){try{const r=await fetch('/api/bed');const d=await r.json();");
   html += F("document.getElementById('bed-temp').textContent=d.valid?d.temperature.toFixed(1)+' C':'--';}catch(e){}}");
+  html += F("function setText(id,value){const e=document.getElementById(id);if(e)e.textContent=value;}");
   html += F("function updateNfc(d){");
-  html += F("document.getElementById('pn5180-status').textContent=d.readerPresent?(d.rfReady?'PN5180 pronto':'PN5180 rilevato, RF non pronta'):'PN5180 non rilevato';");
-  html += F("document.getElementById('pn5180-version').textContent='Product '+d.productVersion+' / Firmware '+d.firmwareVersion+' / EEPROM '+d.eepromVersion;");
-  html += F("document.getElementById('pn5180-scan-status').textContent=d.lastStatus;");
-  html += F("document.getElementById('pn5180-uid').textContent=d.lastUidLength>0?d.lastUid:'Nessun tag letto';");
-  html += F("document.getElementById('pn5180-type').textContent=d.tagType;");
-  html += F("document.getElementById('pn5180-tech').textContent=d.technologies;");
-  html += F("document.getElementById('pn5180-atqa').textContent=d.atqa;");
-  html += F("document.getElementById('pn5180-sak').textContent=d.sak;");
-  html += F("document.getElementById('pn5180-memory').textContent=d.memoryInfo;");
-  html += F("document.getElementById('pn5180-format').textContent=d.dataFormat;}");
+  html += F("setText('pn5180-status',d.readerPresent?(d.rfReady?'");
+  html += tr(TK_NFC_READY);
+  html += F("':'");
+  html += tr(TK_NFC_RF_NOT_READY);
+  html += F("'):'");
+  html += tr(TK_NFC_NOT_DETECTED);
+  html += F("');");
+  html += F("setText('pn5180-version','Product '+d.productVersion+' / Firmware '+d.firmwareVersion+' / EEPROM '+d.eepromVersion);");
+  html += F("setText('pn5180-scan-status',d.lastStatus);");
+  html += F("setText('pn5180-uid',d.lastUidLength>0?d.lastUid:'");
+  html += tr(TK_TAG_NO_UID);
+  html += F("');");
+  html += F("setText('pn5180-type',d.tagType);");
+  html += F("setText('pn5180-tech',d.technologies);");
+  html += F("setText('pn5180-atqa',d.atqa);");
+  html += F("setText('pn5180-sak',d.sak);");
+  html += F("setText('pn5180-memory',d.memoryInfo);");
+  html += F("setText('pn5180-format',d.dataFormat);");
+  html += F("const color=document.getElementById('tag-color');if(color&&d.openPrintTagColor){color.value=d.openPrintTagColor;syncColor();}}");
   html += F("async function refreshNfc(){try{const r=await fetch('/api/nfc');updateNfc(await r.json());}catch(e){}}");
-  html += F("async function readTag(){const b=document.getElementById('read-tag');b.disabled=true;b.textContent='Lettura...';");
-  html += F("let done=false;const t=setTimeout(()=>{if(!done){b.disabled=false;b.textContent='Leggi tag';document.getElementById('pn5180-scan-status').textContent='Lettura senza risposta: premi EN/RST se il portale resta fermo';}},3000);");
-  html += F("try{const r=await fetch('/api/nfc/read?ts='+Date.now());done=true;clearTimeout(t);updateNfc(await r.json());}catch(e){done=true;clearTimeout(t);document.getElementById('pn5180-scan-status').textContent='Errore richiesta lettura';}");
-  html += F("b.disabled=false;b.textContent='Leggi tag';}");
+  html += F("async function readTag(){const b=document.getElementById('read-tag');const label=b.dataset.label||b.textContent;b.disabled=true;b.textContent='...';");
+  html += F("let done=false;const t=setTimeout(()=>{if(!done){b.disabled=false;b.textContent=label;setText('pn5180-scan-status','Lettura senza risposta: premi EN/RST se il portale resta fermo');}},3000);");
+  html += F("try{const r=await fetch('/api/nfc/read?ts='+Date.now());done=true;clearTimeout(t);updateNfc(await r.json());}catch(e){done=true;clearTimeout(t);setText('pn5180-scan-status','Errore richiesta lettura');}");
+  html += F("b.disabled=false;b.textContent=label;}");
   html += F("async function writeOpenPrintTag(){if(!confirm('Scrivo questi dati sul tag appoggiato. Continuo?'))return;");
   html += F("const b=document.getElementById('write-tag');const f=document.getElementById('tag-form');const q=new URLSearchParams(new FormData(f));");
   html += F("const md=f.elements['mdate'].value;if(md){q.set('mdate',Math.floor(new Date(md+'T00:00:00Z').getTime()/1000));}");
-  html += F("b.disabled=true;b.textContent='Scrittura...';");
-  html += F("try{const r=await fetch('/api/nfc/write?'+q.toString()+'&ts='+Date.now());updateNfc(await r.json());}catch(e){document.getElementById('pn5180-scan-status').textContent='Errore scrittura';}");
-  html += F("b.disabled=false;b.textContent='Scrivi OpenPrintTag';}");
+  html += F("const label=b.dataset.label||b.textContent;b.disabled=true;b.textContent='...';");
+  html += F("try{const r=await fetch('/api/nfc/write?'+q.toString()+'&ts='+Date.now());updateNfc(await r.json());}catch(e){setText('pn5180-scan-status','Errore scrittura');}");
+  html += F("b.disabled=false;b.textContent=label;}");
   html += F("function syncColor(){const c=document.getElementById('tag-color');const h=document.getElementById('tag-color-hex');if(c&&h)h.textContent=c.value.toUpperCase();}");
   html += F("function updateHeater(d){document.getElementById('heater-state').textContent=d.enabled?'ON':'OFF';");
-  html += F("document.getElementById('heater-mode').textContent=d.automatic?'AUTO':'Manuale';");
+  html += F("document.getElementById('heater-mode').textContent=d.automatic?'AUTO':'");
+  html += tr(TK_MANUAL);
+  html += F("';");
   html += F("document.getElementById('heater-setpoint').textContent=d.setpoint.toFixed(1)+' C';");
   html += F("document.getElementById('heater-output').textContent=d.outputPercent.toFixed(1)+' %';");
   html += F("const c=document.getElementById('cycle-countdown');if(c)c.textContent=formatDuration(d.cycleRemainingSeconds);");
@@ -1507,7 +1900,9 @@ String dashboardHtml(PageMode pageMode) {
   html += F("function syncSetpointWarning(){const p=selectedProfile();const v=readNumber('profile-temp',p[1]);const n=document.getElementById('profile-note');");
   html += F("if(v>safetyLimit){n.className='warn';n.textContent='Sopra il limite sicurezza attuale: non applicabile.';return false;}");
   html += F("if(v>p[1]){n.className='warn';n.textContent='Temperatura superiore al profilo consigliato.';return true;}");
-  html += F("n.className='ok';n.textContent='Valore nel profilo consigliato.';return true;}");
+  html += F("n.className='ok';n.textContent='");
+  html += tr(TK_PROFILE_WITHIN_RECOMMENDED);
+  html += F("';return true;}");
   html += F("function fillProfile(){const p=selectedProfile();document.getElementById('profile-recommended').textContent=p[1].toFixed(1)+' C / '+Math.round(p[2]/60)+' h';syncSetpointWarning();}");
   html += F("function loadRecommendedProfile(){const p=selectedProfile();document.getElementById('profile-temp').value=p[1];document.getElementById('profile-minutes').value=p[2];syncSetpointWarning();}");
   html += F("async function applySetpoint(){if(!syncSetpointWarning())return;const p=selectedProfile();const v=readNumber('profile-temp',p[1]);");
@@ -1517,15 +1912,48 @@ String dashboardHtml(PageMode pageMode) {
   html += F("async function addCustomProfile(ev){if(ev)ev.preventDefault();const name=document.getElementById('custom-profile-name').value.trim();const temp=readNumber('custom-profile-temp',NaN);const minutes=Math.round(readNumber('custom-profile-minutes',NaN));const s=document.getElementById('settings-status');");
   html += F("s.className='status';if(!name){s.textContent='Nome profilo mancante.';return;}if(!Number.isFinite(temp)||!Number.isFinite(minutes)||minutes<1){s.textContent='Temperatura o durata non validi.';return;}if(temp>safetyLimit){s.className='warn';s.textContent='Temperatura oltre il limite sicurezza.';return;}s.textContent='Aggiungo profilo...';");
   html += F("try{const q=new URLSearchParams({name:name,setpoint:temp,minutes:minutes,ts:Date.now()});const r=await fetch('/api/settings/profile/add?'+q.toString());const t=await r.text();if(!r.ok){s.className='warn';s.textContent='Profilo non aggiunto: '+t;return;}location.href='/settings?ts='+Date.now();}catch(e){s.className='warn';s.textContent='Errore rete mentre aggiungevo il profilo.';}}");
-  html += F("async function saveGeneralSettings(){const s=document.getElementById('general-settings-status');s.className='status';s.textContent='Salvo impostazioni...';");
-  html += F("const q=new URLSearchParams({language:document.getElementById('ui-language').value,wifiSsid:document.getElementById('wifi-ssid').value,wifiPassword:document.getElementById('wifi-password').value,wifiClient:document.getElementById('wifi-client').value,ts:Date.now()});");
-  html += F("try{const r=await fetch('/api/settings/general?'+q.toString());if(!r.ok){s.className='warn';s.textContent='Impostazioni non salvate.';return;}s.className='ok';s.textContent='Impostazioni salvate. Il WiFi operativo resta in modalita AP per ora.';}catch(e){s.className='warn';s.textContent='Errore rete durante il salvataggio.';}}");
-  html += F("function setManualHomeEdit(v){manualHomeEdit=v;const t=document.getElementById('home-profile-temp');const m=document.getElementById('home-cycle-minutes');const b=document.getElementById('home-manual-edit');if(t)t.readOnly=!v;if(m)m.readOnly=!v;if(b)b.textContent=v?'Blocca modifica':'Modifica manuale';}");
+  html += F("async function saveGeneralSettings(){const s=document.getElementById('general-settings-status');s.className='status';s.textContent='");
+  html += tr(TK_SETTINGS_SAVING);
+  html += F("';");
+  html += F("const q=new URLSearchParams({language:document.getElementById('ui-language').value,wifiSsid:document.getElementById('wifi-ssid').value,wifiPassword:document.getElementById('wifi-password').value,wifiClient:document.getElementById('wifi-client').value,debug:document.getElementById('debug-enabled').value,ts:Date.now()});");
+  html += F("try{const r=await fetch('/api/settings/general?'+q.toString());if(!r.ok){s.className='warn';s.textContent='");
+  html += tr(TK_SETTINGS_SAVE_FAILED);
+  html += F("';return;}const d=await r.json();const connected=d.wifiConnected?'");
+  html += tr(TK_SETTINGS_WIFI_CONNECTED);
+  html += F(" '+d.wifiIp:'");
+  html += tr(TK_SETTINGS_WIFI_NOT_CONNECTED);
+  html += F(" --';const ws=document.getElementById('wifi-status-value');if(ws)ws.textContent=connected;s.className=d.wifiConnected?'ok':'status';s.textContent='");
+  html += tr(TK_SETTINGS_SAVED);
+  html += F(" '+connected+'. ");
+  html += tr(TK_SETTINGS_AP_FALLBACK);
+  html += F("';}catch(e){s.className='warn';s.textContent='");
+  html += tr(TK_SETTINGS_SAVE_ERROR);
+  html += F("';}}");
+  html += F("async function scanWifiNetworks(){const s=document.getElementById('general-settings-status');const list=document.getElementById('wifi-networks');s.className='status';s.textContent='");
+  html += tr(TK_SETTINGS_SCAN_START);
+  html += F("';list.innerHTML='';");
+  html += F("try{const r=await fetch('/api/wifi/scan?ts='+Date.now());const d=await r.json();if(!d.networks.length){s.className='warn';s.textContent='");
+  html += tr(TK_SETTINGS_SCAN_NONE);
+  html += F("';return;}d.networks.forEach((n,i)=>{const o=document.createElement('option');o.value=n.ssid;o.textContent=n.ssid+' ('+n.rssi+' dBm'+(n.secure?', ");
+  html += tr(TK_SETTINGS_SECURED);
+  html += F("':'')+')';list.appendChild(o);});list.disabled=false;document.getElementById('wifi-ssid').value=d.networks[0].ssid;s.className='ok';s.textContent='");
+  html += tr(TK_SETTINGS_SCAN_FOUND);
+  html += F(": '+d.networks.length;}catch(e){s.className='warn';s.textContent='");
+  html += tr(TK_SETTINGS_SCAN_ERROR);
+  html += F("';}}");
+  html += F("function chooseWifiNetwork(){const list=document.getElementById('wifi-networks');if(list&&list.value)document.getElementById('wifi-ssid').value=list.value;}");
+  html += F("function setManualHomeEdit(v){manualHomeEdit=v;const t=document.getElementById('home-profile-temp');const m=document.getElementById('home-cycle-minutes');const b=document.getElementById('home-manual-edit');if(t)t.readOnly=!v;if(m)m.readOnly=!v;if(b)b.textContent=v?'");
+  html += tr(TK_LOCK_EDIT);
+  html += F("':'");
+  html += tr(TK_MANUAL_EDIT);
+  html += F("';}");
   html += F("function toggleManualHomeEdit(){setManualHomeEdit(!manualHomeEdit);const n=document.getElementById('home-profile-note');if(n&&manualHomeEdit){n.className='ok';n.textContent='Modifica manuale attiva: puoi cambiare temperatura e durata.';}}");
   html += F("function fillHomeProfile(){const s=document.getElementById('home-profile');if(!s)return;const p=profiles[Number(s.value)||0];const n=document.getElementById('home-profile-note');");
   html += F("if(!manualHomeEdit){document.getElementById('home-profile-temp').value=p[1].toFixed(1);document.getElementById('home-cycle-minutes').value=p[2];}");
   html += F("document.getElementById('home-profile-recommended').textContent=p[1].toFixed(1)+' C / '+Math.round(p[2]/60)+' h';");
-  html += F("if(p[1]>safetyLimit){n.className='warn';n.textContent='Profilo oltre il limite sicurezza attuale.';}else{n.className='ok';n.textContent='Profilo applicabile.';}}");
+  html += F("if(p[1]>safetyLimit){n.className='warn';n.textContent='Profilo oltre il limite sicurezza attuale.';}else{n.className='ok';n.textContent='");
+  html += tr(TK_PROFILE_APPLICABLE);
+  html += F("';}}");
   html += F("async function applyHomeProfile(showMessage=true){const s=document.getElementById('home-profile');const p=profiles[Number(s.value)||0];");
   html += F("const setpoint=readNumber('home-profile-temp',p[1]);");
   html += F("if(setpoint>safetyLimit){document.getElementById('home-profile-note').className='warn';document.getElementById('home-profile-note').textContent='Non applicato: oltre il limite sicurezza.';return;}");
@@ -1569,77 +1997,170 @@ String dashboardHtml(PageMode pageMode) {
   html += tr(TK_NAV_SETTINGS);
   html += F("</a></nav>");
   html += F("<section class=\"grid home-panel\">");
-  html += F("<article class=\"card\"><div class=\"label\">Temperatura</div><div class=\"value\" id=\"temperature\">");
+  html += F("<article class=\"card\"><div class=\"label\">");
+  html += tr(TK_CARD_TEMPERATURE);
+  html += F("</div><div class=\"value\" id=\"temperature\">");
   html += valueOrDash(sensorData.temperature, " C");
   html += F("</div></article>");
-  html += F("<article class=\"card\"><div class=\"label\">Umidita</div><div class=\"value\" id=\"humidity\">");
+  html += F("<article class=\"card\"><div class=\"label\">");
+  html += tr(TK_CARD_HUMIDITY);
+  html += F("</div><div class=\"value\" id=\"humidity\">");
   html += valueOrDash(sensorData.humidity, " %");
   html += F("</div></article>");
-  html += F("<article class=\"card\"><div class=\"label\">Piatto</div><div class=\"value\" id=\"bed-temp\">");
+  html += F("<article class=\"card\"><div class=\"label\">");
+  html += tr(TK_CARD_BED);
+  html += F("</div><div class=\"value\" id=\"bed-temp\">");
   html += valueOrDash(bedData.temperature, " C");
   html += F("</div></article>");
   html += F("</section>");
-  html += F("<section class=\"card wide tag-panel\"><div class=\"label\">PN5180</div><div class=\"small\">");
-  html += F("<strong id=\"pn5180-status\">");
-  html += nfcData.readerPresent ? (nfcData.rfReady ? "PN5180 pronto" : "PN5180 rilevato, RF non pronta") : "PN5180 non rilevato";
-  html += F("</strong><br><span id=\"pn5180-version\">Product ");
-  html += nfcData.productVersion;
-  html += F(" / Firmware ");
-  html += nfcData.firmwareVersion;
-  html += F(" / EEPROM ");
-  html += nfcData.eepromVersion;
-  html += F("</span><br>Stato lettura: <span id=\"pn5180-scan-status\">");
+  html += F("<section class=\"card wide tag-panel\"><div class=\"label\">OpenPrintTag</div><div class=\"small\">");
+  html += F("<div class=\"tag-summary\"><span><strong>");
+  html += tr(TK_TAG_STATUS);
+  html += F(":</strong> <span id=\"pn5180-status\">");
+  html += nfcData.readerPresent ? (nfcData.rfReady ? tr(TK_NFC_READY) : tr(TK_NFC_RF_NOT_READY)) : tr(TK_NFC_NOT_DETECTED);
+  html += F("</span></span><span><strong>");
+  html += tr(TK_TAG_UID);
+  html += F(":</strong> <span id=\"pn5180-uid\">");
+  if (nfcData.lastUidLength > 0) {
+    html += nfcData.lastUid;
+  } else {
+    html += tr(TK_TAG_NO_UID);
+  }
+  html += F("</span></span><span><strong>");
+  html += tr(TK_TAG_LAST_READ);
+  html += F(":</strong> <span id=\"pn5180-scan-status\">");
   html += nfcData.lastStatus;
-  html += F("</span><br>Ultimo UID: <span id=\"pn5180-uid\">");
-  html += nfcData.lastUidLength > 0 ? nfcData.lastUid : "Nessun tag letto";
-  html += F("</span><br>Tipo: <span id=\"pn5180-type\">");
-  html += nfcData.tagType;
-  html += F("</span><br>Tecnologie: <span id=\"pn5180-tech\">");
-  html += nfcData.technologies;
-  html += F("</span><br>ATQA: <span id=\"pn5180-atqa\">");
-  html += nfcData.atqa;
-  html += F("</span><br>SAK: <span id=\"pn5180-sak\">");
-  html += nfcData.sak;
-  html += F("</span><br>Memoria: <span id=\"pn5180-memory\">");
-  html += nfcData.memoryInfo;
-  html += F("</span><br>Formato dati: <span id=\"pn5180-format\">");
-  html += nfcData.dataFormat;
-  html += F("</span><br><button id=\"read-tag\" onclick=\"readTag()\">Leggi tag</button>");
+  html += F("</span></span></div>");
+  if (appSettings.debugEnabled) {
+    html += F("<div class=\"debug-box\"><div class=\"label\">");
+    html += tr(TK_TAG_DEBUG);
+    html += F("</div><span id=\"pn5180-version\">Product ");
+    html += nfcData.productVersion;
+    html += F(" / Firmware ");
+    html += nfcData.firmwareVersion;
+    html += F(" / EEPROM ");
+    html += nfcData.eepromVersion;
+    html += F("</span><br>");
+    html += tr(TK_TAG_TYPE);
+    html += F(": <span id=\"pn5180-type\">");
+    html += nfcData.tagType;
+    html += F("</span><br>");
+    html += tr(TK_TAG_TECH);
+    html += F(": <span id=\"pn5180-tech\">");
+    html += nfcData.technologies;
+    html += F("</span><br>ATQA: <span id=\"pn5180-atqa\">");
+    html += nfcData.atqa;
+    html += F("</span><br>SAK: <span id=\"pn5180-sak\">");
+    html += nfcData.sak;
+    html += F("</span><br>");
+    html += tr(TK_TAG_MEMORY);
+    html += F(": <span id=\"pn5180-memory\">");
+    html += nfcData.memoryInfo;
+    html += F("</span><br>");
+    html += tr(TK_TAG_FORMAT);
+    html += F(": <span id=\"pn5180-format\">");
+    html += nfcData.dataFormat;
+    html += F("</span></div>");
+  }
   html += F("<form id=\"tag-form\" class=\"formgrid\" onsubmit=\"event.preventDefault();writeOpenPrintTag();\">");
-  html += F("<label>Brand<input name=\"brand\" maxlength=\"31\" value=\"Essiccatore\"></label>");
-  html += F("<label>Materiale<input name=\"name\" maxlength=\"31\" value=\"Test PLA\"></label>");
-  html += F("<label>Tipo<select name=\"type\"><option value=\"0\">PLA</option><option value=\"1\">PETG</option><option value=\"2\">TPU</option><option value=\"3\">ABS</option><option value=\"4\">ASA</option><option value=\"5\">PC</option></select></label>");
-  html += F("<label>Colore<div class=\"colorline\"><input id=\"tag-color\" name=\"color\" type=\"color\" value=\"#ffffff\" oninput=\"syncColor()\"><span class=\"hex\" id=\"tag-color-hex\">#FFFFFF</span></div></label>");
-  html += F("<label>Peso nominale g<input name=\"nomw\" type=\"number\" min=\"0\" max=\"9999\" value=\"1000\"></label>");
-  html += F("<label>Peso reale g<input name=\"actw\" type=\"number\" min=\"0\" max=\"9999\" value=\"1000\"></label>");
-  html += F("<label>Bobina vuota g<input name=\"emptyw\" type=\"number\" min=\"0\" max=\"9999\" value=\"250\"></label>");
-  html += F("<label>Densita g/cm3<input name=\"density\" type=\"number\" min=\"0\" max=\"5\" step=\"0.01\" value=\"1.24\"></label>");
-  html += F("<label>Diametro filo mm<input name=\"diameter\" type=\"number\" min=\"0\" max=\"5\" step=\"0.01\" value=\"1.75\"></label>");
-  html += F("<label>Lunghezza nominale mm<input name=\"nomlen\" type=\"number\" min=\"0\" max=\"999999\" value=\"330000\"></label>");
-  html += F("<label>Lunghezza reale mm<input name=\"actlen\" type=\"number\" min=\"0\" max=\"999999\" value=\"330000\"></label>");
-  html += F("<label>Data produzione<input name=\"mdate\" type=\"date\"></label>");
-  html += F("<label>Paese origine<input name=\"country\" maxlength=\"2\" value=\"IT\"></label>");
-  html += F("<label>Nozzle min C<input name=\"nmin\" type=\"number\" min=\"0\" max=\"350\" value=\"205\"></label>");
-  html += F("<label>Nozzle max C<input name=\"nmax\" type=\"number\" min=\"0\" max=\"350\" value=\"215\"></label>");
-  html += F("<label>Piatto min C<input name=\"bmin\" type=\"number\" min=\"0\" max=\"140\" value=\"55\"></label>");
-  html += F("<label>Piatto max C<input name=\"bmax\" type=\"number\" min=\"0\" max=\"140\" value=\"60\"></label>");
-  html += F("<label>Essiccazione C<input name=\"drytemp\" type=\"number\" min=\"0\" max=\"120\" value=\"45\"></label>");
-  html += F("<label>Essiccazione min<input name=\"drytime\" type=\"number\" min=\"0\" max=\"9999\" value=\"240\"></label>");
-  html += F("<label>Larghezza bobina mm<input name=\"spoolw\" type=\"number\" min=\"0\" max=\"999\" value=\"68\"></label>");
-  html += F("<label>Diametro esterno mm<input name=\"spoolod\" type=\"number\" min=\"0\" max=\"999\" value=\"200\"></label>");
-  html += F("<label>Diametro interno mm<input name=\"spoolid\" type=\"number\" min=\"0\" max=\"999\" value=\"100\"></label>");
-  html += F("<label>Foro centrale mm<input name=\"spoolhole\" type=\"number\" min=\"0\" max=\"999\" value=\"52\"></label>");
-  html += F("</form><button id=\"write-tag\" onclick=\"writeOpenPrintTag()\">Scrivi OpenPrintTag</button>");
+  html += F("<label>");
+  html += tr(TK_TAG_BRAND);
+  html += F("<input name=\"brand\" maxlength=\"31\" value=\"Essiccatore\"></label>");
+  html += F("<label>");
+  html += tr(TK_TAG_MATERIAL);
+  html += F("<input name=\"name\" maxlength=\"31\" value=\"Test PLA\"></label>");
+  html += F("<label>");
+  html += tr(TK_TAG_TYPE);
+  html += F("<select name=\"type\"><option value=\"0\">PLA</option><option value=\"1\">PETG</option><option value=\"2\">TPU</option><option value=\"3\">ABS</option><option value=\"4\">ASA</option><option value=\"5\">PC</option></select></label>");
+  html += F("<label>");
+  html += tr(TK_TAG_COLOR);
+  html += F("<div class=\"colorline\"><input id=\"tag-color\" name=\"color\" type=\"color\" value=\"#ffffff\" oninput=\"syncColor()\"><span class=\"hex\" id=\"tag-color-hex\">#FFFFFF</span></div></label>");
+  html += F("<label>");
+  html += tr(TK_TAG_NOMINAL_WEIGHT);
+  html += F("<input name=\"nomw\" type=\"number\" min=\"0\" max=\"9999\" value=\"1000\"></label>");
+  html += F("<label>");
+  html += tr(TK_TAG_ACTUAL_WEIGHT);
+  html += F("<input name=\"actw\" type=\"number\" min=\"0\" max=\"9999\" value=\"1000\"></label>");
+  html += F("<label>");
+  html += tr(TK_TAG_EMPTY_WEIGHT);
+  html += F("<input name=\"emptyw\" type=\"number\" min=\"0\" max=\"9999\" value=\"250\"></label>");
+  html += F("<label>");
+  html += tr(TK_TAG_DENSITY);
+  html += F("<input name=\"density\" type=\"number\" min=\"0\" max=\"5\" step=\"0.01\" value=\"1.24\"></label>");
+  html += F("<label>");
+  html += tr(TK_TAG_DIAMETER);
+  html += F("<input name=\"diameter\" type=\"number\" min=\"0\" max=\"5\" step=\"0.01\" value=\"1.75\"></label>");
+  html += F("<label>");
+  html += tr(TK_TAG_NOMINAL_LENGTH);
+  html += F("<input name=\"nomlen\" type=\"number\" min=\"0\" max=\"999999\" value=\"330000\"></label>");
+  html += F("<label>");
+  html += tr(TK_TAG_ACTUAL_LENGTH);
+  html += F("<input name=\"actlen\" type=\"number\" min=\"0\" max=\"999999\" value=\"330000\"></label>");
+  html += F("<label>");
+  html += tr(TK_TAG_MANUFACTURE_DATE);
+  html += F("<input name=\"mdate\" type=\"date\"></label>");
+  html += F("<label>");
+  html += tr(TK_TAG_COUNTRY);
+  html += F("<input name=\"country\" maxlength=\"2\" value=\"IT\"></label>");
+  html += F("<label>");
+  html += tr(TK_TAG_NOZZLE_MIN);
+  html += F("<input name=\"nmin\" type=\"number\" min=\"0\" max=\"350\" value=\"205\"></label>");
+  html += F("<label>");
+  html += tr(TK_TAG_NOZZLE_MAX);
+  html += F("<input name=\"nmax\" type=\"number\" min=\"0\" max=\"350\" value=\"215\"></label>");
+  html += F("<label>");
+  html += tr(TK_TAG_BED_MIN);
+  html += F("<input name=\"bmin\" type=\"number\" min=\"0\" max=\"140\" value=\"55\"></label>");
+  html += F("<label>");
+  html += tr(TK_TAG_BED_MAX);
+  html += F("<input name=\"bmax\" type=\"number\" min=\"0\" max=\"140\" value=\"60\"></label>");
+  html += F("<label>");
+  html += tr(TK_TAG_DRY_TEMP);
+  html += F("<input name=\"drytemp\" type=\"number\" min=\"0\" max=\"120\" value=\"45\"></label>");
+  html += F("<label>");
+  html += tr(TK_TAG_DRY_TIME);
+  html += F("<input name=\"drytime\" type=\"number\" min=\"0\" max=\"9999\" value=\"240\"></label>");
+  html += F("<label>");
+  html += tr(TK_TAG_SPOOL_WIDTH);
+  html += F("<input name=\"spoolw\" type=\"number\" min=\"0\" max=\"999\" value=\"68\"></label>");
+  html += F("<label>");
+  html += tr(TK_TAG_SPOOL_OD);
+  html += F("<input name=\"spoolod\" type=\"number\" min=\"0\" max=\"999\" value=\"200\"></label>");
+  html += F("<label>");
+  html += tr(TK_TAG_SPOOL_ID);
+  html += F("<input name=\"spoolid\" type=\"number\" min=\"0\" max=\"999\" value=\"100\"></label>");
+  html += F("<label>");
+  html += tr(TK_TAG_SPOOL_HOLE);
+  html += F("<input name=\"spoolhole\" type=\"number\" min=\"0\" max=\"999\" value=\"52\"></label>");
+  html += F("</form><div class=\"tag-actions\"><button id=\"read-tag\" data-label=\"");
+  html += tr(TK_TAG_READ);
+  html += F("\" onclick=\"readTag()\">");
+  html += tr(TK_TAG_READ);
+  html += F("</button><button id=\"write-tag\" data-label=\"");
+  html += tr(TK_TAG_WRITE);
+  html += F("\" onclick=\"writeOpenPrintTag()\">");
+  html += tr(TK_TAG_WRITE);
+  html += F("</button></div>");
   html += F("</div></section>");
-  html += F("<section class=\"card wide heater-panel\"><div class=\"label\">Riscaldatore</div><div class=\"small\">");
-  html += F("<div class=\"heater-summary\"><div class=\"metric\"><span>Stato</span><strong id=\"heater-state\">");
+  html += F("<section class=\"card wide heater-panel\"><div class=\"label\">");
+  html += tr(TK_HEATER);
+  html += F("</div><div class=\"small\">");
+  html += F("<div class=\"heater-summary\"><div class=\"metric\"><span>");
+  html += tr(TK_STATE);
+  html += F("</span><strong id=\"heater-state\">");
   html += heaterEnabled ? "ON" : "OFF";
-  html += F("</strong></div><div class=\"metric\"><span>Modo</span><strong id=\"heater-mode\">");
-  html += heaterControl.automatic ? "AUTO" : "Manuale";
-  html += F("</strong></div><div class=\"metric\"><span>Setpoint</span><strong id=\"heater-setpoint\">");
+  html += F("</strong></div><div class=\"metric\"><span>");
+  html += tr(TK_MODE);
+  html += F("</span><strong id=\"heater-mode\">");
+  html += heaterControl.automatic ? F("AUTO") : tr(TK_MANUAL);
+  html += F("</strong></div><div class=\"metric\"><span>");
+  html += tr(TK_SETPOINT);
+  html += F("</span><strong id=\"heater-setpoint\">");
   html += String(heaterControl.setpoint, 1);
   html += F(" C</strong></div></div>");
-  html += F("<div class=\"profile-control\"><label>Profilo materiale<select id=\"home-profile\" onchange=\"fillHomeProfile()\">");
+  html += F("<div class=\"profile-control\"><label>");
+  html += tr(TK_PROFILE_MATERIAL);
+  html += F("<select id=\"home-profile\" onchange=\"fillHomeProfile()\">");
   for (uint8_t i = 0; i < totalMaterialProfileCount(); i++) {
     html += F("<option value=\"");
     html += String(i);
@@ -1651,24 +2172,44 @@ String dashboardHtml(PageMode pageMode) {
     html += materialProfileName(i);
     html += F("</option>");
   }
-  html += F("</select></label><label>Setpoint ciclo C<input id=\"home-profile-temp\" type=\"number\" min=\"20\" max=\"120\" step=\"0.5\" readonly value=\"");
+  html += F("</select></label><label>");
+  html += tr(TK_CYCLE_SETPOINT);
+  html += F("<input id=\"home-profile-temp\" type=\"number\" min=\"20\" max=\"120\" step=\"0.5\" readonly value=\"");
   html += String(heaterControl.setpoint, 1);
-  html += F("\"></label><label>Durata ciclo min<input id=\"home-cycle-minutes\" type=\"number\" min=\"1\" max=\"9999\" step=\"1\" readonly value=\"");
+  html += F("\"></label><label>");
+  html += tr(TK_CYCLE_DURATION_MIN);
+  html += F("<input id=\"home-cycle-minutes\" type=\"number\" min=\"1\" max=\"9999\" step=\"1\" readonly value=\"");
   html += String(heaterControl.cycleDurationSeconds / 60UL);
-  html += F("\"></label><button type=\"button\" onclick=\"applyHomeProfile()\">Applica ciclo</button><button type=\"button\" class=\"secondary\" id=\"home-manual-edit\" onclick=\"toggleManualHomeEdit()\">Modifica manuale</button></div>");
-  html += F("<p class=\"status\">Consigliato: <span id=\"home-profile-recommended\">--</span></p>");
+  html += F("\"></label><button type=\"button\" onclick=\"applyHomeProfile()\">");
+  html += tr(TK_APPLY_CYCLE);
+  html += F("</button><button type=\"button\" class=\"secondary\" id=\"home-manual-edit\" onclick=\"toggleManualHomeEdit()\">");
+  html += tr(TK_MANUAL_EDIT);
+  html += F("</button></div>");
+  html += F("<p class=\"status\">");
+  html += tr(TK_RECOMMENDED);
+  html += F(": <span id=\"home-profile-recommended\">--</span></p>");
   html += F("<p class=\"status\" id=\"home-profile-note\">--</p>");
-  html += F("<div class=\"cycle-caption\">Countdown ciclo</div><div class=\"cycle-timer\" id=\"cycle-countdown\">--:--:--</div>");
+  html += F("<div class=\"cycle-caption\">");
+  html += tr(TK_CYCLE_COUNTDOWN);
+  html += F("</div><div class=\"cycle-timer\" id=\"cycle-countdown\">--:--:--</div>");
   html += F("<div class=\"button-row\"><button onclick=\"setHeaterAuto(true)\">AUTO</button>");
   html += F("<button class=\"secondary\" onclick=\"setHeaterAuto(false)\">STOP AUTO</button>");
-  html += F("<button class=\"danger\" onclick=\"setHeaterState(true)\">ON manuale</button>");
+  html += F("<button class=\"danger\" onclick=\"setHeaterState(true)\">");
+  html += tr(TK_MANUAL_ON);
+  html += F("</button>");
   html += F("<button class=\"secondary\" onclick=\"setHeaterState(false)\">OFF</button>");
-  html += F("<span class=\"output-inline\">Output <strong id=\"heater-output\">");
+  html += F("<span class=\"output-inline\">");
+  html += tr(TK_OUTPUT);
+  html += F(" <strong id=\"heater-output\">");
   html += String(heaterControl.outputPercent, 1);
   html += F(" %</strong></span></div>");
   html += F("</div></section>");
-  html += F("<section class=\"card wide setpoint-panel\"><div class=\"label\">Impostazioni materiale</div><div class=\"small\">");
-  html += F("<div class=\"formgrid\"><label>Materiale<select id=\"material-profile\" onchange=\"loadRecommendedProfile()\">");
+  html += F("<section class=\"card wide setpoint-panel\"><div class=\"label\">");
+  html += tr(TK_SETPOINT_SETTINGS);
+  html += F("</div><div class=\"small\">");
+  html += F("<div class=\"formgrid\"><label>");
+  html += tr(TK_TABLE_MATERIAL);
+  html += F("<select id=\"material-profile\" onchange=\"loadRecommendedProfile()\">");
   for (uint8_t i = 0; i < totalMaterialProfileCount(); i++) {
     html += F("<option value=\"");
     html += String(i);
@@ -1681,21 +2222,47 @@ String dashboardHtml(PageMode pageMode) {
     html += F("</option>");
   }
   html += F("</select></label>");
-  html += F("<label>Setpoint essiccatore C<input id=\"profile-temp\" type=\"number\" min=\"20\" max=\"120\" step=\"0.5\" value=\"");
+  html += F("<label>");
+  html += tr(TK_DRYER_SETPOINT_C);
+  html += F("<input id=\"profile-temp\" type=\"number\" min=\"20\" max=\"120\" step=\"0.5\" value=\"");
   html += String(heaterControl.setpoint, 1);
   html += F("\" oninput=\"syncSetpointWarning()\"></label>");
-  html += F("<label>Durata ciclo min<input id=\"profile-minutes\" type=\"number\" min=\"1\" max=\"9999\" step=\"1\" value=\"");
+  html += F("<label>");
+  html += tr(TK_CYCLE_DURATION_MIN);
+  html += F("<input id=\"profile-minutes\" type=\"number\" min=\"1\" max=\"9999\" step=\"1\" value=\"");
   html += String(heaterControl.cycleDurationSeconds / 60UL);
-  html += F("\"></label><label>Profilo consigliato<div class=\"hex\" id=\"profile-recommended\">--</div></label></div>");
+  html += F("\"></label><label>");
+  html += tr(TK_RECOMMENDED_PROFILE);
+  html += F("<div class=\"hex\" id=\"profile-recommended\">--</div></label></div>");
   html += F("<p class=\"status\" id=\"profile-note\">--</p>");
-  html += F("<button type=\"button\" onclick=\"applySetpoint()\">Applica setpoint</button>");
-  html += F("<p class=\"status\" id=\"settings-status\">Scegli un materiale per caricare setpoint e durata consigliata.</p>");
-  html += F("<div class=\"label\" style=\"margin-top:24px\">Nuovo profilo personalizzato</div>");
-  html += F("<div class=\"formgrid\"><label>Nome profilo<input id=\"custom-profile-name\" maxlength=\"24\" placeholder=\"PLA 0.5KG\"></label>");
+  html += F("<button type=\"button\" onclick=\"applySetpoint()\">");
+  html += tr(TK_APPLY_SETPOINT);
+  html += F("</button>");
+  html += F("<p class=\"status\" id=\"settings-status\">");
+  html += tr(TK_SETPOINT_HELP);
+  html += F("</p>");
+  html += F("<div class=\"label\" style=\"margin-top:24px\">");
+  html += tr(TK_CUSTOM_PROFILE);
+  html += F("</div>");
+  html += F("<div class=\"formgrid\"><label>");
+  html += tr(TK_PROFILE_NAME);
+  html += F("<input id=\"custom-profile-name\" maxlength=\"24\" placeholder=\"PLA 0.5KG\"></label>");
   html += F("<label>Setpoint C<input id=\"custom-profile-temp\" type=\"number\" min=\"20\" max=\"120\" step=\"0.5\" value=\"45\"></label>");
-  html += F("<label>Durata min<input id=\"custom-profile-minutes\" type=\"number\" min=\"1\" max=\"9999\" step=\"1\" value=\"180\"></label>");
-  html += F("<label>&nbsp;<button type=\"button\" onclick=\"addCustomProfile(event)\">Aggiungi profilo</button></label></div>");
-  html += F("<table><thead><tr><th>Materiale</th><th>Temp.</th><th>Tempo</th><th>Stato</th></tr></thead><tbody>");
+  html += F("<label>");
+  html += tr(TK_DURATION_MIN);
+  html += F("<input id=\"custom-profile-minutes\" type=\"number\" min=\"1\" max=\"9999\" step=\"1\" value=\"180\"></label>");
+  html += F("<label>&nbsp;<button type=\"button\" onclick=\"addCustomProfile(event)\">");
+  html += tr(TK_ADD_PROFILE);
+  html += F("</button></label></div>");
+  html += F("<table><thead><tr><th>");
+  html += tr(TK_TABLE_MATERIAL);
+  html += F("</th><th>");
+  html += tr(TK_TABLE_TEMP);
+  html += F("</th><th>");
+  html += tr(TK_TABLE_TIME);
+  html += F("</th><th>");
+  html += tr(TK_TABLE_STATUS);
+  html += F("</th></tr></thead><tbody>");
   for (uint8_t i = 0; i < totalMaterialProfileCount(); i++) {
     const bool available = materialProfileTemp(i) <= BED_SAFETY_LIMIT_C;
     html += F("<tr><td>");
@@ -1707,7 +2274,7 @@ String dashboardHtml(PageMode pageMode) {
     html += F(" h</td><td class=\"");
     html += (available ? F("ok") : F("warn"));
     html += F("\">");
-    html += (available ? F("Applicabile") : F("Oltre limite sicurezza"));
+    html += (available ? tr(TK_APPLICABLE) : tr(TK_OVER_LIMIT));
     html += F("</td></tr>");
   }
   html += F("</tbody></table>");
@@ -1732,6 +2299,9 @@ String dashboardHtml(PageMode pageMode) {
   html += escapeHtml(appSettings.wifiSsid);
   html += F("\"></label>");
   html += F("<label>");
+  html += tr(TK_SETTINGS_WIFI_NETWORKS);
+  html += F("<select id=\"wifi-networks\" onchange=\"chooseWifiNetwork()\" disabled><option value=\"\">--</option></select></label>");
+  html += F("<label>");
   html += tr(TK_SETTINGS_WIFI_PASSWORD);
   html += F("<input id=\"wifi-password\" type=\"password\" maxlength=\"64\" value=\"");
   html += escapeHtml(appSettings.wifiPassword);
@@ -1746,6 +2316,17 @@ String dashboardHtml(PageMode pageMode) {
   html += appSettings.wifiClientEnabled ? F(" selected") : F("");
   html += F(">");
   html += tr(TK_SETTINGS_WIFI_SAVED);
+  html += F("</option></select></label>");
+  html += F("<label>");
+  html += tr(TK_SETTINGS_DEBUG);
+  html += F("<select id=\"debug-enabled\"><option value=\"0\"");
+  html += appSettings.debugEnabled ? F("") : F(" selected");
+  html += F(">");
+  html += tr(TK_SETTINGS_DEBUG_OFF);
+  html += F("</option><option value=\"1\"");
+  html += appSettings.debugEnabled ? F(" selected") : F("");
+  html += F(">");
+  html += tr(TK_SETTINGS_DEBUG_ON);
   html += F("</option></select></label></div>");
   html += F("<div class=\"status\"><strong>");
   html += tr(TK_FIRMWARE_LOCALE);
@@ -1754,6 +2335,16 @@ String dashboardHtml(PageMode pageMode) {
   html += F(" / <strong>");
   html += tr(TK_FALLBACK_LOCALE);
   html += F(":</strong> English</div>");
+  html += F("<div class=\"status\"><strong>");
+  html += tr(TK_SETTINGS_WIFI_STATUS);
+  html += F(":</strong> <span id=\"wifi-status-value\">");
+  html += wifiClientConnected() ? tr(TK_SETTINGS_WIFI_CONNECTED) : tr(TK_SETTINGS_WIFI_NOT_CONNECTED);
+  html += F(" ");
+  html += wifiClientIp();
+  html += F("</span></div>");
+  html += F("<button type=\"button\" class=\"secondary\" onclick=\"scanWifiNetworks()\">");
+  html += tr(TK_SETTINGS_WIFI_SCAN);
+  html += F("</button>");
   html += F("<button type=\"button\" onclick=\"saveGeneralSettings()\">");
   html += tr(TK_SETTINGS_SAVE);
   html += F("</button>");
@@ -1875,6 +2466,35 @@ void handleApiSettingsProfileAdd() {
   server.send(200, "application/json", settingsJson());
 }
 
+void handleApiWifiScan() {
+  Serial.println("HTTP GET /api/wifi/scan");
+  WiFi.mode(WIFI_AP_STA);
+  WiFi.setSleep(false);
+
+  const int networkCount = WiFi.scanNetworks(false, true);
+  String json = "{\"networks\":[";
+  for (int i = 0; i < networkCount; i++) {
+    if (WiFi.SSID(i).length() == 0) {
+      continue;
+    }
+    if (json.endsWith("}")) {
+      json += ",";
+    }
+    json += "{\"ssid\":\"";
+    json += escapeJson(WiFi.SSID(i));
+    json += "\",\"rssi\":";
+    json += String(WiFi.RSSI(i));
+    json += ",\"secure\":";
+    json += WiFi.encryptionType(i) == WIFI_AUTH_OPEN ? "false" : "true";
+    json += "}";
+  }
+  json += "]}";
+  WiFi.scanDelete();
+
+  server.sendHeader("Cache-Control", "no-store");
+  server.send(200, "application/json", json);
+}
+
 void handleApiSettingsGeneral() {
   Serial.println("HTTP GET /api/settings/general");
 
@@ -1902,9 +2522,14 @@ void handleApiSettingsGeneral() {
     appSettings.wifiClientEnabled = server.arg("wifiClient") == "1";
   }
 
+  if (server.hasArg("debug")) {
+    appSettings.debugEnabled = server.arg("debug") == "1";
+  }
+
   saveAppSettings();
   server.sendHeader("Cache-Control", "no-store");
   server.send(200, "application/json", settingsJson());
+  scheduleWifiReconnect();
 }
 
 void handleApiNfc() {
@@ -2031,7 +2656,7 @@ void setup() {
   nfcData.lastStatus = "PN5180 non inizializzato";
 
   WiFi.disconnect(true);
-  WiFi.mode(WIFI_AP);
+  WiFi.mode(WIFI_AP_STA);
   WiFi.setSleep(false);
   WiFi.softAPConfig(AP_IP, AP_GATEWAY, AP_SUBNET);
   WiFi.softAP(AP_SSID, AP_PASSWORD);
@@ -2042,6 +2667,7 @@ void setup() {
   Serial.println(AP_PASSWORD);
   Serial.print("Indirizzo: http://");
   Serial.println(WiFi.softAPIP());
+  connectWifiClient();
 
   server.on("/", handleRoot);
   server.on("/temperature", handleTemperaturePage);
@@ -2053,6 +2679,7 @@ void setup() {
   server.on("/api/settings/material", HTTP_GET, handleApiSettingsMaterial);
   server.on("/api/settings/profile/add", HTTP_GET, handleApiSettingsProfileAdd);
   server.on("/api/settings/general", HTTP_GET, handleApiSettingsGeneral);
+  server.on("/api/wifi/scan", HTTP_GET, handleApiWifiScan);
   server.on("/api/nfc", handleApiNfc);
   server.on("/api/nfc/read", HTTP_GET, handleApiNfcRead);
   server.on("/api/nfc/write", HTTP_GET, handleApiNfcWriteTest);
@@ -2069,6 +2696,10 @@ void setup() {
 
 void loop() {
   server.handleClient();
+  if (wifiReconnectPending && (long)(millis() - wifiReconnectAtMs) >= 0) {
+    wifiReconnectPending = false;
+    connectWifiClient();
+  }
   readSensor();
   readBedTemperature();
   updateHeaterControl();

@@ -32,6 +32,7 @@ L'idea iniziale e realizzare uno spazio comune per 4 o 5 bobine, in base al cont
 - OpenPrintTag: standard NFC open-source di Prusa Research per bobine smart.
 - Specifiche OpenPrintTag: https://openprinttag.org/
 - Note hardware ESP32: [docs/hardware/esp32.md](docs/hardware/esp32.md)
+- TODO di progetto: [docs/TODO.md](docs/TODO.md)
 
 ## Stato del progetto
 
