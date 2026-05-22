@@ -2154,16 +2154,6 @@
 	)
 	(wire
 		(pts
-			(xy 162.56 40.64) (xy 176.53 40.64)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "1ee19d25-d250-4c0b-8913-11c9d5fa330e")
-	)
-	(wire
-		(pts
 			(xy 24.13 25.4) (xy 27.94 25.4)
 		)
 		(stroke
@@ -2734,26 +2724,6 @@
 	)
 	(wire
 		(pts
-			(xy 176.53 38.1) (xy 162.56 38.1)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "c41cc871-9ade-4b15-926e-fd0eaae4a315")
-	)
-	(wire
-		(pts
-			(xy 176.53 43.18) (xy 162.56 43.18)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "c89164c9-65b3-4413-ad08-b5bdceedea51")
-	)
-	(wire
-		(pts
 			(xy 46.99 41.91) (xy 54.61 41.91)
 		)
 		(stroke
@@ -2771,16 +2741,6 @@
 			(type default)
 		)
 		(uuid "cc1306d8-5bcf-49b0-94a6-8f2c17fb9ac7")
-	)
-	(wire
-		(pts
-			(xy 176.53 45.72) (xy 162.56 45.72)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "cc50804a-1423-486f-a9db-62e39efed1d8")
 	)
 	(wire
 		(pts
@@ -3132,16 +3092,6 @@
 		)
 		(uuid "12f678f1-9f9a-4cdb-96fd-1a52b1863a38")
 	)
-	(label "PN5180_REQ"
-		(at 176.53 38.1 180)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right bottom)
-		)
-		(uuid "1d7f835b-c513-463c-925e-adce51ce29c0")
-	)
 	(label "3V3"
 		(at 176.53 66.04 180)
 		(effects
@@ -3191,16 +3141,6 @@
 			(justify left bottom)
 		)
 		(uuid "3fa3dc87-8232-4fd5-90a7-da0a2aedef81")
-	)
-	(label "PN5180_AUX"
-		(at 176.53 40.64 180)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right bottom)
-		)
-		(uuid "4063a7f7-ae53-43d2-ba19-ce5a9f98a6bd")
 	)
 	(label "BME280_SDA"
 		(at 78.74 29.21 270)
@@ -3442,16 +3382,6 @@
 		)
 		(uuid "ab710210-0c54-40c0-8896-0ff45382616a")
 	)
-	(label "PN5180_GPIO"
-		(at 176.53 45.72 180)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right bottom)
-		)
-		(uuid "aff62cd2-4fe5-489d-834a-2e66e6f099d8")
-	)
 	(label "GPIO32"
 		(at 46.99 52.07 0)
 		(effects
@@ -3461,16 +3391,6 @@
 			(justify left bottom)
 		)
 		(uuid "be79da35-d407-43b5-80cf-24e0d10d06bd")
-	)
-	(label "PN5180_IRQ"
-		(at 176.53 43.18 180)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right bottom)
-		)
-		(uuid "bf050925-8296-48ab-86af-43d1e16dfa4c")
 	)
 	(label "GPIO09"
 		(at 46.99 74.93 0)
@@ -4364,4 +4284,21 @@
 		)
 	)
 	(embedded_fonts no)
+
+	(no_connect
+		(at 162.56 45.72)
+		(uuid "961cfaf6-16ee-462e-abca-1ce8c84da45d")
+	)
+	(no_connect
+		(at 162.56 43.18)
+		(uuid "2f2b3b41-de4c-4cc3-a72a-64766a4fceb0")
+	)
+	(no_connect
+		(at 162.56 40.64)
+		(uuid "90790bf1-27e3-42ea-a42c-0c8860babda9")
+	)
+	(no_connect
+		(at 162.56 38.1)
+		(uuid "69af4845-92f3-4042-9972-3e1578681964")
+	)
 )
