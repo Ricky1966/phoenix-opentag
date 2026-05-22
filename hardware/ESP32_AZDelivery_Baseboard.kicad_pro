@@ -242,7 +242,7 @@
       "internal_id": "",
       "mfg": "",
       "mpn": "",
-      "sch_revision": ""
+      "sch_revision": "0.1"
     },
     "layer_pairs": [],
     "layer_presets": [],
@@ -649,13 +649,18 @@
       {
         "filename": "ESP32_AZDelivery_Baseboard.kicad_sch",
         "name": "ESP32_AZDelivery_Baseboard",
-        "uuid": "00000000-0000-0000-0000-000000000000"
+        "uuid": "6dfc456e-f0f7-4393-96f4-0b7c9f575168"
       }
     ],
     "used_designators": "",
     "variants": []
   },
-  "sheets": [],
+  "sheets": [
+    [
+      "6dfc456e-f0f7-4393-96f4-0b7c9f575168",
+      "ESP32_AZDelivery_Baseboard"
+    ]
+  ],
   "text_variables": {},
   "tuning_profiles": {
     "meta": {

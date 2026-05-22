@@ -2108,7 +2108,7 @@
 	)
 	(wire
 		(pts
-			(xy 116.84 52.07) (xy 154.94 52.07)
+			(xy 116.84 52.07) (xy 168.91 52.07)
 		)
 		(stroke
 			(width 0)
@@ -2378,7 +2378,7 @@
 	)
 	(wire
 		(pts
-			(xy 121.92 49.53) (xy 154.94 49.53)
+			(xy 121.92 49.53) (xy 168.91 49.53)
 		)
 		(stroke
 			(width 0)
@@ -2628,7 +2628,7 @@
 	)
 	(wire
 		(pts
-			(xy 119.38 54.61) (xy 154.94 54.61)
+			(xy 119.38 54.61) (xy 168.91 54.61)
 		)
 		(stroke
 			(width 0)
@@ -2768,7 +2768,7 @@
 	)
 	(wire
 		(pts
-			(xy 120.65 57.15) (xy 154.94 57.15)
+			(xy 120.65 57.15) (xy 168.91 57.15)
 		)
 		(stroke
 			(width 0)
@@ -3016,16 +3016,6 @@
 		)
 		(uuid "2f723e9a-3a18-4d74-89e0-bf0410281ff4")
 	)
-	(label "PN5180_AUX"
-		(at 154.94 78.74 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "3cf4c41c-3976-4e34-afff-227b703e5d85")
-	)
 	(label "GPIO06"
 		(at 109.22 82.55 0)
 		(effects
@@ -3045,16 +3035,6 @@
 			(justify right bottom)
 		)
 		(uuid "41d483e3-4b81-4a02-8b67-9c73cf97a9e8")
-	)
-	(label "PN5180_GPIO"
-		(at 154.94 76.2 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "4405cc7c-e2e2-4a66-8e38-eb2084828925")
 	)
 	(label "PN5180_NSS"
 		(at 154.94 57.15 0)
@@ -3296,16 +3276,6 @@
 		)
 		(uuid "a829e968-2486-4134-bc91-5f29484a7658")
 	)
-	(label "PN5180_IRQ"
-		(at 154.94 68.58 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "a9c9f13a-fc7c-4f15-aba6-ab4ea1d56761")
-	)
 	(label "GPIO32"
 		(at 46.99 52.07 0)
 		(effects
@@ -3395,16 +3365,6 @@
 			(justify left bottom)
 		)
 		(uuid "d7224051-bf1d-4230-b56b-c11bc1dd0ad0")
-	)
-	(label "PN5180_REQ"
-		(at 154.94 81.28 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "daa9143a-0d89-48f2-87fd-b94fe87b21cc")
 	)
 	(label "GPIO10"
 		(at 46.99 77.47 0)
@@ -3860,6 +3820,121 @@
 		)
 	)
 	(symbol
+		(lib_id "Connector_Generic:Conn_01x13")
+		(at 173.99 59.69 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "ae4ae95c-c930-449b-827b-83d20f7a663d")
+		(property "Reference" "J3"
+			(at 176.53 58.4199 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "PN5180_1x13"
+			(at 176.53 60.9599 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "Connector_PinSocket_2.54mm:PinSocket_1x13_P2.54mm_Vertical"
+			(at 173.99 59.69 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 173.99 59.69 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "PN5180 NFC module 13-pin female header"
+			(at 173.99 59.69 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "1b2d42ca-18aa-476c-b724-090a66363019")
+		)
+		(pin "2"
+			(uuid "60129726-5fa9-4270-9021-43c300e04f72")
+		)
+		(pin "3"
+			(uuid "d7d05c17-5d1c-48d9-b434-3bd1e5731339")
+		)
+		(pin "4"
+			(uuid "d2b47bc8-af17-4139-bc6d-f18f684a4e0d")
+		)
+		(pin "5"
+			(uuid "380f087b-57b5-4c64-9dd5-f8c7dd35299b")
+		)
+		(pin "6"
+			(uuid "0f2e6c0b-ac2e-4b29-8432-40c06b0a04de")
+		)
+		(pin "7"
+			(uuid "8da0513e-ec8d-437f-aa71-afd8f7e091e0")
+		)
+		(pin "8"
+			(uuid "1579f7f0-c439-4019-b4f2-c4322eb3ed52")
+		)
+		(pin "9"
+			(uuid "da57503b-5043-45e5-bf70-9a536200f30b")
+		)
+		(pin "10"
+			(uuid "cd7e18b0-4d40-4e57-be8f-b2b7a1afabca")
+		)
+		(pin "11"
+			(uuid "9b644387-8bec-44cc-bb7b-3eb5d088ce44")
+		)
+		(pin "12"
+			(uuid "eba8979c-12aa-46d3-a454-861aa63e13c8")
+		)
+		(pin "13"
+			(uuid "9c10cdf3-abad-4ea1-96e0-2d76165de1d8")
+		)
+		(instances
+			(project "ESP32_AZDelivery_Baseboard"
+				(path "/6dfc456e-f0f7-4393-96f4-0b7c9f575168"
+					(reference "J3")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "Connector_Generic:Conn_01x19")
 		(at 97.79 59.69 0)
 		(mirror y)
@@ -4085,379 +4160,264 @@
 	)
 	(embedded_fonts no)
 
-	(symbol
-		(lib_id "Connector_Generic:Conn_01x13")
-		(at 173.99 59.69 0)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "ae4ae95c-c930-449b-827b-83d20f7a663d")
-		(property "Reference" "J3"
-			(at 176.53 58.4199 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Value" "PN5180_1x13"
-			(at 176.53 60.9599 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Footprint" "Connector_PinSocket_2.54mm:PinSocket_1x13_P2.54mm_Vertical"
-			(at 173.99 59.69 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" ""
-			(at 173.99 59.69 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" "PN5180 NFC module 13-pin female header"
-			(at 173.99 59.69 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(pin "1"
-			(uuid "1b2d42ca-18aa-476c-b724-090a66363019")
-		)
-		(pin "2"
-			(uuid "60129726-5fa9-4270-9021-43c300e04f72")
-		)
-		(pin "3"
-			(uuid "d7d05c17-5d1c-48d9-b434-3bd1e5731339")
-		)
-		(pin "4"
-			(uuid "d2b47bc8-af17-4139-bc6d-f18f684a4e0d")
-		)
-		(pin "5"
-			(uuid "380f087b-57b5-4c64-9dd5-f8c7dd35299b")
-		)
-		(pin "6"
-			(uuid "0f2e6c0b-ac2e-4b29-8432-40c06b0a04de")
-		)
-		(pin "7"
-			(uuid "8da0513e-ec8d-437f-aa71-afd8f7e091e0")
-		)
-		(pin "8"
-			(uuid "1579f7f0-c439-4019-b4f2-c4322eb3ed52")
-		)
-		(pin "9"
-			(uuid "da57503b-5043-45e5-bf70-9a536200f30b")
-		)
-		(pin "10"
-			(uuid "cd7e18b0-4d40-4e57-be8f-b2b7a1afabca")
-		)
-		(pin "11"
-			(uuid "9b644387-8bec-44cc-bb7b-3eb5d088ce44")
-		)
-		(pin "12"
-			(uuid "eba8979c-12aa-46d3-a454-861aa63e13c8")
-		)
-		(pin "13"
-			(uuid "9c10cdf3-abad-4ea1-96e0-2d76165de1d8")
-		)
-		(instances
-			(project "ESP32_AZDelivery_Baseboard"
-				(path "/6dfc456e-f0f7-4393-96f4-0b7c9f575168"
-					(reference "J3")
-					(unit 1)
-				)
-			)
-		)
-	)
 	(label "5V"
-		(at 154.94 44.45 0)
+		(at 163.83 44.45 0)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
 			(justify left bottom)
 		)
-		(uuid "93639612-9b16-483e-b93e-f503d4144c02")
+		(uuid "355d19cd-e7f5-44ef-910f-0b255b7d9d6c")
 	)
 	(wire
 		(pts
-			(xy 154.94 44.45) (xy 168.91 44.45)
+			(xy 163.83 44.45) (xy 168.91 44.45)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "79195049-a86d-4f04-adf9-35064521d578")
+		(uuid "13331b5c-d553-4961-8238-c11e438c0bca")
 	)
 	(label "3V3"
-		(at 154.94 46.99 0)
+		(at 158.75 46.99 0)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
 			(justify left bottom)
 		)
-		(uuid "078ab440-ea80-4164-a19c-0b7e54414aa5")
+		(uuid "25fb5df7-018c-4119-966a-666ef3c377a5")
 	)
 	(wire
 		(pts
-			(xy 154.94 46.99) (xy 168.91 46.99)
+			(xy 158.75 46.99) (xy 168.91 46.99)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "688fb93e-48ab-431c-bc90-bff20b576e32")
+		(uuid "483daa25-3e48-4b9a-b5ec-c8c2ffea701b")
 	)
 	(label "PN5180_RST"
-		(at 154.94 49.53 0)
+		(at 163.83 49.53 0)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
 			(justify left bottom)
 		)
-		(uuid "a7d3c2c6-abd4-4c52-afe3-0e95703757ad")
+		(uuid "cd7b20c8-bf64-4abe-9b3f-ef3ad8fafba7")
 	)
 	(wire
 		(pts
-			(xy 154.94 49.53) (xy 168.91 49.53)
+			(xy 163.83 49.53) (xy 168.91 49.53)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "b399c33b-6b39-4c4a-81d8-31c0bd20f74f")
+		(uuid "37702d0d-0b73-4851-986a-99df67f3805d")
 	)
 	(label "PN5180_NSS"
-		(at 154.94 52.07 0)
+		(at 158.75 52.07 0)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
 			(justify left bottom)
 		)
-		(uuid "69617a6d-675b-44b7-b7e6-00eddebce6d0")
+		(uuid "e5c44637-3d6a-4b07-928d-ee63fcd1d18b")
 	)
 	(wire
 		(pts
-			(xy 154.94 52.07) (xy 168.91 52.07)
+			(xy 158.75 52.07) (xy 168.91 52.07)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "f66a7503-6a77-49af-8969-fddd9b31682f")
+		(uuid "f74637c7-d60a-42e5-8d8b-654a7f70ef10")
 	)
 	(label "PN5180_MOSI"
-		(at 154.94 54.61 0)
+		(at 163.83 54.61 0)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
 			(justify left bottom)
 		)
-		(uuid "60f9228c-0998-4f40-95eb-f6e4e07ed8e5")
+		(uuid "2b2baf65-9124-4cfc-83c1-d85886aca1a0")
 	)
 	(wire
 		(pts
-			(xy 154.94 54.61) (xy 168.91 54.61)
+			(xy 163.83 54.61) (xy 168.91 54.61)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "40c42f36-ab82-44c2-bcc7-89b7f3f70066")
+		(uuid "746ea64b-dec3-4aa3-96a5-846ac2d0b98a")
 	)
 	(label "PN5180_MISO"
-		(at 154.94 57.15 0)
+		(at 158.75 57.15 0)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
 			(justify left bottom)
 		)
-		(uuid "5a854db7-b67c-40d0-a32a-d5fb1780a848")
+		(uuid "e2709bc1-5c27-427e-9336-22cfbc852a11")
 	)
 	(wire
 		(pts
-			(xy 154.94 57.15) (xy 168.91 57.15)
+			(xy 158.75 57.15) (xy 168.91 57.15)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "f91c6179-9711-4ba6-aec9-661a8e62a682")
+		(uuid "e9fc0c3d-773c-4f3e-88da-e204ac3cb797")
 	)
 	(label "PN5180_CLK"
-		(at 154.94 59.69 0)
+		(at 163.83 59.69 0)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
 			(justify left bottom)
 		)
-		(uuid "7c89cdd6-219b-4b5b-9239-9502abe15f0d")
+		(uuid "d692a5ff-2bc5-42f2-a242-03e8ff46d63e")
 	)
 	(wire
 		(pts
-			(xy 154.94 59.69) (xy 168.91 59.69)
+			(xy 163.83 59.69) (xy 168.91 59.69)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "11d7031e-30ed-4e3d-8dfd-6d6bef479732")
+		(uuid "4ea3e16d-0907-46d5-a60c-54af5924bf48")
 	)
 	(label "PN5180_BUSY"
-		(at 154.94 62.23 0)
+		(at 158.75 62.23 0)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
 			(justify left bottom)
 		)
-		(uuid "ada4b006-fb55-4ee0-af62-b961708ae4f9")
+		(uuid "64d52ba1-04bc-4235-896b-9e0170cb781f")
 	)
 	(wire
 		(pts
-			(xy 154.94 62.23) (xy 168.91 62.23)
+			(xy 158.75 62.23) (xy 168.91 62.23)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "6d827b29-b96a-4684-b33b-a1ee8f061b75")
+		(uuid "25852bca-e331-482c-a9ba-7a0e45815370")
 	)
 	(label "GND"
-		(at 154.94 64.77 0)
+		(at 163.83 64.77 0)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
 			(justify left bottom)
 		)
-		(uuid "a9e96a13-95d2-4a21-9350-815cc958c174")
+		(uuid "ab710210-0c54-40c0-8896-0ff45382616a")
 	)
 	(wire
 		(pts
-			(xy 154.94 64.77) (xy 168.91 64.77)
+			(xy 163.83 64.77) (xy 168.91 64.77)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "d8032f25-c4d6-4a72-a447-2b527d46278f")
+		(uuid "1e388c25-5fb7-42a4-b5ca-8d9a54002d42")
 	)
 	(label "PN5180_IRQ"
-		(at 154.94 67.31 0)
+		(at 158.75 67.31 0)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
 			(justify left bottom)
 		)
-		(uuid "11267b86-47c1-4c57-b67a-f673d03e8e5e")
+		(uuid "bf050925-8296-48ab-86af-43d1e16dfa4c")
 	)
 	(wire
 		(pts
-			(xy 154.94 67.31) (xy 168.91 67.31)
+			(xy 158.75 67.31) (xy 168.91 67.31)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "f7eb8d2d-292d-4870-ace6-0f4080b8b32f")
+		(uuid "4abfd202-38c1-4668-870b-f2f6118a890c")
 	)
 	(label "PN5180_GPIO"
-		(at 154.94 69.85 0)
+		(at 163.83 69.85 0)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
 			(justify left bottom)
 		)
-		(uuid "bc1976c7-3608-4da1-a777-58224618451c")
+		(uuid "aff62cd2-4fe5-489d-834a-2e66e6f099d8")
 	)
 	(wire
 		(pts
-			(xy 154.94 69.85) (xy 168.91 69.85)
+			(xy 163.83 69.85) (xy 168.91 69.85)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "337fb0c7-8916-4ff3-8f53-20253b8217d0")
+		(uuid "8b89cd32-3770-4a17-9fd9-11064f039970")
 	)
 	(label "PN5180_REQ"
-		(at 154.94 72.39 0)
+		(at 158.75 72.39 0)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
 			(justify left bottom)
 		)
-		(uuid "19eee151-06dd-4d6f-a420-34f0b0d04081")
+		(uuid "1d7f835b-c513-463c-925e-adce51ce29c0")
 	)
 	(wire
 		(pts
-			(xy 154.94 72.39) (xy 168.91 72.39)
+			(xy 158.75 72.39) (xy 168.91 72.39)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "650f8666-2913-404f-b6b8-26f05d548b92")
+		(uuid "630e424f-ce74-459c-a655-6c576726bd47")
 	)
 	(label "PN5180_AUX"
-		(at 154.94 74.93 0)
+		(at 163.83 74.93 0)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
 			(justify left bottom)
 		)
-		(uuid "d11d95fb-9e91-4742-83a0-db9a5cc98b5d")
+		(uuid "4063a7f7-ae53-43d2-ba19-ce5a9f98a6bd")
 	)
 	(wire
 		(pts
-			(xy 154.94 74.93) (xy 168.91 74.93)
+			(xy 163.83 74.93) (xy 168.91 74.93)
 		)
 		(stroke
 			(width 0)
 			(type default)
 		)
-		(uuid "47344158-c245-4a24-8089-f0740532654f")
+		(uuid "e7ca4326-22e8-43e2-89ea-714bf2988c2d")
 	)
 )
