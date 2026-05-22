@@ -167,6 +167,8 @@ uint8_t customProfileCount = 0;
 void clearNfcReadState();
 enum PageMode : uint8_t { PAGE_HOME, PAGE_TAGS, PAGE_SETPOINT, PAGE_SETTINGS };
 String dashboardHtml(PageMode pageMode = PAGE_HOME);
+uint32_t heaterCycleRemainingSeconds();
+uint32_t heaterCycleElapsedSeconds();
 
 enum TextKey : uint8_t {
   TK_APP_TITLE,
@@ -1555,8 +1557,10 @@ String settingsJson() {
   json += String(heaterControl.setpoint, 1);
   json += ",\"cycleDurationSeconds\":";
   json += String(heaterControl.cycleDurationSeconds);
+  json += ",\"cycleElapsedSeconds\":";
+  json += String(heaterCycleElapsedSeconds());
   json += ",\"cycleRemainingSeconds\":";
-  json += String(heaterControl.cycleRunning ? heaterControl.cycleRemainingSeconds : heaterControl.cycleDurationSeconds);
+  json += String(heaterCycleRemainingSeconds());
   json += ",\"cycleRunning\":";
   json += heaterControl.cycleRunning ? "true" : "false";
   json += ",\"safetyLimit\":";
@@ -1738,6 +1742,17 @@ void updateHeaterControl() {
   setHeater((now - heaterControl.windowStartMs) < onTimeMs);
 }
 
+uint32_t heaterCycleRemainingSeconds() {
+  return heaterControl.cycleRunning ? heaterControl.cycleRemainingSeconds : heaterControl.cycleDurationSeconds;
+}
+
+uint32_t heaterCycleElapsedSeconds() {
+  if (!heaterControl.cycleRunning || heaterControl.cycleDurationSeconds <= heaterControl.cycleRemainingSeconds) {
+    return 0;
+  }
+  return heaterControl.cycleDurationSeconds - heaterControl.cycleRemainingSeconds;
+}
+
 String heaterJson() {
   String json = "{";
   json += "\"enabled\":";
@@ -1752,8 +1767,10 @@ String heaterJson() {
   json += String(heaterControl.outputPercent, 1);
   json += ",\"cycleDurationSeconds\":";
   json += String(heaterControl.cycleDurationSeconds);
+  json += ",\"cycleElapsedSeconds\":";
+  json += String(heaterCycleElapsedSeconds());
   json += ",\"cycleRemainingSeconds\":";
-  json += String(heaterControl.cycleRunning ? heaterControl.cycleRemainingSeconds : heaterControl.cycleDurationSeconds);
+  json += String(heaterCycleRemainingSeconds());
   json += ",\"cycleRunning\":";
   json += heaterControl.cycleRunning ? "true" : "false";
   json += ",\"safetyLimit\":";
@@ -1820,11 +1837,13 @@ String dashboardHtml(PageMode pageMode) {
   html += F(".tag-summary{display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin-bottom:14px}.tag-summary span{font-size:15px}");
   html += F(".debug-box{background:#f8fafc;border:1px solid #d9e2ec;border-radius:6px;padding:12px;margin:0 0 14px}.debug-box .label{margin-bottom:6px}");
   html += F(".tag-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:14px}.tag-actions button{margin-top:0}");
+  html += F(".hum-bar-wrap{height:8px;border-radius:4px;background:#d9e2ec;margin-top:10px;overflow:hidden}.hum-bar{height:100%;border-radius:4px;transition:width .5s,background .4s}");
   html += F("</style>");
   html += F("<script>");
   html += F("async function refreshData(){try{const r=await fetch('/api/bme280');const d=await r.json();");
   html += F("if(d.valid){document.getElementById('temperature').textContent=d.temperature.toFixed(1)+' C';");
-  html += F("document.getElementById('humidity').textContent=d.humidity.toFixed(1)+' %';}");
+  html += F("document.getElementById('humidity').textContent=d.humidity.toFixed(1)+' %';");
+  html += F("const bar=document.getElementById('humidity-bar');if(bar){const p=Math.min(d.humidity,100);bar.style.width=p+'%';bar.style.background=p<=15?'#0f766e':p<=30?'#d97706':'#b91c1c';}}");
   html += F("}catch(e){}}");
   html += F("async function refreshBed(){try{const r=await fetch('/api/bed');const d=await r.json();");
   html += F("document.getElementById('bed-temp').textContent=d.valid?d.temperature.toFixed(1)+' C':'--';}catch(e){}}");
@@ -1868,6 +1887,7 @@ String dashboardHtml(PageMode pageMode) {
   html += F("document.getElementById('heater-setpoint').textContent=d.setpoint.toFixed(1)+' C';");
   html += F("document.getElementById('heater-output').textContent=d.outputPercent.toFixed(1)+' %';");
   html += F("const c=document.getElementById('cycle-countdown');if(c)c.textContent=formatDuration(d.cycleRemainingSeconds);");
+  html += F("const hc=document.getElementById('home-cycle-countdown');if(hc)hc.textContent=formatDuration(d.cycleRemainingSeconds);");
   html += F("const ht=document.getElementById('home-profile-temp');if(ht&&document.activeElement!==ht&&!d.automatic&&!manualHomeEdit)ht.value=d.setpoint.toFixed(1);");
   html += F("const pt=document.getElementById('profile-temp');if(pt&&document.activeElement!==pt&&!d.automatic)pt.value=d.setpoint.toFixed(1);");
   html += F("const hm=document.getElementById('home-cycle-minutes');if(hm&&document.activeElement!==hm&&!d.automatic&&!manualHomeEdit)hm.value=Math.round(d.cycleDurationSeconds/60);");
@@ -2006,12 +2026,15 @@ String dashboardHtml(PageMode pageMode) {
   html += tr(TK_CARD_HUMIDITY);
   html += F("</div><div class=\"value\" id=\"humidity\">");
   html += valueOrDash(sensorData.humidity, " %");
-  html += F("</div></article>");
+  html += F("</div><div class=\"hum-bar-wrap\"><div class=\"hum-bar\" id=\"humidity-bar\"></div></div></article>");
   html += F("<article class=\"card\"><div class=\"label\">");
   html += tr(TK_CARD_BED);
   html += F("</div><div class=\"value\" id=\"bed-temp\">");
   html += valueOrDash(bedData.temperature, " C");
   html += F("</div></article>");
+  html += F("<article class=\"card\"><div class=\"label\">");
+  html += tr(TK_CYCLE_COUNTDOWN);
+  html += F("</div><div class=\"value\" style=\"font-size:26px;font-variant-numeric:tabular-nums\" id=\"home-cycle-countdown\">--:--:--</div></article>");
   html += F("</section>");
   html += F("<section class=\"card wide tag-panel\"><div class=\"label\">OpenPrintTag</div><div class=\"small\">");
   html += F("<div class=\"tag-summary\"><span><strong>");
