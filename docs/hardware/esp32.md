@@ -1,80 +1,179 @@
-# ESP32 usato nel progetto
+# Hardware — ESP32 AZ-Delivery Baseboard
 
-Scheda ESP32 DevKit con interfaccia USB-seriale CP2102, rilevata su `/dev/ttyUSB0`.
+Scheda ESP32 DevKit 38-pin con interfaccia USB-seriale CP2102, rilevata su `/dev/ttyUSB0`.
 
 Chip rilevato durante l'upload:
 
-- ESP32-D0WD-V3, revision v3.0.
-- MAC: `40:22:d8:e8:7b:58`.
-- Upload verificato con PlatformIO su porta `/dev/ttyUSB0`.
+- ESP32-D0WD-V3, revision v3.0
+- MAC: `40:22:d8:e8:7b:58`
+- Upload verificato con PlatformIO su porta `/dev/ttyUSB0`
 
-## Pin serigrafati sulla scheda
+---
 
-Vista come nella foto, con connettore USB a sinistra e modulo ESP32 a destra.
+## Pin assegnati al progetto
 
-### Lato superiore
+### Tabella completa
 
-Da sinistra verso destra:
+| GPIO | Serigrafia | Funzione firmware | Periferica | Connettore PCB | Note |
+|------|-----------|-------------------|-----------|----------------|------|
+| 5    | G5        | `PN5180_NSS`      | PN5180 SPI CS   | J4 PN5180_SPI (pin 4) | Bootstrap, attenzione al boot |
+| 16   | G16       | `PN5180_BUSY`     | PN5180 CTRL     | J5 PN5180_CTRL (pin 2) | |
+| 17   | G17       | `PN5180_RST`      | PN5180 CTRL     | J5 PN5180_CTRL (pin 1) | |
+| 18   | G18       | SPI SCK           | PN5180 SPI CLK  | J4 PN5180_SPI (pin 1) | VSPI default |
+| 19   | G19       | SPI MISO          | PN5180 SPI MISO | J4 PN5180_SPI (pin 2) | VSPI default |
+| 21   | G21       | I2C SDA           | BME280          | J7 BME280 (pin 3) | |
+| 22   | G22       | I2C SCL           | BME280          | J7 BME280 (pin 4) | |
+| 23   | G23       | SPI MOSI          | PN5180 SPI MOSI | J4 PN5180_SPI (pin 3) | VSPI default |
+| 25   | G25       | `HEATER_PIN`      | MOSFET riscaldatore | **da aggiungere** | Active-low |
+| 34   | G34       | `BED_THERMISTOR_PIN` | NTC piatto   | J8 NTC_SENSOR (pin 1) | Solo input, ADC |
+| 27   | G27       | *(riservato)*     | Ventola 1 PWM   | **da aggiungere** | Futuro |
+| 32   | G32       | *(riservato)*     | Ventola 2 PWM   | **da aggiungere** | Futuro |
 
-| Serigrafia | Nota |
-| --- | --- |
-| 5V | Alimentazione 5 V da USB/VIN scheda |
-| CMD | Linea flash, evitare per I/O generico |
-| SD3 | Linea flash, evitare per I/O generico |
-| SD2 | Linea flash, evitare per I/O generico |
-| G13 | GPIO 13 |
-| GND | Massa |
-| G12 | GPIO 12, pin di bootstrap: usare con cautela |
-| G14 | GPIO 14 |
-| G27 | GPIO 27 |
-| G26 | GPIO 26 |
-| G25 | GPIO 25 |
-| G33 | GPIO 33 |
-| G32 | GPIO 32 |
-| G35 | GPIO 35, solo input |
-| G34 | GPIO 34, solo input |
-| SN | Sensor VN / GPIO 39, solo input |
-| SP | Sensor VP / GPIO 36, solo input |
-| EN | Enable/reset chip |
-| 3V3 | Alimentazione 3,3 V |
+### Pin liberi (breakout disponibile, non usati dal firmware)
 
-### Lato inferiore
+GPIO 0, 2, 4, 12, 13, 14, 15, 26, 33, 35, 36/SP, 39/SN.
 
-Da sinistra verso destra:
+---
 
-| Serigrafia | Nota |
-| --- | --- |
-| CLK | Linea flash, evitare per I/O generico |
-| SD0 | Linea flash, evitare per I/O generico |
-| SD1 | Linea flash, evitare per I/O generico |
-| G15 | GPIO 15, pin di bootstrap: usare con cautela |
-| G2 | GPIO 2, pin di bootstrap: usare con cautela |
-| G0 | GPIO 0, pin di bootstrap/programmazione |
-| G4 | GPIO 4 |
-| G16 | GPIO 16 |
-| G17 | GPIO 17 |
-| G5 | GPIO 5, pin di bootstrap: usare con cautela |
-| G18 | GPIO 18 |
-| G19 | GPIO 19 |
-| GND | Massa |
-| G21 | GPIO 21 |
-| RXD | UART0 RX / GPIO 3 |
-| TXD | UART0 TX / GPIO 1 |
-| G22 | GPIO 22 |
-| G23 | GPIO 23 |
-| GND | Massa |
+## Connettori presenti nel progetto KiCad
 
-## Pin consigliati per il progetto
+| Riferimento | Valore | Footprint | Segnali |
+|-------------|--------|-----------|---------|
+| J1 | ESP32_LEFT_1x19 | PinSocket 1×19 2.54mm | Lato sinistro ESP32 |
+| J2 | ESP32_RIGHT_1x19 | PinSocket 1×19 2.54mm | Lato destro ESP32 |
+| J3 | PN5180_1x13 | PinSocket 1×13 2.54mm | Pin-header femmina 13-pin per modulo PN5180 |
+| J7 | BME280 | JST XH 4-pin | 3V3 · GND · SDA · SCL |
+| J8 | NTC_SENSOR | Terminal block Phoenix 5.08mm 2-pin | NTC_ADC · GND |
 
-- I2C BME280: GPIO 21 SDA, GPIO 22 SCL.
-- SPI PN5180: GPIO 18 SCK, GPIO 19 MISO, GPIO 23 MOSI, GPIO 5 CS/SS.
-- Controllo PN5180: GPIO 16 BUSY, GPIO 17 RST.
-- Stepper driver: GPIO 25 STEP, GPIO 26 DIR, GPIO 27 ENABLE.
-- Controllo riscaldatore/PID: GPIO 32 o GPIO 33 verso driver/MOSFET/SSR, non direttamente al piatto.
+### Pinout J3 — PN5180 1×13 pin header femmina
+
+Connettore unico che sostituisce i quattro JST separati (J3/J4/J5/J6) presenti in schema nelle versioni precedenti.
+Corrisponde al pinout standard del modulo PN5180 NXP/AZ-Delivery.
+
+| Pin | Segnale | Note |
+|-----|---------|------|
+| 1 | 5V | Alimentazione RF |
+| 2 | 3V3 | Alimentazione logica |
+| 3 | PN5180_RST | Reset (GPIO 17) |
+| 4 | PN5180_NSS | SPI Chip Select (GPIO 5, bootstrap) |
+| 5 | PN5180_MOSI | SPI MOSI (GPIO 23) |
+| 6 | PN5180_MISO | SPI MISO (GPIO 19) |
+| 7 | PN5180_CLK | SPI Clock (GPIO 18) |
+| 8 | PN5180_BUSY | Busy flag (GPIO 16) |
+| 9 | GND | Massa |
+| 10 | PN5180_IRQ | Interrupt (non connesso al firmware) |
+| 11 | PN5180_GPIO | GPIO ausiliario (non connesso al firmware) |
+| 12 | PN5180_REQ | REQ ausiliario (non connesso al firmware) |
+| 13 | PN5180_AUX | AUX ausiliario (non connesso al firmware) |
+
+### Connettori mancanti nello schema (da aggiungere)
+
+- **HEATER**: connettore 2-pin per il MOSFET del riscaldatore (GPIO 25, active-low)
+- **FAN1 / FAN2**: connettori per ventole 24 V PWM su GPIO 27 e GPIO 32
+
+---
+
+## Circuito NTC piatto
+
+```
+3V3 ──── R_pullup (100 kΩ) ──┬── GPIO34 (ADC)
+                              │
+                             C1 (100 nF)
+                              │
+NTC (100 kΩ @ 25 °C) ────────┴──── GND
+```
+
+- Pullup: **100 kΩ** (costante firmware `BED_PULLUP_OHMS = 100000.0F`)
+- NTC nominale: 100 kΩ a 25 °C, β = 3950
+- Bypass cap: 100 nF (C1 in schema)
+- GPIO 34 è solo-input: nessun problema di boot
+
+> **Nota schematica**: R1 è valorizzato **100 kΩ** nello schema KiCad, in accordo con la costante firmware `BED_PULLUP_OHMS = 100000.0F`.
+
+---
+
+## Circuito MOSFET riscaldatore
+
+```
+GPIO25 ──── R_gate ──── GATE
+                         │
+                        MOSFET N-ch
+                         │
+                        DRAIN ──── Riscaldatore ──── VCC (24V)
+                         │
+                        SOURCE ──── GND
+```
+
+- GPIO 25, active-low (`HEATER_ACTIVE_LOW = true`): LOW = riscaldatore ON
+- Il connettore MOSFET non è ancora nello schema KiCad
+- Safety limit firmware: 90 °C (stop automatico)
+
+---
+
+## Alimentazione PN5180
+
+Il modulo PN5180 richiede sia 3,3 V (logica) che 5 V (RF). Entrambi sono portati al connettore J3.
+
+---
 
 ## Pin da evitare o usare con cautela
 
-- Evitare `CMD`, `CLK`, `SD0`, `SD1`, `SD2`, `SD3`: sono legati alla flash.
-- Evitare carichi o pull errati su GPIO 0, 2, 5, 12, 15: influenzano il boot.
-- GPIO 34, 35, 36/SP e 39/SN sono solo input.
-- RXD/TXD sono usati dalla seriale USB; meglio lasciarli liberi durante sviluppo e debug.
+| GPIO | Motivo |
+|------|--------|
+| CMD, CLK, SD0–SD3 | Linee flash SPI interne, non usare |
+| 0 | Bootstrap / programmazione |
+| 2, 5, 12, 15 | Bootstrap: pull errati impediscono il boot |
+| 1 (TXD), 3 (RXD) | UART0 usata da USB/Serial, non usare durante debug |
+| 34, 35, 36, 39 | Solo input, niente pull interno disponibile |
+
+---
+
+## Pinout fisico scheda (38 pin)
+
+### Lato superiore — da sinistra verso destra
+
+| Serigrafia | GPIO | Uso nel progetto |
+|-----------|------|-----------------|
+| 5V | — | Alimentazione 5 V |
+| CMD | — | Flash, non usare |
+| SD3 | — | Flash, non usare |
+| SD2 | — | Flash, non usare |
+| G13 | 13 | Libero |
+| GND | — | Massa |
+| G12 | 12 | Libero (bootstrap) |
+| G14 | 14 | Libero |
+| G27 | 27 | **Riservato Ventola 1** |
+| G26 | 26 | Libero |
+| G25 | 25 | **HEATER MOSFET** |
+| G33 | 33 | Libero |
+| G32 | 32 | **Riservato Ventola 2** |
+| G35 | 35 | Libero (solo input) |
+| G34 | 34 | **NTC piatto (ADC)** |
+| SN | 39 | Libero (solo input) |
+| SP | 36 | Libero (solo input) |
+| EN | — | Enable/reset chip |
+| 3V3 | — | Alimentazione 3,3 V |
+
+### Lato inferiore — da sinistra verso destra
+
+| Serigrafia | GPIO | Uso nel progetto |
+|-----------|------|-----------------|
+| CLK | — | Flash, non usare |
+| SD0 | — | Flash, non usare |
+| SD1 | — | Flash, non usare |
+| G15 | 15 | Libero (bootstrap) |
+| G2 | 2 | Libero (bootstrap) |
+| G0 | 0 | Libero (bootstrap/prog) |
+| G4 | 4 | Libero |
+| G16 | 16 | **PN5180 BUSY** |
+| G17 | 17 | **PN5180 RST** |
+| G5 | 5 | **PN5180 NSS/CS** (bootstrap) |
+| G18 | 18 | **PN5180 CLK** |
+| G19 | 19 | **PN5180 MISO** |
+| GND | — | Massa |
+| G21 | 21 | **BME280 SDA** |
+| RXD | 3 | UART0 RX |
+| TXD | 1 | UART0 TX |
+| G22 | 22 | **BME280 SCL** |
+| G23 | 23 | **PN5180 MOSI** |
+| GND | — | Massa |
