@@ -8157,7 +8157,7 @@
 			)
 			(justify left bottom)
 		)
-		(uuid "b1acaa5f-269b-4bcc-ba9f-b96ec3c75119")
+		(uuid "c7bccc06-4489-40e0-9155-627e40076a98")
 	)
 	(label "GND"
 		(at 82.55 187.96 90)
@@ -8167,7 +8167,7 @@
 			)
 			(justify left bottom)
 		)
-		(uuid "d9de29cd-5b0f-4315-a401-de0a973dbd03")
+		(uuid "11f5fcba-c15e-45cd-9479-2f521742b467")
 	)
 	(label "GPIO21_I2C_SDA"
 		(at 85.09 187.96 90)
@@ -8177,7 +8177,7 @@
 			)
 			(justify left bottom)
 		)
-		(uuid "f2c2048e-9d1b-459c-93d3-b41f6c2c479e")
+		(uuid "5925e757-0fdd-498c-b4da-e7e4efe875fe")
 	)
 	(label "GPIO22_I2C_SCL"
 		(at 87.63 187.96 90)
@@ -8187,7 +8187,7 @@
 			)
 			(justify left bottom)
 		)
-		(uuid "c45f1b62-6445-44da-9c31-ceef171dadc5")
+		(uuid "dd6cb413-41d2-405d-9bcd-76dc4b9172c8")
 	)
 	(label "OPT4048_INT"
 		(at 90.17 187.96 90)
@@ -8197,7 +8197,7 @@
 			)
 			(justify left bottom)
 		)
-		(uuid "839ecf92-7dcb-4f2a-9472-9fb3645d4615")
+		(uuid "6cdb9883-3320-49b0-af8c-729d429ef197")
 	)
 	(label "GPIO13"
 		(at 100.33 187.96 90)
@@ -8207,7 +8207,7 @@
 			)
 			(justify left bottom)
 		)
-		(uuid "0c651d4a-f146-4d52-bbaf-3734d6161e3a")
+		(uuid "7e143d62-5966-4229-a2e1-d4202f6c8c1e")
 	)
 	(label "GPIO14"
 		(at 102.87 187.96 90)
@@ -8217,7 +8217,7 @@
 			)
 			(justify left bottom)
 		)
-		(uuid "b6f73bce-d3a2-4872-b8a5-a52bd51297ca")
+		(uuid "ba8ac21c-a16d-48fa-b3f6-0d78bf0e19e2")
 	)
 	(label "PCF8574_P0"
 		(at 105.41 187.96 90)
@@ -8227,7 +8227,7 @@
 			)
 			(justify left bottom)
 		)
-		(uuid "3016e312-70b2-40b9-aa90-b16060587f67")
+		(uuid "70ae0928-6aa1-46f5-bd3a-3e45c5abb55e")
 	)
 	(label "GND"
 		(at 107.95 187.96 90)
@@ -8237,7 +8237,7 @@
 			)
 			(justify left bottom)
 		)
-		(uuid "9fa49296-5555-4476-abfa-36a63bc4deca")
+		(uuid "0c75d49e-8775-49c8-a52b-a11ad6fd50af")
 	)
 	(sheet_instances
 		(path "/"
