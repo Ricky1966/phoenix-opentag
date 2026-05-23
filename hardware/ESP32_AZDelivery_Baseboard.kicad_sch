@@ -2112,6 +2112,22 @@
 		(color 0 0 0 0)
 		(uuid "f77cb884-5d5a-4609-9b3b-d1899a2fa19c")
 	)
+	(no_connect
+		(at 162.56 43.18)
+		(uuid "2f2b3b41-de4c-4cc3-a72a-64766a4fceb0")
+	)
+	(no_connect
+		(at 162.56 38.1)
+		(uuid "69af4845-92f3-4042-9972-3e1578681964")
+	)
+	(no_connect
+		(at 162.56 40.64)
+		(uuid "90790bf1-27e3-42ea-a42c-0c8860babda9")
+	)
+	(no_connect
+		(at 162.56 45.72)
+		(uuid "961cfaf6-16ee-462e-abca-1ce8c84da45d")
+	)
 	(wire
 		(pts
 			(xy 46.99 52.07) (xy 54.61 52.07)
@@ -2131,6 +2147,26 @@
 			(type default)
 		)
 		(uuid "01857da6-9388-465c-b546-3c6949020b35")
+	)
+	(wire
+		(pts
+			(xy 140.97 111.76) (xy 137.16 111.76)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "08dd2293-9079-4f1c-93d1-9ba5b9e21600")
+	)
+	(wire
+		(pts
+			(xy 77.47 110.49) (xy 81.28 110.49)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "10c80fde-aceb-46ac-9f3a-c1ad6a7a17d4")
 	)
 	(wire
 		(pts
@@ -2324,6 +2360,16 @@
 	)
 	(wire
 		(pts
+			(xy 161.29 109.22) (xy 157.48 109.22)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "4085b272-684b-40de-8f65-b220bfb31b5f")
+	)
+	(wire
+		(pts
 			(xy 162.56 66.04) (xy 201.93 66.04)
 		)
 		(stroke
@@ -2404,6 +2450,16 @@
 	)
 	(wire
 		(pts
+			(xy 77.47 113.03) (xy 81.28 113.03)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "5cd31fd9-d037-458e-866b-16b466da2cd8")
+	)
+	(wire
+		(pts
 			(xy 102.87 57.15) (xy 129.54 57.15)
 		)
 		(stroke
@@ -2424,6 +2480,16 @@
 	)
 	(wire
 		(pts
+			(xy 57.15 110.49) (xy 60.96 110.49)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "6069f69d-66ce-4f74-a53d-1d4ff740fa81")
+	)
+	(wire
+		(pts
 			(xy 27.94 25.4) (xy 27.94 69.85)
 		)
 		(stroke
@@ -2441,6 +2507,16 @@
 			(type default)
 		)
 		(uuid "65be2a4f-b0a0-4503-8b0e-543d08c4141a")
+	)
+	(wire
+		(pts
+			(xy 140.97 109.22) (xy 137.16 109.22)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "6c3ba68a-5fce-4964-a825-9451503db67f")
 	)
 	(wire
 		(pts
@@ -2521,6 +2597,16 @@
 			(type default)
 		)
 		(uuid "7f32faa2-9912-41d4-8b4d-e2f0bf6b5a41")
+	)
+	(wire
+		(pts
+			(xy 97.79 113.03) (xy 101.6 113.03)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "7f4bef40-f483-4f57-8bc3-1033a293f6a7")
 	)
 	(wire
 		(pts
@@ -2624,6 +2710,16 @@
 	)
 	(wire
 		(pts
+			(xy 161.29 111.76) (xy 157.48 111.76)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "9011a885-5459-4aab-9ff9-e82f0ce4bfe3")
+	)
+	(wire
+		(pts
 			(xy 46.99 36.83) (xy 52.07 36.83)
 		)
 		(stroke
@@ -2714,6 +2810,16 @@
 	)
 	(wire
 		(pts
+			(xy 97.79 110.49) (xy 101.6 110.49)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "c340af52-d7e6-4ead-a01a-10dc59844f98")
+	)
+	(wire
+		(pts
 			(xy 102.87 39.37) (xy 135.89 39.37)
 		)
 		(stroke
@@ -2791,6 +2897,16 @@
 			(type default)
 		)
 		(uuid "cfa3f968-48d7-4a6f-aa51-174259257fef")
+	)
+	(wire
+		(pts
+			(xy 57.15 113.03) (xy 60.96 113.03)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "d0d9d749-94d6-4f25-8589-90f928dc27ad")
 	)
 	(wire
 		(pts
@@ -2904,6 +3020,16 @@
 	)
 	(wire
 		(pts
+			(xy 36.83 113.03) (xy 40.64 113.03)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "eab31802-2463-4912-976f-200fd374e143")
+	)
+	(wire
+		(pts
 			(xy 44.45 25.4) (xy 39.37 25.4)
 		)
 		(stroke
@@ -2931,6 +3057,16 @@
 			(type default)
 		)
 		(uuid "ec094374-9701-412f-b4de-d19c9e1d099b")
+	)
+	(wire
+		(pts
+			(xy 36.83 110.49) (xy 40.64 110.49)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "ec446070-46ae-4e13-82c1-7f2ca9231696")
 	)
 	(wire
 		(pts
@@ -3073,6 +3209,16 @@
 		(uuid "07438e04-8e38-4ff4-9cfd-87b0e487f7fc")
 	)
 	(label "GND"
+		(at 40.64 113.03 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "0816df8f-6885-4075-b3af-ca43a4c55ea9")
+	)
+	(label "GND"
 		(at 46.99 69.85 0)
 		(effects
 			(font
@@ -3092,6 +3238,26 @@
 		)
 		(uuid "12f678f1-9f9a-4cdb-96fd-1a52b1863a38")
 	)
+	(label "GPIO33"
+		(at 81.28 110.49 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "14e0680d-b376-48ea-bf44-7ee8324630cf")
+	)
+	(label "GPIO25"
+		(at 40.64 110.49 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "246105b3-4757-4352-b350-a7523545fbc6")
+	)
 	(label "3V3"
 		(at 176.53 66.04 180)
 		(effects
@@ -3101,6 +3267,16 @@
 			(justify right bottom)
 		)
 		(uuid "25fb5df7-018c-4119-966a-666ef3c377a5")
+	)
+	(label "GND"
+		(at 60.96 113.03 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "2adcddea-7d8a-4a3e-8620-b5b02fb52f30")
 	)
 	(label "GPIO35"
 		(at 46.99 49.53 0)
@@ -3232,6 +3408,16 @@
 		)
 		(uuid "61c94c9d-bf2d-4dec-9048-d970b5da4519")
 	)
+	(label "GND"
+		(at 101.6 113.03 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "63cdb8ef-a1df-4fcd-b401-a5248bd733b8")
+	)
 	(label "PN5180_BUSY"
 		(at 176.53 50.8 180)
 		(effects
@@ -3241,6 +3427,16 @@
 			(justify right bottom)
 		)
 		(uuid "64d52ba1-04bc-4235-896b-9e0170cb781f")
+	)
+	(label "GND"
+		(at 81.28 113.03 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "656281fd-3a50-4d25-8111-bb989c9f150a")
 	)
 	(label "GPIO36"
 		(at 46.99 41.91 0)
@@ -3282,6 +3478,16 @@
 		)
 		(uuid "6f88ab72-fe0c-49eb-801c-ed9f07a9cf61")
 	)
+	(label "GND"
+		(at 157.48 109.22 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "74363e8a-14fb-4653-b2df-4d4aa054df0b")
+	)
 	(label "GPIO39"
 		(at 46.99 44.45 0)
 		(effects
@@ -3321,6 +3527,16 @@
 			(justify right bottom)
 		)
 		(uuid "9dac5f57-2eb3-4a3e-827b-d1fd353d4bf0")
+	)
+	(label "GND"
+		(at 137.16 109.22 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "9e620631-f9f0-4d90-a6a7-7b735a5b89c8")
 	)
 	(label "GPIO03_RX0"
 		(at 109.22 46.99 0)
@@ -3381,6 +3597,26 @@
 			(justify right bottom)
 		)
 		(uuid "ab710210-0c54-40c0-8896-0ff45382616a")
+	)
+	(label "GPIO26"
+		(at 60.96 110.49 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "b3723f2d-9bdc-418d-a88f-c42b3827bbaf")
+	)
+	(label "GPIO04"
+		(at 101.6 110.49 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "b9695287-39a8-4162-b26a-f7a8224bf2c4")
 	)
 	(label "GPIO32"
 		(at 46.99 52.07 0)
@@ -3452,6 +3688,16 @@
 		)
 		(uuid "d3221e80-dbbd-40fd-a3a0-3b85c22655c5")
 	)
+	(label "GPIO32"
+		(at 137.16 111.76 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "d4e951cb-f078-42dd-87a6-f6df03f7e34b")
+	)
 	(label "GPIO11"
 		(at 46.99 80.01 0)
 		(effects
@@ -3481,6 +3727,16 @@
 			(justify left bottom)
 		)
 		(uuid "d7224051-bf1d-4230-b56b-c11bc1dd0ad0")
+	)
+	(label "GPIO27"
+		(at 157.48 111.76 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "d9d0a1e3-1299-443c-b8d1-917cb34af334")
 	)
 	(label "GPIO10"
 		(at 46.99 77.47 0)
@@ -3735,6 +3991,164 @@
 		)
 	)
 	(symbol
+		(lib_id "Connector_Generic:Conn_01x02")
+		(at 146.05 109.22 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "230867a7-a782-49ef-acb1-638f9c6979ee")
+		(property "Reference" "J11"
+			(at 146.05 118.11 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "FAN2_CTRL"
+			(at 146.05 115.57 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Connector_JST:JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical"
+			(at 146.05 109.22 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 146.05 109.22 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 146.05 109.22 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "4484eb60-5e5e-4965-b376-a21f3d8fb2d1")
+		)
+		(pin "2"
+			(uuid "dd357e48-0a89-4df5-a7b5-a629333cf1da")
+		)
+		(instances
+			(project "ESP32_AZDelivery_Baseboard"
+				(path "/6dfc456e-f0f7-4393-96f4-0b7c9f575168"
+					(reference "J11")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Connector_Generic:Conn_01x02")
+		(at 52.07 113.03 180)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "245b843b-3be3-4182-a3c1-79ebee27aa45")
+		(property "Reference" "J5"
+			(at 52.07 104.14 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "HEATER2_CTRL"
+			(at 52.07 106.68 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Connector_JST:JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical"
+			(at 52.07 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 52.07 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 52.07 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "863228ea-e7c9-4c6e-bd4a-9060d7483953")
+		)
+		(pin "2"
+			(uuid "8f671fdc-4bd1-48e0-b2c5-aef9f37d8aeb")
+		)
+		(instances
+			(project "ESP32_AZDelivery_Baseboard"
+				(path "/6dfc456e-f0f7-4393-96f4-0b7c9f575168"
+					(reference "J5")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "Connector_Generic:Conn_01x19")
 		(at 59.69 59.69 0)
 		(unit 1)
@@ -3861,6 +4275,164 @@
 			(project "ESP32_AZDelivery_Baseboard"
 				(path "/6dfc456e-f0f7-4393-96f4-0b7c9f575168"
 					(reference "J1")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Connector_Generic:Conn_01x02")
+		(at 92.71 113.03 180)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "4bdf7937-110c-4ab2-ad68-3c80ef76d21c")
+		(property "Reference" "J9"
+			(at 92.71 104.14 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "HEATER4_CTRL"
+			(at 92.71 106.68 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Connector_JST:JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical"
+			(at 92.71 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 92.71 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 92.71 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "d3134dda-f890-4438-9c1b-03886fcd5528")
+		)
+		(pin "2"
+			(uuid "49fd6db0-4c9a-4088-9b2a-642f7ebb075c")
+		)
+		(instances
+			(project "ESP32_AZDelivery_Baseboard"
+				(path "/6dfc456e-f0f7-4393-96f4-0b7c9f575168"
+					(reference "J9")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Connector_Generic:Conn_01x02")
+		(at 72.39 113.03 180)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "9cbed4cc-ceba-4789-81de-9fa8b8cbf39a")
+		(property "Reference" "J6"
+			(at 72.39 104.14 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "HEATER3_CTRL"
+			(at 72.39 106.68 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Connector_JST:JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical"
+			(at 72.39 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 72.39 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 72.39 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "fa0b83e4-5031-4fa1-91ff-16cb41110b0a")
+		)
+		(pin "2"
+			(uuid "83d143ce-3cdc-45fa-96ff-00c2d243f7ef")
+		)
+		(instances
+			(project "ESP32_AZDelivery_Baseboard"
+				(path "/6dfc456e-f0f7-4393-96f4-0b7c9f575168"
+					(reference "J6")
 					(unit 1)
 				)
 			)
@@ -4054,6 +4626,164 @@
 			(project "ESP32_AZDelivery_Baseboard"
 				(path "/6dfc456e-f0f7-4393-96f4-0b7c9f575168"
 					(reference "J3")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Connector_Generic:Conn_01x02")
+		(at 166.37 109.22 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "b4d592ae-047f-4a0b-a125-0905907c650c")
+		(property "Reference" "J10"
+			(at 166.37 118.11 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "FAN1_CTRL"
+			(at 166.37 115.57 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Connector_JST:JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical"
+			(at 166.37 109.22 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 166.37 109.22 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 166.37 109.22 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "1e53425a-af6a-44cc-9df2-4e3f394f9d99")
+		)
+		(pin "2"
+			(uuid "322018f1-f50a-4adf-a2ef-5c5c1dcd0ae0")
+		)
+		(instances
+			(project "ESP32_AZDelivery_Baseboard"
+				(path "/6dfc456e-f0f7-4393-96f4-0b7c9f575168"
+					(reference "J10")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Connector_Generic:Conn_01x02")
+		(at 31.75 113.03 180)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "dd609835-9fe1-466f-85a7-e84283bc96c5")
+		(property "Reference" "J4"
+			(at 31.75 104.14 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "HEATER1_CTRL"
+			(at 31.75 106.68 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Connector_JST:JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical"
+			(at 31.75 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 31.75 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" ""
+			(at 31.75 113.03 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "b25e93ae-8535-4316-ac12-4202c00c369e")
+		)
+		(pin "2"
+			(uuid "49e5b5ac-eb17-41bd-8fcd-c79b9d1f545a")
+		)
+		(instances
+			(project "ESP32_AZDelivery_Baseboard"
+				(path "/6dfc456e-f0f7-4393-96f4-0b7c9f575168"
+					(reference "J4")
 					(unit 1)
 				)
 			)
@@ -4284,499 +5014,4 @@
 		)
 	)
 	(embedded_fonts no)
-
-	(no_connect
-		(at 162.56 45.72)
-		(uuid "961cfaf6-16ee-462e-abca-1ce8c84da45d")
-	)
-	(no_connect
-		(at 162.56 43.18)
-		(uuid "2f2b3b41-de4c-4cc3-a72a-64766a4fceb0")
-	)
-	(no_connect
-		(at 162.56 40.64)
-		(uuid "90790bf1-27e3-42ea-a42c-0c8860babda9")
-	)
-	(no_connect
-		(at 162.56 38.1)
-		(uuid "69af4845-92f3-4042-9972-3e1578681964")
-	)
-
-
-	(symbol
-		(lib_id "Connector_Generic:Conn_01x02")
-		(at 10.16 107.95 180)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
-		(uuid "dd609835-9fe1-466f-85a7-e84283bc96c5")
-		(property "Reference" "J4"
-			(at 10.16 99.06 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "HEATER1_CTRL"
-			(at 10.16 101.6 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" "Connector_JST:JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical"
-			(at 10.16 107.95 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" ""
-			(at 10.16 107.95 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" ""
-			(at 10.16 107.95 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(pin "1"
-			(uuid "b25e93ae-8535-4316-ac12-4202c00c369e")
-		)
-		(pin "2"
-			(uuid "49e5b5ac-eb17-41bd-8fcd-c79b9d1f545a")
-		)
-		(instances
-			(project "ESP32_AZDelivery_Baseboard"
-				(path "/6dfc456e-f0f7-4393-96f4-0b7c9f575168"
-					(reference "J4")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(wire
-		(pts
-			(xy 15.24 107.95) (xy 19.05 107.95)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "eab31802-2463-4912-976f-200fd374e143")
-	)
-	(wire
-		(pts
-			(xy 15.24 105.41) (xy 19.05 105.41)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "ec446070-46ae-4e13-82c1-7f2ca9231696")
-	)
-	(label "GND"
-		(at 19.05 107.95 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "0816df8f-6885-4075-b3af-ca43a4c55ea9")
-	)
-	(label "GPIO25"
-		(at 19.05 105.41 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "246105b3-4757-4352-b350-a7523545fbc6")
-	)
-	(symbol
-		(lib_id "Connector_Generic:Conn_01x02")
-		(at 30.48 107.95 180)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
-		(uuid "245b843b-3be3-4182-a3c1-79ebee27aa45")
-		(property "Reference" "J5"
-			(at 30.48 99.06 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "HEATER2_CTRL"
-			(at 30.48 101.6 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" "Connector_JST:JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical"
-			(at 30.48 107.95 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" ""
-			(at 30.48 107.95 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" ""
-			(at 30.48 107.95 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(pin "1"
-			(uuid "863228ea-e7c9-4c6e-bd4a-9060d7483953")
-		)
-		(pin "2"
-			(uuid "8f671fdc-4bd1-48e0-b2c5-aef9f37d8aeb")
-		)
-		(instances
-			(project "ESP32_AZDelivery_Baseboard"
-				(path "/6dfc456e-f0f7-4393-96f4-0b7c9f575168"
-					(reference "J5")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(wire
-		(pts
-			(xy 35.56 107.95) (xy 39.37 107.95)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "d0d9d749-94d6-4f25-8589-90f928dc27ad")
-	)
-	(wire
-		(pts
-			(xy 35.56 105.41) (xy 39.37 105.41)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "6069f69d-66ce-4f74-a53d-1d4ff740fa81")
-	)
-	(label "GND"
-		(at 39.37 107.95 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "2adcddea-7d8a-4a3e-8620-b5b02fb52f30")
-	)
-	(label "GPIO26"
-		(at 39.37 105.41 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "b3723f2d-9bdc-418d-a88f-c42b3827bbaf")
-	)
-	(symbol
-		(lib_id "Connector_Generic:Conn_01x02")
-		(at 50.8 107.95 180)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
-		(uuid "9cbed4cc-ceba-4789-81de-9fa8b8cbf39a")
-		(property "Reference" "J6"
-			(at 50.8 99.06 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "HEATER3_CTRL"
-			(at 50.8 101.6 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" "Connector_JST:JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical"
-			(at 50.8 107.95 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" ""
-			(at 50.8 107.95 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" ""
-			(at 50.8 107.95 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(pin "1"
-			(uuid "fa0b83e4-5031-4fa1-91ff-16cb41110b0a")
-		)
-		(pin "2"
-			(uuid "83d143ce-3cdc-45fa-96ff-00c2d243f7ef")
-		)
-		(instances
-			(project "ESP32_AZDelivery_Baseboard"
-				(path "/6dfc456e-f0f7-4393-96f4-0b7c9f575168"
-					(reference "J6")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(wire
-		(pts
-			(xy 55.88 107.95) (xy 59.69 107.95)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "5cd31fd9-d037-458e-866b-16b466da2cd8")
-	)
-	(wire
-		(pts
-			(xy 55.88 105.41) (xy 59.69 105.41)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "10c80fde-aceb-46ac-9f3a-c1ad6a7a17d4")
-	)
-	(label "GND"
-		(at 59.69 107.95 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "656281fd-3a50-4d25-8111-bb989c9f150a")
-	)
-	(label "GPIO33"
-		(at 59.69 105.41 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "14e0680d-b376-48ea-bf44-7ee8324630cf")
-	)
-	(symbol
-		(lib_id "Connector_Generic:Conn_01x02")
-		(at 71.12 107.95 180)
-		(unit 1)
-		(body_style 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(in_pos_files yes)
-		(dnp no)
-		(uuid "4bdf7937-110c-4ab2-ad68-3c80ef76d21c")
-		(property "Reference" "J9"
-			(at 71.12 99.06 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Value" "HEATER4_CTRL"
-			(at 71.12 101.6 0)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" "Connector_JST:JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical"
-			(at 71.12 107.95 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Datasheet" ""
-			(at 71.12 107.95 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Description" ""
-			(at 71.12 107.95 0)
-			(hide yes)
-			(show_name no)
-			(do_not_autoplace no)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(pin "1"
-			(uuid "d3134dda-f890-4438-9c1b-03886fcd5528")
-		)
-		(pin "2"
-			(uuid "49fd6db0-4c9a-4088-9b2a-642f7ebb075c")
-		)
-		(instances
-			(project "ESP32_AZDelivery_Baseboard"
-				(path "/6dfc456e-f0f7-4393-96f4-0b7c9f575168"
-					(reference "J9")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(wire
-		(pts
-			(xy 76.2 107.95) (xy 80.01 107.95)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "7f4bef40-f483-4f57-8bc3-1033a293f6a7")
-	)
-	(wire
-		(pts
-			(xy 76.2 105.41) (xy 80.01 105.41)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "c340af52-d7e6-4ead-a01a-10dc59844f98")
-	)
-	(label "GND"
-		(at 80.01 107.95 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "63cdb8ef-a1df-4fcd-b401-a5248bd733b8")
-	)
-	(label "GPIO04"
-		(at 80.01 105.41 0)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify left bottom)
-		)
-		(uuid "b9695287-39a8-4162-b26a-f7a8224bf2c4")
-	)
 )
