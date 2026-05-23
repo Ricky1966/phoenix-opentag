@@ -5971,6 +5971,211 @@
 			)
 		)
 	)
+	(symbol
+		(lib_id "Connector_Generic:Conn_01x02")
+		(at 75 150 270)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "b187265b-9724-49b6-a4c4-19d9ad96f04a")
+		(property "Reference" "J15"
+			(at 82.62 150.254 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "BUCK_5V_IN"
+			(at 84.398 149.492 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "TerminalBlock_Phoenix:TerminalBlock_Phoenix_MKDS-1,5-2-5.08_1x02_P5.08mm_Horizontal"
+			(at 75 150 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 75 150 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Buck converter 5V power input, screw terminal"
+			(at 75 150 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "da1602bc-45da-47a3-813a-b9d8b347d06d")
+		)
+		(pin "2"
+			(uuid "d03b9c42-d39c-485d-9bd6-f397ac10f8ba")
+		)
+		(instances
+			(project "ESP32_AZDelivery_Baseboard"
+				(path "/6dfc456e-f0f7-4393-96f4-0b7c9f575168"
+					(reference "J15")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Connector_Generic:Conn_01x03")
+		(at 88 150 270)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "fd2651a8-7428-4619-9819-7999e3b77b14")
+		(property "Reference" "JP1"
+			(at 95.62 150.254 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "USB_BUCK_SEL"
+			(at 97.398 149.492 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical"
+			(at 88 150 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 88 150 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Power select jumper: 1=BUCK_5V 2=5V(VIN) 3=NC. Cap 1-2=BUCK, cap 2-3=USB"
+			(at 88 150 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "256569bb-84aa-4e55-84f8-3b9248ea3f86")
+		)
+		(pin "2"
+			(uuid "f6768954-8af6-4279-bb2b-b2516ba57ef3")
+		)
+		(pin "3"
+			(uuid "63280bec-8113-45f2-b902-6d57989a8f80")
+		)
+		(instances
+			(project "ESP32_AZDelivery_Baseboard"
+				(path "/6dfc456e-f0f7-4393-96f4-0b7c9f575168"
+					(reference "JP1")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(label "BUCK_5V"
+		(at 75 144.92 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "e7432bf3-cfcf-4e2d-b9e0-7fb55815f271")
+	)
+	(label "GND"
+		(at 72.46 144.92 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "9a1c09e2-01c7-41f3-a07a-2f8ca60ddaa0")
+	)
+	(label "BUCK_5V"
+		(at 90.54 144.92 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "476c12cd-ecfc-4668-be51-2e77926f562d")
+	)
+	(label "5V"
+		(at 88 144.92 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "3a789f55-d744-47c2-9db1-e86dd475081c")
+	)
+	(no_connect
+		(at 85.46 144.92)
+		(uuid "cf26312d-ae4a-4f04-a7b0-3fc942966fe8")
+	)
 	(sheet_instances
 		(path "/"
 			(page "1")
