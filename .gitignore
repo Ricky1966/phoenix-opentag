@@ -1,1 +1,4 @@
 .pio/
+hardware/.history/
+hardware/*.bak*
+hardware/~*.lck
