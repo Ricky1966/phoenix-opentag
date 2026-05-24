@@ -7121,7 +7121,7 @@
 			(do_not_autoplace no)
 			(effects (font (size 1.27 1.27)) (justify left))
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Connector_FFC-FPC:Hirose_FH12-10S-0.5SH_1x10-1MP_P0.5mm_Vertical"
 			(at 209.55 71.12 0)
 			(hide yes)
 			(show_name no)
@@ -7362,7 +7362,7 @@
 			(do_not_autoplace no)
 			(effects (font (size 1.27 1.27)))
 		)
-		(property "Footprint" ""
+		(property "Footprint" "Connector_FFC-FPC:Hirose_FH12-8S-0.5SH_1x08-1MP_P0.5mm_Vertical"
 			(at 80.01 193.04 0)
 			(hide yes)
 			(show_name no)
