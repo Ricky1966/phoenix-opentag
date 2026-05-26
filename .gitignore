@@ -2,3 +2,5 @@
 hardware/.history/
 hardware/*.bak*
 hardware/~*.lck
+hardware/*.dsn
+hardware/*.ses
