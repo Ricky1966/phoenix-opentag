@@ -5240,7 +5240,7 @@
 		)
 		(uuid "8713a0e7-7ca5-4c40-b1c7-f9247f8283e9")
 	)
-	(label "OPT4048_INT"
+	(label "GPIO15"
 		(at 74.93 187.96 90)
 		(effects
 			(font
