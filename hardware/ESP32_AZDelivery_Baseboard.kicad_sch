@@ -6210,7 +6210,7 @@
 				)
 			)
 		)
-		(property "Value" "FAN2_CTRL"
+		(property "Value" "SOLENOID_CTRL"
 			(at 198.12 135.89 0)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7863,7 +7863,7 @@
 				)
 			)
 		)
-		(property "Value" "FAN1_CTRL"
+		(property "Value" "FAN_CTRL"
 			(at 218.44 135.89 0)
 			(show_name no)
 			(do_not_autoplace no)
