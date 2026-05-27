@@ -1,25 +1,15 @@
-Ref,Qty,Value,Footprint
-C1 C2 C3 C4 C5,5,100nF,C_0805_2012Metric
-D1,1,LED,LED_0805_2012Metric
-J1,1,ESP32_LEFT_1x19,PinSocket_1x19_P2.54mm_Vertical
-J10,1,FAN_CTRL,JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical
-J11,1,SOLENOID_CTRL,JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical
-J12,1,NTC2_SENSOR,JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical
-J13,1,NTC3_SENSOR,JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical
-J14,1,NTC4_SENSOR,JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical
-J15,1,BUCK_5V_IN,"TerminalBlock_Phoenix_MKDS-1,5-2-5.08_1x02_P5.08mm_Horizontal"
-J16,1,OPT4048+LED+RUNOUT,Hirose_FH12-8S-0.5SH_1x08-1MP_P0.50mm_Horizontal
-J17,1,NEMA17_CTRL,JST_XH_B4B-XH-A_1x04_P2.50mm_Vertical
-J2,1,ESP32_RIGHT_1x19,PinSocket_1x19_P2.54mm_Vertical
-J3,1,PN5180_FFC10,Hirose_FH12-10S-0.5SH_1x10-1MP_P0.50mm_Horizontal
-J4,1,HEATER1_CTRL,JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical
-J5,1,HEATER2_CTRL,JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical
-J6,1,HEATER3_CTRL,JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical
-J7,1,BME280,JST_XH_B4B-XH-A_1x04_P2.50mm_Vertical
-J8,1,NTC1_SENSOR,JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical
-J9,1,HEATER4_CTRL,JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical
-JP1,1,USB_BUCK_SEL,PinHeader_1x03_P2.54mm_Vertical
-R1 R2 R3 R4,4,100K,R_0805_2012Metric
-R5,1,330,R_0805_2012Metric
-R6,1,120,R_0805_2012Metric
-U1,1,PCF8574AP,DIP-16_W7.62mm
+Designator,Qty,Value,Description,Package,Manufacturer,MPN,Assembly
+"C1,C2,C3,C4,C5",5,100nF,Ceramic Capacitor 100nF X7R 16V ±10%,0805 (2012 Metric),Yageo,CC0805KRX7R9BB104,SMT
+D1,1,LED Green,LED Green 2V 20mA,0805 (2012 Metric),Würth Elektronik,150080GS75000,SMT
+"R1,R2,R3,R4",4,100KΩ,Resistor 100KΩ 1% 125mW,0805 (2012 Metric),Yageo,RC0805FR-07100KL,SMT
+R5,1,330Ω,Resistor 330Ω 1% 125mW,0805 (2012 Metric),Yageo,RC0805FR-07330RL,SMT
+R6,1,120Ω,Resistor 120Ω 1% 125mW,0805 (2012 Metric),Yageo,RC0805FR-07120RL,SMT
+"R7,R8",2,4.7KΩ,Resistor 4.7KΩ 1% 125mW I2C Pull-up,0805 (2012 Metric),Yageo,RC0805FR-074K7L,SMT
+J3,1,FH12-10S-0.5SH,FPC/FFC Connector 10-pin 0.5mm pitch Top Contact SMD,SMD,Hirose,FH12-10S-0.5SH(55),SMT
+J16,1,FH12-8S-0.5SH,FPC/FFC Connector 8-pin 0.5mm pitch Top Contact SMD,SMD,Hirose,FH12-8S-0.5SH(55),SMT
+"J1,J2",2,PinSocket 1x19,Female Pin Header 19-pin 2.54mm pitch Vertical,THT,Generic,—,No Assemble (Customer)
+"J4,J5,J6,J8,J9,J10,J11,J12,J13,J14",10,B2B-XH-A,JST XH Connector 2-pin 2.5mm pitch Vertical,THT,JST,B2B-XH-A(LF)(SN),No Assemble (Customer)
+"J7,J17",2,B4B-XH-A,JST XH Connector 4-pin 2.5mm pitch Vertical,THT,JST,B4B-XH-A(LF)(SN),No Assemble (Customer)
+J15,1,MKDS 1.5/2-5.08,PCB Terminal Block 2-pin 5.08mm pitch Horizontal,THT,Phoenix Contact,1715017,No Assemble (Customer)
+JP1,1,PinHeader 1x03,Male Pin Header 3-pin 2.54mm pitch Vertical,THT,Generic,—,No Assemble (Customer)
+U1,1,PCF8574AP,8-bit I2C I/O Expander DIP-16,DIP-16,NXP,PCF8574AP,No Assemble (Customer)

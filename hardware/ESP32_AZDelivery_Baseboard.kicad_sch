@@ -3421,7 +3421,7 @@
 		(uuid "34478ff0-4bd1-4d84-b161-7917b6340e11")
 	)
 	(junction
-		(at 44.45 33.02)
+		(at 27.94 27.14)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "3df4d1ec-9580-4762-8cd0-88675a541e5f")
@@ -3445,7 +3445,7 @@
 		(uuid "545fca8c-15f8-446c-a738-fc43fbc866bd")
 	)
 	(junction
-		(at 44.45 58.82)
+		(at 55.88 55.88)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "6e3fd537-4a19-4d2d-b11a-33e905dcf50b")
@@ -3463,7 +3463,7 @@
 		(uuid "8f20e7fe-cc89-4a41-aea0-94ecc221628e")
 	)
 	(junction
-		(at 44.45 58.42)
+		(at 55.88 55.48)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "b06de043-cce3-4b1a-a8e8-cbeb1e1d2a67")
@@ -3481,7 +3481,7 @@
 		(uuid "cc8cb44f-9d2a-428b-94e7-8788393f73de")
 	)
 	(junction
-		(at 44.45 83.82)
+		(at 34.29 72.39)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "cf011c83-de92-49d8-b369-efa38a72997c")
@@ -3493,7 +3493,7 @@
 		(uuid "e2b05ec6-f153-4835-a7c0-9f9782060530")
 	)
 	(junction
-		(at 44.45 33.82)
+		(at 27.94 27.94)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "e625e314-28eb-481b-81a0-ae52259ee6d6")
@@ -3552,7 +3552,7 @@
 	)
 	(wire
 		(pts
-			(xy 44.45 33.02) (xy 44.45 30.01)
+			(xy 27.94 27.14) (xy 27.94 24.13)
 		)
 		(stroke
 			(width 0)
@@ -3592,7 +3592,7 @@
 	)
 	(wire
 		(pts
-			(xy 34.29 58.42) (xy 44.45 58.42)
+			(xy 45.72 55.48) (xy 55.88 55.48)
 		)
 		(stroke
 			(width 0)
@@ -3742,7 +3742,7 @@
 	)
 	(wire
 		(pts
-			(xy 44.45 88.9) (xy 44.45 83.82)
+			(xy 34.29 77.47) (xy 34.29 72.39)
 		)
 		(stroke
 			(width 0)
@@ -3752,7 +3752,7 @@
 	)
 	(wire
 		(pts
-			(xy 44.45 58.42) (xy 44.45 55.01)
+			(xy 55.88 55.48) (xy 55.88 52.07)
 		)
 		(stroke
 			(width 0)
@@ -3792,7 +3792,7 @@
 	)
 	(wire
 		(pts
-			(xy 44.45 58.82) (xy 44.45 58.42)
+			(xy 55.88 55.88) (xy 55.88 55.48)
 		)
 		(stroke
 			(width 0)
@@ -3912,7 +3912,7 @@
 	)
 	(wire
 		(pts
-			(xy 44.45 33.82) (xy 44.45 33.02)
+			(xy 27.94 27.94) (xy 27.94 27.14)
 		)
 		(stroke
 			(width 0)
@@ -4152,7 +4152,7 @@
 	)
 	(wire
 		(pts
-			(xy 44.45 63.9) (xy 44.45 58.82)
+			(xy 55.88 60.96) (xy 55.88 55.88)
 		)
 		(stroke
 			(width 0)
@@ -4202,7 +4202,7 @@
 	)
 	(wire
 		(pts
-			(xy 44.45 38.9) (xy 44.45 33.82)
+			(xy 27.94 33.02) (xy 27.94 27.94)
 		)
 		(stroke
 			(width 0)
@@ -4242,7 +4242,7 @@
 	)
 	(wire
 		(pts
-			(xy 34.29 83.82) (xy 34.29 82.55)
+			(xy 24.13 72.39) (xy 24.13 71.12)
 		)
 		(stroke
 			(width 0)
@@ -4252,7 +4252,7 @@
 	)
 	(wire
 		(pts
-			(xy 44.45 33.82) (xy 46.99 33.82)
+			(xy 27.94 27.94) (xy 30.48 27.94)
 		)
 		(stroke
 			(width 0)
@@ -4319,6 +4319,16 @@
 			(type default)
 		)
 		(uuid "abb3b8cb-6ad9-45ff-a666-af5e3b5310ab")
+	)
+	(wire
+		(pts
+			(xy 24.13 72.39) (xy 36.83 72.39)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "af62ad1f-f293-4b50-bc19-9b8ed99152cb")
 	)
 	(wire
 		(pts
@@ -4392,7 +4402,7 @@
 	)
 	(wire
 		(pts
-			(xy 35.56 33.02) (xy 44.45 33.02)
+			(xy 19.05 27.14) (xy 27.94 27.14)
 		)
 		(stroke
 			(width 0)
@@ -4452,7 +4462,7 @@
 	)
 	(wire
 		(pts
-			(xy 44.45 83.82) (xy 44.45 80.01)
+			(xy 34.29 72.39) (xy 34.29 68.58)
 		)
 		(stroke
 			(width 0)
@@ -4522,7 +4532,7 @@
 	)
 	(wire
 		(pts
-			(xy 44.45 58.82) (xy 46.99 58.82)
+			(xy 55.88 55.88) (xy 58.42 55.88)
 		)
 		(stroke
 			(width 0)
@@ -4602,16 +4612,6 @@
 	)
 	(wire
 		(pts
-			(xy 44.45 83.82) (xy 41.99 83.82)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "f13d4472-1fdb-43db-b6c9-82adb75f5dbb")
-	)
-	(wire
-		(pts
 			(xy 99.06 59.69) (xy 106.68 59.69)
 		)
 		(stroke
@@ -4632,16 +4632,6 @@
 	)
 	(wire
 		(pts
-			(xy 41.91 83.82) (xy 34.29 83.82)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "f5a70ed1-33b3-4f9f-86f7-a7b220d37f3c")
-	)
-	(wire
-		(pts
 			(xy 125.73 45.72) (xy 125.73 49.53)
 		)
 		(stroke
@@ -4659,16 +4649,6 @@
 			(type default)
 		)
 		(uuid "f6a13778-9dfe-4762-8ec9-0013afcc1896")
-	)
-	(wire
-		(pts
-			(xy 44.45 83.82) (xy 46.99 83.82)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "f798aac8-7781-40f6-9659-f0f523c22b87")
 	)
 	(wire
 		(pts
@@ -4841,7 +4821,7 @@
 		(uuid "246105b3-4757-4352-b350-a7523545fbc6")
 	)
 	(label "GPIO36"
-		(at 34.29 58.42 90)
+		(at 45.72 55.48 90)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -4931,7 +4911,7 @@
 		(uuid "3f12e4df-b1a6-42a2-b451-9202260cc21f")
 	)
 	(label "GPIO39"
-		(at 35.56 33.02 90)
+		(at 19.05 27.14 90)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -4950,7 +4930,7 @@
 		)
 		(uuid "3fa3dc87-8232-4fd5-90a7-da0a2aedef81")
 	)
-	(label "BME280_SDA"
+	(label "GPIO21_I2C_SDA"
 		(at 130.81 49.53 270)
 		(effects
 			(font
@@ -4961,7 +4941,7 @@
 		(uuid "41d483e3-4b81-4a02-8b67-9c73cf97a9e8")
 	)
 	(label "GND"
-		(at 137.16 190.50 270)
+		(at 137.16 190.5 270)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -4971,7 +4951,7 @@
 		(uuid "42f63349-ecf2-4b33-a62e-367e1d06865f")
 	)
 	(label "GND"
-		(at 46.99 88.9 90)
+		(at 36.83 77.47 90)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -5230,6 +5210,16 @@
 		)
 		(uuid "8112bb6a-d6eb-4a79-a73f-22d181188016")
 	)
+	(label "3V3"
+		(at 243.84 135.89 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "814ef718-40ad-4c50-850d-fb756099cc8a")
+	)
 	(label "GPIO22_I2C_SCL"
 		(at 161.29 62.23 0)
 		(effects
@@ -5261,7 +5251,7 @@
 		(uuid "8e4b26b1-efe6-45e6-a010-133eab7caf0b")
 	)
 	(label "GND"
-		(at 54.61 58.82 90)
+		(at 66.04 55.88 90)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -5269,6 +5259,16 @@
 			(justify left bottom)
 		)
 		(uuid "92e9441f-0f4a-45e1-b7d3-450f9f8bf41f")
+	)
+	(label "GPIO22_I2C_SCL"
+		(at 259.08 143.51 270)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "9487a662-756b-44fb-9946-dbf42d39f0c9")
 	)
 	(label "PCF8574_P2"
 		(at 82.55 187.96 90)
@@ -5381,12 +5381,12 @@
 		(uuid "a829e968-2486-4134-bc91-5f29484a7658")
 	)
 	(label "3V3"
-		(at 44.45 97.39 90)
+		(at 44.45 97.39 180)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
-			(justify left bottom)
+			(justify right bottom)
 		)
 		(uuid "a88f61fe-c080-4a4d-acb4-d0da580798a6")
 	)
@@ -5471,7 +5471,7 @@
 		(uuid "be79da35-d407-43b5-80cf-24e0d10d06bd")
 	)
 	(label "GND"
-		(at 54.61 83.82 90)
+		(at 44.45 72.39 90)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -5479,6 +5479,16 @@
 			(justify left bottom)
 		)
 		(uuid "c0bd7f78-e0cb-41e2-b0fc-309227925f82")
+	)
+	(label "GPIO21_I2C_SDA"
+		(at 243.84 143.51 270)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "c169690a-9fd7-4e35-b25e-6bb0116b9ed3")
 	)
 	(label "GPIO09"
 		(at 99.06 95.25 0)
@@ -5521,12 +5531,12 @@
 		(uuid "c6e4103f-6d03-4ce1-a44c-72ed438445c9")
 	)
 	(label "3V3"
-		(at 44.45 72.39 90)
+		(at 34.29 60.96 180)
 		(effects
 			(font
 				(size 1.27 1.27)
 			)
-			(justify left bottom)
+			(justify right bottom)
 		)
 		(uuid "c9403d47-e66b-4314-9e23-5da31c8825dc")
 	)
@@ -5561,7 +5571,17 @@
 		(uuid "cd7b20c8-bf64-4abe-9b3f-ef3ad8fafba7")
 	)
 	(label "3V3"
-		(at 44.45 47.39 90)
+		(at 259.08 135.89 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "ce90f1c0-2e46-4fd6-9540-c37ae18fa28d")
+	)
+	(label "3V3"
+		(at 55.88 44.45 90)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -5621,7 +5641,7 @@
 		(uuid "d692a5ff-2bc5-42f2-a242-03e8ff46d63e")
 	)
 	(label "GND"
-		(at 54.61 33.82 90)
+		(at 38.1 27.94 90)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -5671,7 +5691,7 @@
 		(uuid "df59ee9a-ea06-410a-987b-fc9b4df5a6ff")
 	)
 	(label "GND"
-		(at 46.99 63.9 90)
+		(at 58.42 60.96 90)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -5731,7 +5751,7 @@
 		(uuid "e78c54ac-d277-4142-808a-f5b004c0c7d1")
 	)
 	(label "GND"
-		(at 46.99 38.9 90)
+		(at 30.48 33.02 90)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -5751,7 +5771,7 @@
 		(uuid "e9ae278e-5a56-4177-98f2-35fabdd3c187")
 	)
 	(label "GPIO35"
-		(at 34.29 82.55 90)
+		(at 24.13 71.12 90)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -5781,7 +5801,7 @@
 		(uuid "f2e59089-6820-43fc-bd0a-81667e878bbe")
 	)
 	(label "3V3"
-		(at 44.45 22.39 90)
+		(at 27.94 16.51 90)
 		(effects
 			(font
 				(size 1.27 1.27)
@@ -5872,7 +5892,7 @@
 	)
 	(symbol
 		(lib_id "Connector_Generic:Conn_01x02")
-		(at 46.99 43.98 270)
+		(at 30.48 38.1 270)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -5882,7 +5902,7 @@
 		(dnp no)
 		(uuid "0b54167e-67e1-456e-b051-99f995469720")
 		(property "Reference" "J14"
-			(at 53.086 42.164 0)
+			(at 36.576 36.284 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -5892,7 +5912,7 @@
 			)
 		)
 		(property "Value" "NTC4_SENSOR"
-			(at 55.372 41.91 0)
+			(at 38.862 36.03 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -5902,7 +5922,7 @@
 			)
 		)
 		(property "Footprint" "Connector_JST:JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical"
-			(at 46.99 43.98 0)
+			(at 30.48 38.1 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5913,7 +5933,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 46.99 43.98 0)
+			(at 30.48 38.1 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5924,7 +5944,7 @@
 			)
 		)
 		(property "Description" "Generic connector, single row, 01x02"
-			(at 46.99 43.98 0)
+			(at 30.48 38.1 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5951,7 +5971,7 @@
 	)
 	(symbol
 		(lib_id "Device:R")
-		(at 44.45 76.2 180)
+		(at 34.29 64.77 180)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -5962,7 +5982,7 @@
 		(fields_autoplaced yes)
 		(uuid "0c1baf74-f86d-400c-8449-922102341d65")
 		(property "Reference" "R2"
-			(at 38.1 76.2 90)
+			(at 27.94 64.77 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -5972,7 +5992,7 @@
 			)
 		)
 		(property "Value" "100K"
-			(at 40.64 76.2 90)
+			(at 30.48 64.77 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -5982,7 +6002,7 @@
 			)
 		)
 		(property "Footprint" "Resistor_SMD:R_0805_2012Metric"
-			(at 44.45 76.2 90)
+			(at 34.29 64.77 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -5993,7 +6013,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 44.45 76.2 0)
+			(at 34.29 64.77 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6004,7 +6024,7 @@
 			)
 		)
 		(property "Description" "Resistor"
-			(at 44.45 76.2 0)
+			(at 34.29 64.77 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6761,7 +6781,7 @@
 	)
 	(symbol
 		(lib_id "Device:R")
-		(at 44.45 51.2 180)
+		(at 55.88 48.26 180)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -6772,7 +6792,7 @@
 		(fields_autoplaced yes)
 		(uuid "5c139095-29ce-4e28-b078-88bd75e4172f")
 		(property "Reference" "R3"
-			(at 38.1 51.2 90)
+			(at 49.53 48.26 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -6782,7 +6802,7 @@
 			)
 		)
 		(property "Value" "100K"
-			(at 40.64 51.2 90)
+			(at 52.07 48.26 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -6792,7 +6812,7 @@
 			)
 		)
 		(property "Footprint" "Resistor_SMD:R_0805_2012Metric"
-			(at 44.45 51.2 90)
+			(at 55.88 48.26 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6803,7 +6823,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 44.45 51.2 0)
+			(at 55.88 48.26 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6814,7 +6834,7 @@
 			)
 		)
 		(property "Description" "Resistor"
-			(at 44.45 51.2 0)
+			(at 55.88 48.26 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6834,6 +6854,88 @@
 			(project "ESP32_AZDelivery_Baseboard"
 				(path "/6dfc456e-f0f7-4393-96f4-0b7c9f575168"
 					(reference "R3")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:R")
+		(at 243.84 139.7 0)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "65923fcf-0f50-4fa1-b6af-e9ae067a545f")
+		(property "Reference" "R7"
+			(at 246.38 138.4299 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "4.7K"
+			(at 246.38 140.9699 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric"
+			(at 242.062 139.7 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 243.84 139.7 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Resistor"
+			(at 243.84 139.7 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "2"
+			(uuid "418a0b66-ab3e-486f-bef0-90204764cce1")
+		)
+		(pin "1"
+			(uuid "4c86d2a7-3081-494d-9cb9-28b1f9e91937")
+		)
+		(instances
+			(project "ESP32_AZDelivery_Baseboard"
+				(path "/6dfc456e-f0f7-4393-96f4-0b7c9f575168"
+					(reference "R7")
 					(unit 1)
 				)
 			)
@@ -6921,7 +7023,7 @@
 	)
 	(symbol
 		(lib_id "Device:R")
-		(at 44.45 26.2 180)
+		(at 27.94 20.32 180)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -6932,7 +7034,7 @@
 		(fields_autoplaced yes)
 		(uuid "71ef8e6e-ea65-4a8d-aa38-c60a6e7e73ea")
 		(property "Reference" "R4"
-			(at 38.1 26.2 90)
+			(at 21.59 20.32 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -6942,7 +7044,7 @@
 			)
 		)
 		(property "Value" "100K"
-			(at 40.64 26.2 90)
+			(at 24.13 20.32 90)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -6952,7 +7054,7 @@
 			)
 		)
 		(property "Footprint" "Resistor_SMD:R_0805_2012Metric"
-			(at 44.45 26.2 90)
+			(at 27.94 20.32 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6963,7 +7065,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 44.45 26.2 0)
+			(at 27.94 20.32 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -6974,7 +7076,7 @@
 			)
 		)
 		(property "Description" "Resistor"
-			(at 44.45 26.2 0)
+			(at 27.94 20.32 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7086,7 +7188,7 @@
 	)
 	(symbol
 		(lib_id "Device:C")
-		(at 50.8 58.82 90)
+		(at 62.23 55.88 90)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -7097,7 +7199,7 @@
 		(fields_autoplaced yes)
 		(uuid "7e28e365-972f-4688-b7e9-59fbcc90c84a")
 		(property "Reference" "C3"
-			(at 49.53 55.01 0)
+			(at 60.96 52.07 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -7108,7 +7210,7 @@
 			)
 		)
 		(property "Value" "100nF"
-			(at 52.07 55.01 0)
+			(at 63.5 52.07 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -7119,7 +7221,7 @@
 			)
 		)
 		(property "Footprint" "Capacitor_SMD:C_0805_2012Metric"
-			(at 50.8 58.82 0)
+			(at 62.23 55.88 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7130,7 +7232,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 50.8 58.82 0)
+			(at 62.23 55.88 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7141,7 +7243,7 @@
 			)
 		)
 		(property "Description" "Unpolarized capacitor"
-			(at 50.8 58.82 0)
+			(at 62.23 55.88 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7167,8 +7269,8 @@
 		)
 	)
 	(symbol
-		(lib_id "Connector_Generic:Conn_01x02")
-		(at 46.99 93.98 270)
+		(lib_id "Device:R")
+		(at 259.08 139.7 0)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -7176,29 +7278,32 @@
 		(on_board yes)
 		(in_pos_files yes)
 		(dnp no)
-		(uuid "99065366-0700-4320-beb0-6d5803f62801")
-		(property "Reference" "J12"
-			(at 54.134 94.488 0)
+		(fields_autoplaced yes)
+		(uuid "9725ccf8-8533-4ff9-9f33-d4deb52db57a")
+		(property "Reference" "R8"
+			(at 261.62 138.4299 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(justify left)
 			)
 		)
-		(property "Value" "NTC2_SENSOR"
-			(at 56.134 94.488 0)
+		(property "Value" "4.7K"
+			(at 261.62 140.9699 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
 				(font
 					(size 1.27 1.27)
 				)
+				(justify left)
 			)
 		)
-		(property "Footprint" "Connector_JST:JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical"
-			(at 46.99 93.98 0)
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric"
+			(at 257.302 139.7 90)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7209,7 +7314,86 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 46.99 93.98 0)
+			(at 259.08 139.7 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Resistor"
+			(at 259.08 139.7 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "2"
+			(uuid "5f0c13f3-21f7-4567-8b9c-d8153928df71")
+		)
+		(pin "1"
+			(uuid "1421a992-df70-439b-8b35-1e15d9c96056")
+		)
+		(instances
+			(project "ESP32_AZDelivery_Baseboard"
+				(path "/6dfc456e-f0f7-4393-96f4-0b7c9f575168"
+					(reference "R8")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Connector_Generic:Conn_01x02")
+		(at 36.83 82.55 270)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "99065366-0700-4320-beb0-6d5803f62801")
+		(property "Reference" "J12"
+			(at 45.498 81.788 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "NTC2_SENSOR"
+			(at 47.498 81.788 0)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Connector_JST:JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical"
+			(at 36.83 82.55 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 36.83 82.55 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7220,7 +7404,7 @@
 			)
 		)
 		(property "Description" "Generic connector, single row, 01x02"
-			(at 46.99 93.98 0)
+			(at 36.83 82.55 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7510,7 +7694,7 @@
 	)
 	(symbol
 		(lib_id "Connector_Generic:Conn_01x02")
-		(at 46.99 68.98 270)
+		(at 58.42 66.04 270)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -7520,7 +7704,7 @@
 		(dnp no)
 		(uuid "aef2c181-ea28-4017-aed9-9f398f9ac86c")
 		(property "Reference" "J13"
-			(at 55.404 69.342 0)
+			(at 66.834 66.402 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -7530,7 +7714,7 @@
 			)
 		)
 		(property "Value" "NTC3_SENSOR"
-			(at 57.404 69.342 0)
+			(at 68.834 66.402 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -7540,7 +7724,7 @@
 			)
 		)
 		(property "Footprint" "Connector_JST:JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical"
-			(at 46.99 68.98 0)
+			(at 58.42 66.04 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7551,7 +7735,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 46.99 68.98 0)
+			(at 58.42 66.04 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7562,7 +7746,7 @@
 			)
 		)
 		(property "Description" "Generic connector, single row, 01x02"
-			(at 46.99 68.98 0)
+			(at 58.42 66.04 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7923,7 +8107,7 @@
 	)
 	(symbol
 		(lib_id "Device:C")
-		(at 50.8 83.82 90)
+		(at 40.64 72.39 90)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -7931,10 +8115,9 @@
 		(on_board yes)
 		(in_pos_files yes)
 		(dnp no)
-		(fields_autoplaced yes)
 		(uuid "b5cfec11-1f92-44e2-ac00-72335bba6fe3")
 		(property "Reference" "C2"
-			(at 49.53 80.01 0)
+			(at 39.37 68.58 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -7945,7 +8128,7 @@
 			)
 		)
 		(property "Value" "100nF"
-			(at 52.07 80.01 0)
+			(at 41.91 68.58 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -7956,7 +8139,7 @@
 			)
 		)
 		(property "Footprint" "Capacitor_SMD:C_0805_2012Metric"
-			(at 50.8 83.82 0)
+			(at 40.64 72.39 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7967,7 +8150,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 50.8 83.82 0)
+			(at 40.64 72.39 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -7978,7 +8161,7 @@
 			)
 		)
 		(property "Description" "Unpolarized capacitor"
-			(at 50.8 83.82 0)
+			(at 40.64 72.39 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8005,7 +8188,7 @@
 	)
 	(symbol
 		(lib_id "Device:C")
-		(at 50.8 33.82 90)
+		(at 34.29 27.94 90)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -8016,7 +8199,7 @@
 		(fields_autoplaced yes)
 		(uuid "ce6d491f-7029-4692-b7ea-0904d8c90769")
 		(property "Reference" "C4"
-			(at 49.53 30.01 0)
+			(at 33.02 24.13 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -8027,7 +8210,7 @@
 			)
 		)
 		(property "Value" "100nF"
-			(at 52.07 30.01 0)
+			(at 35.56 24.13 0)
 			(show_name no)
 			(do_not_autoplace no)
 			(effects
@@ -8038,7 +8221,7 @@
 			)
 		)
 		(property "Footprint" "Capacitor_SMD:C_0805_2012Metric"
-			(at 50.8 33.82 0)
+			(at 34.29 27.94 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8049,7 +8232,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 50.8 33.82 0)
+			(at 34.29 27.94 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
@@ -8060,7 +8243,7 @@
 			)
 		)
 		(property "Description" "Unpolarized capacitor"
-			(at 50.8 33.82 0)
+			(at 34.29 27.94 0)
 			(hide yes)
 			(show_name no)
 			(do_not_autoplace no)
