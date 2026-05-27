@@ -4,3 +4,5 @@ hardware/*.bak*
 hardware/~*.lck
 hardware/*.dsn
 hardware/*.ses
+hardware/*.gbr
+hardware/*.gbrjob
