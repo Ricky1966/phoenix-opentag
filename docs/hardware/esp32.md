@@ -1,5 +1,7 @@
 # Hardware — ESP32 AZ-Delivery Baseboard
 
+> Per l'architettura generale del sistema (alimentazione 24V, MOSFET esterni, buck converter, componenti fuori PCB) vedi [design.md](design.md).
+
 Scheda ESP32 DevKit 38-pin con interfaccia USB-seriale CP2102, rilevata su `/dev/ttyUSB0`.
 
 Chip rilevato durante l'upload:
@@ -65,11 +67,6 @@ Corrisponde al pinout standard del modulo PN5180 NXP/AZ-Delivery.
 | 11 | PN5180_GPIO | GPIO ausiliario (non connesso al firmware) |
 | 12 | PN5180_REQ | REQ ausiliario (non connesso al firmware) |
 | 13 | PN5180_AUX | AUX ausiliario (non connesso al firmware) |
-
-### Connettori mancanti nello schema (da aggiungere)
-
-- **HEATER**: connettore 2-pin per il MOSFET del riscaldatore (GPIO 25, active-low)
-- **FAN1 / FAN2**: connettori per ventole 24 V PWM su GPIO 27 e GPIO 32
 
 ---
 
