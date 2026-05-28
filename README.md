@@ -2,16 +2,17 @@
 
 Sistema per la gestione e l'essiccazione dei filamenti, basato su ESP32 e sullo standard NFC OpenPrintTag di Prusa per il riconoscimento delle bobine.
 
-Il sistema usera un lettore PN5180 per leggere i tag NFC/RFID delle bobine, un sensore BME280 per misurare temperatura e umidita della camera e un controllo PID per gestire un vecchio piatto di stampa 235x235 mm a 24 V, recuperato da una Geeetech.
+Il sistema usera un lettore PN5180 per leggere i tag NFC/RFID delle bobine, un sensore BME280 per misurare temperatura e umidita della camera e un controllo PID per gestire da 1 a 4 riscaldatori a 24 V, infine un sistema OPT4048 per leggere il colore del filamento.
 
-L'idea iniziale e realizzare uno spazio comune per 4 o 5 bobine, in base al contenitore disponibile, con un motore stepper per far ruotare le bobine durante la lettura o la gestione del filamento.
+L'idea iniziale è di realizzare uno spazio comune per 4 bobine, in base al contenitore disponibile, con un motore stepper per far ruotare le bobine durante la lettura o la gestione del filamento.
 
 ## Obiettivi
 
-- Gestire un vano comune per 4 o 5 bobine di filamento.
+- Gestire un vano comune per 4 bobine di filamento.
 - Riconoscere i filamenti tramite tag NFC/RFID compatibili OpenPrintTag.
 - Leggere i tag tramite modulo PN5180 collegato a ESP32.
-- Monitorare temperatura e umidita interna con BME280.
+- Leggerne il colore attraverso un sensore OPT4048.
+- Monitorare temperatura e umidità interna con BME280.
 - Controllare il riscaldamento con regolazione PID su quattro zone indipendenti.
 - Utilizzare elementi riscaldanti a 24V adatti alla geometria del contenitore scelto.
 - Far ruotare le bobine con uno stepper, per facilitare lettura e gestione.
@@ -25,7 +26,8 @@ L'idea iniziale e realizzare uno spazio comune per 4 o 5 bobine, in base al cont
 - Alimentatore 24 V 15 A.
 - Convertitore buck 24 V / 5 V per alimentare ESP32 ed elettronica a bassa tensione.
 - Motore stepper per rotazione bobine.
-- Alloggiamento per 4 o 5 bobine di filamento.
+- Sensore OPT4048 e 2 Led bianchi.
+- Alloggiamento per 4 bobine di filamento.
 
 ## Riferimenti
 
@@ -36,7 +38,7 @@ L'idea iniziale e realizzare uno spazio comune per 4 o 5 bobine, in base al cont
 
 ## Stato del progetto
 
-Repository inizializzato. La documentazione raccoglie le prime specifiche funzionali e hardware; il codice verra aggiunto durante lo sviluppo.
+Repository inizializzato. La documentazione raccoglie le prime specifiche funzionali e hardware; il codice verrà aggiunto durante lo sviluppo.
 
 ## Licenza
 

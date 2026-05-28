@@ -122,6 +122,32 @@ Quattro divisori resistivi identici per lettura termistore NTC:
 
 GPIO34–39 sono **solo input** e non hanno pull-up interni: il pull-up esterno (R1–R4, 100kΩ) è indispensabile. I condensatori C1–C5 (100nF) filtrano il rumore sul segnale ADC.
 
+### Motore stepper NEMA17 (J17, JST-XH 4-pin)
+La PCB espone i segnali di controllo per un driver stepper esterno tramite il connettore J17:
+
+| Pin J17 | Segnale | Sorgente | Funzione |
+|---------|---------|----------|----------|
+| 1 | GND | — | Massa riferimento |
+| 2 | EN | PCF8574 P0 (I2C) | Enable driver (LOW = attivo) |
+| 3 | STEP | GPIO14 | Impulso passo |
+| 4 | DIR | GPIO13 | Direzione rotazione |
+
+Il segnale EN è gestito dal PCF8574 (I2C expander, P0) invece che da un GPIO diretto, risparmiando un pin ESP32.
+
+**Componenti esterni necessari:**
+- **Driver stepper** (breakout board): A4988, DRV8825 o TMC2208/TMC2209. Riceve STEP/DIR/EN dalla PCB e converte in corrente per le bobine del motore.
+- **Alimentazione bobine**: 24V dall'alimentatore principale (stessa sorgente dei riscaldatori). Il driver regola la corrente alle bobine internamente.
+- **Motore**: NEMA17, collegato al driver tramite cavo a 4 fili (2 bobine).
+
+```
+PCB J17 ──STEP/DIR/EN──► Driver (A4988/DRV8825/TMC22xx)
+                              │
+                    24V ──────┤  VMOT
+                    5V  ──────┤  VDD (logica driver)
+                              │
+                           NEMA17 (bobine A/B)
+```
+
 ### Pull-up I2C (R7, R8)
 Due resistori da 4.7kΩ collegano SDA e SCL a 3.3V. Necessari perché il bus I2C ha tre dispositivi (BME280 + PCF8574 + OPT4048) e il cavo FPC introduce capacità parassita.
 
@@ -160,5 +186,7 @@ Alimentatore 24V / 15A
 | Ventola 24V                              | 1 | Con segnale PWM o ON/OFF                                |
 | Solenoide 24V                            | 1 | Per chiusura meccanica camera                           |
 | Modulo BME280                            | 1 | Con connettore JST-XH 4-pin o adattatore                |
+| Driver stepper (A4988 / DRV8825 / TMC2209) | 1 | Breakout board esterna, riceve STEP/DIR/EN dalla PCB  |
+| Motore NEMA17                            | 1 | Bobine alimentate a 24V tramite driver                  |
 | Modulo PN5180                            | 1 | Con cavo FPC 10-pin 0.5mm                               |
 | Modulo OPT4048 + 2× LED bianchi + runout | 1 | Con cavo FPC 8-pin 0.5mm                                |
