@@ -12,8 +12,8 @@ L'idea iniziale e realizzare uno spazio comune per 4 o 5 bobine, in base al cont
 - Riconoscere i filamenti tramite tag NFC/RFID compatibili OpenPrintTag.
 - Leggere i tag tramite modulo PN5180 collegato a ESP32.
 - Monitorare temperatura e umidita interna con BME280.
-- Controllare il riscaldamento con regolazione PID.
-- Riutilizzare un piatto di stampa 235x235 mm a 24 V come elemento riscaldante.
+- Controllare il riscaldamento con regolazione PID su quattro zone indipendenti.
+- Utilizzare elementi riscaldanti a 24V adatti alla geometria del contenitore scelto.
 - Far ruotare le bobine con uno stepper, per facilitare lettura e gestione.
 
 ## Hardware previsto
@@ -21,7 +21,7 @@ L'idea iniziale e realizzare uno spazio comune per 4 o 5 bobine, in base al cont
 - ESP32.
 - Lettore NFC PN5180.
 - Sensore temperatura/umidita BME280.
-- Piatto riscaldato 235x235 mm Geeetech a 24 V.
+- Quattro elementi riscaldanti a 24V.
 - Alimentatore 24 V 15 A.
 - Convertitore buck 24 V / 5 V per alimentare ESP32 ed elettronica a bassa tensione.
 - Motore stepper per rotazione bobine.

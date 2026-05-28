@@ -23,11 +23,7 @@ Il sistema è composto da una **scheda di controllo custom** (questa PCB) e da u
 
 ## Perché il 24V è esterno alla scheda
 
-I carichi a 24V (riscaldatori, ventola, solenoide) richiedono correnti elevate:
-
-- Ogni riscaldatore (piatto Geeetech 235×235mm) assorbe circa **8–10 A** a 24V
-- Quattro riscaldatori in uso contemporaneo → fino a **40 A totali**
-- La ventola e il solenoide aggiungono altri 1–2 A
+I carichi a 24V (riscaldatori, ventola, solenoide) richiedono correnti che dipendono dal tipo di riscaldatore scelto. La corrente complessiva può essere significativa con quattro riscaldatori attivi contemporaneamente. La ventola e il solenoide aggiungono ulteriore assorbimento.
 
 Far scorrere queste correnti attraverso la PCB di controllo comporterebbe:
 - Piste larghissime, incompatibili con un layout compatto
@@ -67,9 +63,9 @@ Ogni carico a 24V è controllato da un **MOSFET N-channel** esterno, pilotato di
 
 **Requisiti MOSFET**:
 - V_DS ≥ 30V (margine sul 24V)
-- I_D ≥ 10A (per i canali riscaldatore)
+- I_D adeguato alla corrente del riscaldatore scelto
 - V_GS(th) ≤ 2V — **logic-level**, deve accendersi completamente con 3.3V sul gate
-- Esempio compatibile: IRLZ44N, STP36NF06L, AOD4184A
+- Esempi compatibili: IRLZ44N, STP36NF06L, AOD4184A
 
 Ogni connettore CTRL porta solo il **segnale gate** (1 pin segnale + 1 GND). Il circuito di potenza (drain→carico→24V, source→GND) è completamente esterno alla PCB.
 
@@ -153,7 +149,7 @@ Alimentatore 24V / 15A
 |------------|----|------|
 | MOSFET N-ch logic-level (es. IRLZ44N) | 6 | 4× riscaldatori + ventola + solenoide |
 | Buck converter 24V→5V ≥ 1A | 1 | Con output regolabile o fisso 5V |
-| Riscaldatore piatto 235×235mm 24V | fino a 4 | Recuperato da stampante 3D |
+| Riscaldatore 24V | 4 | Tipo da definire in base alla geometria del contenitore |
 | NTC 100kΩ β=3950 con cavo | 4 | Tipo NTC3950 |
 | Ventola 24V | 1 | Con segnale PWM o ON/OFF |
 | Solenoide 24V | 1 | Per chiusura meccanica camera |
