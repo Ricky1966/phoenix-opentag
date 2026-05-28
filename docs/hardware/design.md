@@ -177,16 +177,16 @@ Alimentatore 24V / 15A
 
 ## Componenti fuori dalla PCB — lista di acquisto
 
-| Componente                               |Qt | Note                                                    |
-|------------------------------------------|---|---------------------------------------------------------|
-| MOSFET N-ch logic-level (es. IRLZ44N)    | 6 | 4× riscaldatori + ventola + solenoide                   |
-| Buck converter 24V→5V ≥ 1A               | 1 | Con output regolabile o fisso 5V                        |
-| Riscaldatore 24V                         | 4 | Tipo da definire in base alla geometria del contenitore |
-| NTC 100kΩ β=3950 con cavo                | 4 | Tipo NTC3950                                            |
-| Ventola 24V                              | 1 | Con segnale PWM o ON/OFF                                |
-| Solenoide 24V                            | 1 | Per chiusura meccanica camera                           |
-| Modulo BME280                            | 1 | Con connettore JST-XH 4-pin o adattatore                |
-| Driver stepper (A4988 / DRV8825 / TMC2209) | 1 | Breakout board esterna, riceve STEP/DIR/EN dalla PCB  |
-| Motore NEMA17                            | 1 | Bobine alimentate a 24V tramite driver                  |
-| Modulo PN5180                            | 1 | Con cavo FPC 10-pin 0.5mm                               |
-| Modulo OPT4048 + 2× LED bianchi + runout | 1 | Con cavo FPC 8-pin 0.5mm                                |
+| Componente                                 |Qt | Note                                                    |
+|--------------------------------------------|---|---------------------------------------------------------|
+| MOSFET N-ch logic-level (es. IRLZ44N)      | 6 | 4× riscaldatori + ventola + solenoide                   |
+| Buck converter 24V→5V ≥ 1A                 | 1 | Con output regolabile o fisso 5V                        |
+| Riscaldatore 24V                           | 4 | Tipo da definire in base alla geometria del contenitore |
+| NTC 100kΩ β=3950 con cavo                  | 4 | Tipo NTC3950                                            |
+| Ventola 24V                                | 1 | Con segnale PWM o ON/OFF                                |
+| Solenoide 24V                              | 1 | Per chiusura meccanica camera                           |
+| Modulo BME280                              | 1 | Con connettore JST-XH 4-pin o adattatore                |
+| Driver stepper (A4988 / DRV8825 / TMC2209) | 1 | Breakout board esterna, riceve STEP/DIR/EN dalla PCB    |
+| Motore NEMA17                              | 1 | Bobine alimentate a 24V tramite driver                  |
+| Modulo PN5180                              | 1 | Con cavo FPC 10-pin 0.5mm                               |
+| Modulo OPT4048 + 2× LED bianchi + runout   | 1 | Con cavo FPC 8-pin 0.5mm                                |
