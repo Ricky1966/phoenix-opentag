@@ -94,8 +94,14 @@ Modulo NFC a 13.56 MHz per la lettura dei tag OpenPrintTag sulle bobine.
 Collegato via VSPI (GPIO18/19/23) + CS GPIO5 + BUSY GPIO16 + RST GPIO17.
 Alimentato a 3.3V (logica) e 5V (RF), entrambi forniti dalla PCB.
 
-### OPT4048 — Sensore colore/luce (J16, FPC 8-pin)
-Sensore ottico per rilevamento bobina o runout filamento. Collegato via I2C condiviso con BME280 e PCF8574. Interrupt su GPIO15.
+### OPT4048 + LED bianchi + Runout filamento (J16, FPC 8-pin)
+Il connettore J16 porta un modulo composto da tre elementi che lavorano insieme:
+
+- **OPT4048** — sensore di colore tristimolo ad alta precisione, collegato via I2C (indirizzo fisso, bus condiviso con BME280 e PCF8574), interrupt su GPIO15
+- **2× LED bianchi** — illuminano il filamento o la bobina per garantire una lettura colore stabile e indipendente dalla luce ambiente
+- **Runout filament sensor** — rileva l'assenza del filamento (esaurimento bobina) analizzando la variazione di riflettanza/colore quando il filamento non è presente davanti al sensore
+
+Il sistema permette di identificare il colore del filamento in uso e di rilevare automaticamente quando la bobina è esaurita, integrando le informazioni con i tag NFC letti dal PN5180.
 
 ### Circuito NTC ×4 (R1–R4, C1–C5)
 Quattro divisori resistivi identici per lettura termistore NTC:
@@ -155,3 +161,4 @@ Alimentatore 24V / 15A
 | Solenoide 24V | 1 | Per chiusura meccanica camera |
 | Modulo BME280 | 1 | Con connettore JST-XH 4-pin o adattatore |
 | Modulo PN5180 AZ-Delivery | 1 | Con cavo FPC 10-pin 0.5mm |
+| Modulo OPT4048 + 2× LED bianchi + runout | 1 | Con cavo FPC 8-pin 0.5mm |
