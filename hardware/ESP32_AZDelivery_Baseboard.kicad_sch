@@ -3692,7 +3692,7 @@
 	)
 	(wire
 		(pts
-			(xy 177.8 81.28) (xy 214.63 81.28)
+			(xy 177.8 81.28) (xy 196.85 81.28)
 		)
 		(stroke
 			(width 0)
@@ -3739,6 +3739,16 @@
 			(type default)
 		)
 		(uuid "34ebad33-0696-44e6-b69e-e2149075205b")
+	)
+	(wire
+		(pts
+			(xy 204.47 73.66) (xy 214.63 73.66)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "36cf7669-46c4-4b9e-8931-3ae791cf04d9")
 	)
 	(wire
 		(pts
@@ -3922,6 +3932,16 @@
 	)
 	(wire
 		(pts
+			(xy 204.47 78.74) (xy 214.63 78.74)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "4afc49db-8a95-4370-8441-86ab3238ab8b")
+	)
+	(wire
+		(pts
 			(xy 154.94 82.55) (xy 194.31 82.55)
 		)
 		(stroke
@@ -4059,6 +4079,16 @@
 			(type default)
 		)
 		(uuid "7a36bc3e-e8bc-480d-ba2c-23f37677578b")
+	)
+	(wire
+		(pts
+			(xy 204.47 81.28) (xy 214.63 81.28)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "7b778893-88bf-4b44-9ab7-af110aefad48")
 	)
 	(wire
 		(pts
@@ -4392,7 +4422,7 @@
 	)
 	(wire
 		(pts
-			(xy 181.61 73.66) (xy 214.63 73.66)
+			(xy 181.61 73.66) (xy 196.85 73.66)
 		)
 		(stroke
 			(width 0)
@@ -4472,7 +4502,7 @@
 	)
 	(wire
 		(pts
-			(xy 187.96 78.74) (xy 214.63 78.74)
+			(xy 187.96 78.74) (xy 196.85 78.74)
 		)
 		(stroke
 			(width 0)
@@ -6051,6 +6081,85 @@
 	)
 	(symbol
 		(lib_id "Device:R")
+		(at 200.66 73.66 90)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "157f8bb2-eea6-4c54-8742-c9fe431be5e3")
+		(property "Reference" "R9"
+			(at 199.39 71.882 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "33"
+			(at 202.438 71.628 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric"
+			(at 200.66 75.438 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 200.66 73.66 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Resistor"
+			(at 200.66 73.66 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "2"
+			(uuid "8ad9f2ff-d696-455a-9282-2b5006e5540e")
+		)
+		(pin "1"
+			(uuid "bb5eb3ac-e7cf-4f8a-bf20-a15eb598f766")
+		)
+		(instances
+			(project "ESP32_AZDelivery_Baseboard"
+				(path "/6dfc456e-f0f7-4393-96f4-0b7c9f575168"
+					(reference "R9")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:R")
 		(at 44.45 101.2 180)
 		(unit 1)
 		(body_style 1)
@@ -6781,6 +6890,85 @@
 	)
 	(symbol
 		(lib_id "Device:R")
+		(at 200.66 78.74 90)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "4d272b3c-eafc-4f56-a860-30ccaab5e579")
+		(property "Reference" "R10"
+			(at 199.39 76.962 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "33"
+			(at 202.946 77.216 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric"
+			(at 200.66 80.518 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 200.66 78.74 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Resistor"
+			(at 200.66 78.74 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "2"
+			(uuid "e3ea0c44-0d85-4f64-8c34-61c5b83926de")
+		)
+		(pin "1"
+			(uuid "6bff1998-11a5-433d-b8b0-e61b15c42617")
+		)
+		(instances
+			(project "ESP32_AZDelivery_Baseboard"
+				(path "/6dfc456e-f0f7-4393-96f4-0b7c9f575168"
+					(reference "R10")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:R")
 		(at 55.88 48.26 180)
 		(unit 1)
 		(body_style 1)
@@ -7503,6 +7691,85 @@
 			(project "ESP32_AZDelivery_Baseboard"
 				(path "/6dfc456e-f0f7-4393-96f4-0b7c9f575168"
 					(reference "J6")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Device:R")
+		(at 200.66 81.28 90)
+		(unit 1)
+		(body_style 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(in_pos_files yes)
+		(dnp no)
+		(uuid "a332050c-f013-4494-9e79-27a6346e786b")
+		(property "Reference" "R11"
+			(at 199.898 85.598 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "33"
+			(at 203.2 85.598 90)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Resistor_SMD:R_0805_2012Metric"
+			(at 200.66 83.058 90)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 200.66 81.28 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Resistor"
+			(at 200.66 81.28 0)
+			(hide yes)
+			(show_name no)
+			(do_not_autoplace no)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(pin "2"
+			(uuid "1f9f7082-f6be-47a3-b7d1-abcf0b7c41fc")
+		)
+		(pin "1"
+			(uuid "9596405e-8306-4733-aa8a-3725de428466")
+		)
+		(instances
+			(project "ESP32_AZDelivery_Baseboard"
+				(path "/6dfc456e-f0f7-4393-96f4-0b7c9f575168"
+					(reference "R11")
 					(unit 1)
 				)
 			)

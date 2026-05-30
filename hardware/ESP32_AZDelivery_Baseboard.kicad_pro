@@ -70,7 +70,20 @@
         }
       },
       "diff_pair_dimensions": [],
-      "drc_exclusions": [],
+      "drc_exclusions": [
+        [
+          "unconnected_items|134500000|75000000|F.Cu|4|110f663b-647e-4ce1-ad98-1d582b21e55a|82714f8b-48c3-4466-87f8-27e79b096678",
+          ""
+        ],
+        [
+          "unconnected_items|142087500|72000000|F.Cu|4|39082e4e-01b0-4d21-9813-b2ee000db30f|683ae9f6-ce64-43ae-90bd-a41794d3c32b",
+          ""
+        ],
+        [
+          "unconnected_items|149500000|80087500|F.Cu|4|e384e686-292d-40a0-b50a-b0274b1140b7|c814326e-de95-4545-a85e-c9726c275580",
+          ""
+        ]
+      ],
       "meta": {
         "version": 2
       },
@@ -652,7 +665,7 @@
         "uuid": "6dfc456e-f0f7-4393-96f4-0b7c9f575168"
       }
     ],
-    "used_designators": "R7-8",
+    "used_designators": "R7-11",
     "variants": []
   },
   "sheets": [

@@ -5,6 +5,7 @@ D1,1,LED Green,LED Green 2V 20mA,0805 (2012 Metric),Würth Elektronik,150080GS75
 R5,1,330Ω,Resistor 330Ω 1% 125mW,0805 (2012 Metric),Yageo,RC0805FR-07330RL,SMT
 R6,1,120Ω,Resistor 120Ω 1% 125mW,0805 (2012 Metric),Yageo,RC0805FR-07120RL,SMT
 "R7,R8",2,4.7KΩ,Resistor 4.7KΩ 1% 125mW I2C Pull-up,0805 (2012 Metric),Yageo,RC0805FR-074K7L,SMT
+"R9,R10,R11",3,33Ω,Resistor 33Ω 1% 125mW SPI Series Damping,0805 (2012 Metric),Yageo,RC0805FR-0733RL,SMT
 J3,1,FH12-10S-0.5SH,FPC/FFC Connector 10-pin 0.5mm pitch Top Contact SMD,SMD,Hirose,FH12-10S-0.5SH(55),SMT
 J16,1,FH12-8S-0.5SH,FPC/FFC Connector 8-pin 0.5mm pitch Top Contact SMD,SMD,Hirose,FH12-8S-0.5SH(55),SMT
 "J1,J2",2,PinSocket 1x19,Female Pin Header 19-pin 2.54mm pitch Vertical,THT,Generic,—,No Assemble (Customer)
