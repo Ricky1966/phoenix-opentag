@@ -1,0 +1,613 @@
+#include "web_ui.h"
+#include "config.h"
+#include "utils.h"
+#include "i18n.h"
+#include "materials.h"
+#include "sensor.h"
+#include "heater.h"
+#include "nfc.h"
+#include <WiFi.h>
+#include <ElegantOTA.h>
+
+WebServer server(80);
+
+static bool          wifiReconnectPending = false;
+static unsigned long wifiReconnectAtMs    = 0;
+
+static const IPAddress AP_IP(192, 168, 4, 1);
+static const IPAddress AP_GATEWAY(192, 168, 4, 1);
+static const IPAddress AP_SUBNET(255, 255, 255, 0);
+
+// ── WiFi helpers ─────────────────────────────────────────────────────────────
+
+bool wifiClientConnected() {
+  return appSettings.wifiClientEnabled && WiFi.status() == WL_CONNECTED;
+}
+
+String wifiClientIp() {
+  return wifiClientConnected() ? WiFi.localIP().toString() : String("--");
+}
+
+void connectWifiClient(uint16_t timeoutMs) {
+  if (!appSettings.wifiClientEnabled || appSettings.wifiSsid.length() == 0) {
+    WiFi.disconnect(false); return;
+  }
+  WiFi.mode(WIFI_AP_STA); WiFi.setSleep(false);
+  Serial.print("Connessione WiFi a "); Serial.println(appSettings.wifiSsid);
+  WiFi.begin(appSettings.wifiSsid.c_str(), appSettings.wifiPassword.c_str());
+  const unsigned long startMs = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - startMs < timeoutMs) { delay(250); Serial.print("."); }
+  Serial.println();
+  if (WiFi.status() == WL_CONNECTED) { Serial.print("WiFi connesso, IP: "); Serial.println(WiFi.localIP()); }
+  else { Serial.println("WiFi non connesso: AP di emergenza resta attivo."); }
+}
+
+static void scheduleWifiReconnect(uint16_t delayMs = 1500) {
+  wifiReconnectPending = true;
+  wifiReconnectAtMs = millis() + delayMs;
+}
+
+void checkWifiReconnect() {
+  if (wifiReconnectPending && (long)(millis() - wifiReconnectAtMs) >= 0) {
+    wifiReconnectPending = false;
+    connectWifiClient();
+  }
+}
+
+// ── JSON serializers ──────────────────────────────────────────────────────────
+
+String settingsJson() {
+  String json = "{\"selected\":"; json += String(selectedMaterialProfile);
+  json += ",\"setpoint\":"; json += String(heaterControl.setpoint, 1);
+  json += ",\"cycleDurationSeconds\":";  json += String(heaterControl.cycleDurationSeconds);
+  json += ",\"cycleElapsedSeconds\":";   json += String(heaterCycleElapsedSeconds());
+  json += ",\"cycleRemainingSeconds\":"; json += String(heaterCycleRemainingSeconds());
+  json += ",\"cycleRunning\":"; json += heaterControl.cycleRunning ? "true" : "false";
+  json += ",\"safetyLimit\":";  json += String(BED_SAFETY_LIMIT_C, 1);
+  json += ",\"language\":\""; json += escapeJson(appSettings.language);
+  json += "\",\"compiledLocale\":\""; json += UI_LOCALE_CODE;
+  json += "\",\"compiledLocaleName\":\""; json += UI_LOCALE_NAME;
+  json += "\",\"wifiSsid\":\""; json += escapeJson(appSettings.wifiSsid);
+  json += "\",\"wifiConfigured\":"; json += appSettings.wifiSsid.length() > 0 ? "true" : "false";
+  json += ",\"wifiClientEnabled\":"; json += appSettings.wifiClientEnabled ? "true" : "false";
+  json += ",\"wifiConnected\":"; json += wifiClientConnected() ? "true" : "false";
+  json += ",\"wifiIp\":\""; json += wifiClientIp();
+  json += "\",\"wifiRssi\":"; json += wifiClientConnected() ? String(WiFi.RSSI()) : "null";
+  json += ",\"debugEnabled\":"; json += appSettings.debugEnabled ? "true" : "false";
+  json += ",\"profiles\":[";
+  for (uint8_t i = 0; i < totalMaterialProfileCount(); i++) {
+    if (i > 0) json += ",";
+    json += "{\"id\":"; json += String(i);
+    json += ",\"name\":\""; json += escapeJson(materialProfileName(i));
+    json += "\",\"temperature\":"; json += String(materialProfileTemp(i), 1);
+    json += ",\"minutes\":"; json += String(materialProfileMinutes(i));
+    json += ",\"available\":"; json += materialProfileTemp(i) <= BED_SAFETY_LIMIT_C ? "true" : "false";
+    json += ",\"custom\":"; json += i >= MATERIAL_PROFILE_COUNT ? "true" : "false";
+    json += "}";
+  }
+  json += "]}";
+  return json;
+}
+
+// ── Dashboard HTML ────────────────────────────────────────────────────────────
+
+String dashboardHtml(PageMode pageMode) {
+  readSensor(); readBedTemperature();
+  String html; html.reserve(10000);
+
+  html += F("<!doctype html><html lang=\""); html += appSettings.language; html += F("\"><head>");
+  html += F("<meta charset=\"utf-8\">");
+  html += F("<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">");
+  html += F("<title>"); html += tr(TK_APP_TITLE); html += F("</title>");
+  html += F("<style>");
+  html += F(":root{font-family:system-ui,-apple-system,Segoe UI,sans-serif;font-size:17px;color:#1f2933;background:#f4f7f8}");
+  html += F("body{margin:0;padding:24px}main{max-width:1180px;margin:auto}");
+  html += F("h1{font-size:34px;margin:0 0 6px}.sub{color:#52606d;margin:0 0 24px;font-size:16px}");
+  html += F("nav{display:flex;gap:10px;margin:0 0 12px;align-items:center;flex-wrap:wrap}");
+  html += F("nav a{border-radius:6px;background:#d9e2ec;color:#102a43;text-decoration:none;padding:10px 15px;font-weight:700;font-size:16px}");
+  html += F("nav a.active{background:#0f766e;color:white}");
+  html += F(".tags .home-panel,.tags .heater-panel,.tags .setpoint-panel,.tags .settings-panel,.home .tag-panel,.home .heater-panel,.home .setpoint-panel,.home .settings-panel,.setpoint .home-panel,.setpoint .tag-panel,.setpoint .settings-panel,.settings .home-panel,.settings .tag-panel,.settings .heater-panel,.settings .setpoint-panel{display:none}");
+  html += F(".grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px}");
+  html += F(".card{background:white;border:1px solid #d9e2ec;border-radius:8px;padding:20px}.wide{margin-top:14px}");
+  html += F(".label{font-size:15px;color:#52606d;margin-bottom:10px;font-weight:600}.value{font-size:36px;font-weight:700;color:#102a43}");
+  html += F(".small{font-size:16px;line-height:1.6;color:#102a43}");
+  html += F(".formgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-top:16px}");
+  html += F("label{display:grid;gap:6px;font-size:15px;color:#52606d;font-weight:700}");
+  html += F("input,select{border:1px solid #bcccdc;border-radius:6px;padding:10px 12px;font:inherit;font-size:16px;color:#102a43;background:white}");
+  html += F("input[readonly]{background:#f0f4f8;color:#52606d}");
+  html += F("input[type=color]{width:100%;height:44px;padding:3px;cursor:pointer}");
+  html += F(".colorline{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}");
+  html += F(".hex{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:15px;color:#102a43;background:#f0f4f8;border:1px solid #d9e2ec;border-radius:6px;padding:10px 12px}");
+  html += F("code{display:block;margin-top:6px;white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:14px;line-height:1.45}");
+  html += F("button{margin-top:14px;border:0;border-radius:6px;background:#0f766e;color:white;padding:11px 16px;font-size:16px;font-weight:700;cursor:pointer}");
+  html += F("button.secondary{background:#334e68;margin-left:8px}button.danger{background:#b91c1c}");
+  html += F(".status{margin-top:18px;color:#52606d;font-size:15px}.warn{color:#b91c1c;font-weight:700}.ok{color:#0f766e;font-weight:700}");
+  html += F("table{width:100%;border-collapse:collapse;margin-top:12px}th,td{text-align:left;border-bottom:1px solid #d9e2ec;padding:10px 8px;font-size:15px}th{font-size:14px;color:#52606d;font-weight:700}");
+  html += F(".inline-control{display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-top:12px}.inline-control label{min-width:200px}.inline-control button{margin-top:0}");
+  html += F(".profile-control{display:grid;grid-template-columns:1.2fr 1fr 1fr auto auto;gap:14px;align-items:end;margin-top:18px}");
+  html += F(".profile-control label{font-size:16px;min-width:0}.profile-control select,.profile-control input,.profile-control .hex{height:48px;font-size:18px;font-weight:800;box-sizing:border-box}.profile-control button{height:48px;margin-top:0;padding:0 18px}");
+  html += F(".heater-summary{display:flex;gap:22px;align-items:center;flex-wrap:wrap;margin:4px 0 14px}.metric{display:grid;gap:3px}.metric span{font-size:14px;color:#52606d;font-weight:700}.metric strong{font-size:24px;color:#102a43}");
+  html += F(".button-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:14px}.button-row button{margin-top:0}.output-inline{margin-left:auto;color:#52606d;font-size:15px}.output-inline strong{color:#102a43}");
+  html += F(".cycle-timer{display:inline-block;margin:10px 0 6px;padding:14px 20px;border-radius:8px;background:#102a43;color:white;font-size:46px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:0}");
+  html += F(".cycle-caption{font-size:14px;color:#52606d;font-weight:700;margin-top:12px}");
+  html += F(".tag-summary{display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin-bottom:14px}.tag-summary span{font-size:16px}");
+  html += F(".debug-box{background:#f8fafc;border:1px solid #d9e2ec;border-radius:6px;padding:14px;margin:0 0 14px}.debug-box .label{margin-bottom:6px}");
+  html += F(".tag-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:14px}.tag-actions button{margin-top:0}");
+  html += F(".hum-bar-wrap{height:10px;border-radius:5px;background:#d9e2ec;margin-top:12px;overflow:hidden}.hum-bar{height:100%;border-radius:5px;transition:width .5s,background .4s}");
+  html += F(".stat{font-size:14px;color:#52606d;font-weight:700;margin-bottom:4px}.stat-val{font-size:22px;font-weight:800;color:#102a43}");
+  html += F(".hcard-row{display:flex;gap:16px;margin-top:8px;flex-wrap:wrap}");
+  html += F(".badge{display:inline-block;padding:4px 12px;border-radius:20px;font-size:15px;font-weight:700;background:#d9e2ec;color:#334e68}");
+  html += F(".badge.on{background:#dcfce7;color:#166534}.badge.auto{background:#dbeafe;color:#1e40af}");
+  html += F("details{border:1px solid #d9e2ec;border-radius:8px;margin-top:14px;overflow:hidden}");
+  html += F("details summary{padding:12px 16px;font-weight:700;font-size:14px;cursor:pointer;background:#f8fafc;list-style:none;display:flex;justify-content:space-between;align-items:center;color:#334e68}");
+  html += F("details summary::-webkit-details-marker{display:none}details summary::after{content:'\\25BC';font-size:11px;color:#52606d;transition:transform .2s}");
+  html += F("details[open] summary::after{transform:rotate(-180deg)}");
+  html += F("details .formgrid{padding:14px 16px 16px;border-top:1px solid #d9e2ec}");
+  html += F(".help{margin-top:16px;padding:14px 16px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;font-size:15px;color:#0c4a6e;line-height:1.7}");
+  html += F(".help strong{color:#0369a1;display:block;margin-bottom:6px;font-size:16px}");
+  html += F(".help ul{margin:4px 0 0;padding-left:20px}.help li{margin-bottom:5px}");
+  html += F("</style><script>");
+  html += F("async function refreshData(){try{const r=await fetch('/api/bme280');const d=await r.json();");
+  html += F("if(d.valid){document.getElementById('temperature').textContent=d.temperature.toFixed(1)+' C';");
+  html += F("document.getElementById('humidity').textContent=d.humidity.toFixed(1)+' %';");
+  html += F("const bar=document.getElementById('humidity-bar');if(bar){const p=Math.min(d.humidity,100);bar.style.width=p+'%';bar.style.background=p<=15?'#0f766e':p<=30?'#d97706':'#b91c1c';}}}catch(e){}}");
+  html += F("async function refreshBed(){try{const r=await fetch('/api/bed');const d=await r.json();document.getElementById('bed-temp').textContent=d.valid?d.temperature.toFixed(1)+' C':'--';}catch(e){}}");
+  html += F("function setText(id,value){const e=document.getElementById(id);if(e)e.textContent=value;}");
+  html += F("function updateNfc(d){setText('pn5180-status',d.readerPresent?(d.rfReady?'");
+  html += tr(TK_NFC_READY); html += F("':'"); html += tr(TK_NFC_RF_NOT_READY); html += F("'):'"); html += tr(TK_NFC_NOT_DETECTED); html += F("');");
+  html += F("setText('pn5180-version','Product '+d.productVersion+' / Firmware '+d.firmwareVersion+' / EEPROM '+d.eepromVersion);");
+  html += F("setText('pn5180-scan-status',d.lastStatus);");
+  html += F("setText('pn5180-uid',d.lastUidLength>0?d.lastUid:'"); html += tr(TK_TAG_NO_UID); html += F("');");
+  html += F("setText('pn5180-type',d.tagType);setText('pn5180-tech',d.technologies);setText('pn5180-atqa',d.atqa);setText('pn5180-sak',d.sak);setText('pn5180-memory',d.memoryInfo);setText('pn5180-format',d.dataFormat);");
+  html += F("const color=document.getElementById('tag-color');if(color&&d.openPrintTagColor){color.value=d.openPrintTagColor;syncColor();}}");
+  html += F("async function refreshNfc(){try{const r=await fetch('/api/nfc');updateNfc(await r.json());}catch(e){}}");
+  html += F("async function readTag(){const b=document.getElementById('read-tag');const label=b.dataset.label||b.textContent;b.disabled=true;b.textContent='...';");
+  html += F("let done=false;const t=setTimeout(()=>{if(!done){b.disabled=false;b.textContent=label;setText('pn5180-scan-status','Lettura senza risposta: premi EN/RST se il portale resta fermo');}},3000);");
+  html += F("try{const r=await fetch('/api/nfc/read?ts='+Date.now());done=true;clearTimeout(t);updateNfc(await r.json());}catch(e){done=true;clearTimeout(t);setText('pn5180-scan-status','Errore richiesta lettura');}");
+  html += F("b.disabled=false;b.textContent=label;}");
+  html += F("async function writeOpenPrintTag(){if(!confirm('Scrivo questi dati sul tag appoggiato. Continuo?'))return;");
+  html += F("const b=document.getElementById('write-tag');const f=document.getElementById('tag-form');const q=new URLSearchParams(new FormData(f));");
+  html += F("const md=f.elements['mdate'].value;if(md){q.set('mdate',Math.floor(new Date(md+'T00:00:00Z').getTime()/1000));}");
+  html += F("const label=b.dataset.label||b.textContent;b.disabled=true;b.textContent='...';");
+  html += F("try{const r=await fetch('/api/nfc/write?'+q.toString()+'&ts='+Date.now());updateNfc(await r.json());}catch(e){setText('pn5180-scan-status','Errore scrittura');}");
+  html += F("b.disabled=false;b.textContent=label;}");
+  html += F("function syncColor(){const c=document.getElementById('tag-color');const h=document.getElementById('tag-color-hex');if(c&&h)h.textContent=c.value.toUpperCase();}");
+  html += F("function updateHeater(d){document.getElementById('heater-state').textContent=d.enabled?'ON':'OFF';");
+  html += F("document.getElementById('heater-mode').textContent=d.automatic?'AUTO':'"); html += tr(TK_MANUAL); html += F("';");
+  html += F("document.getElementById('heater-setpoint').textContent=d.setpoint.toFixed(1)+' C';");
+  html += F("document.getElementById('heater-output').textContent=d.outputPercent.toFixed(1)+' %';");
+  // aggiorna anche la card riepilogativa in Home
+  html += F("const hs=document.getElementById('hcard-state');if(hs){hs.textContent=d.enabled?'ON':'OFF';hs.className='badge'+(d.enabled?' on':'');}");
+  html += F("const hm2=document.getElementById('hcard-mode');if(hm2){hm2.textContent=d.automatic?'AUTO':'MAN';hm2.className='badge'+(d.automatic?' auto':'');}");
+  html += F("const ho=document.getElementById('hcard-out');if(ho)ho.textContent=d.outputPercent.toFixed(1)+' %';");
+  html += F("const hsp=document.getElementById('hcard-sp');if(hsp)hsp.textContent=d.setpoint.toFixed(1)+' C';");
+  html += F("const c=document.getElementById('cycle-countdown');if(c)c.textContent=formatDuration(d.cycleRemainingSeconds);");
+  html += F("const hc=document.getElementById('home-cycle-countdown');if(hc)hc.textContent=formatDuration(d.cycleRemainingSeconds);");
+  html += F("const ht=document.getElementById('home-profile-temp');if(ht&&document.activeElement!==ht&&!d.automatic&&!manualHomeEdit)ht.value=d.setpoint.toFixed(1);");
+  html += F("const pt=document.getElementById('profile-temp');if(pt&&document.activeElement!==pt&&!d.automatic)pt.value=d.setpoint.toFixed(1);");
+  html += F("const hm=document.getElementById('home-cycle-minutes');if(hm&&document.activeElement!==hm&&!d.automatic&&!manualHomeEdit)hm.value=Math.round(d.cycleDurationSeconds/60);");
+  html += F("const pm=document.getElementById('profile-minutes');if(pm&&document.activeElement!==pm&&!d.automatic)pm.value=Math.round(d.cycleDurationSeconds/60);");
+  html += F("const hp=document.getElementById('home-profile');if(hp)hp.disabled=d.automatic;}");
+  html += F("function formatDuration(s){s=Number(s)||0;const h=Math.floor(s/3600);const m=Math.floor((s%3600)/60);const sec=s%60;return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0');}");
+  html += F("async function refreshHeater(){try{const r=await fetch('/api/heater');updateHeater(await r.json());}catch(e){}}");
+  html += F("async function setHeaterState(v){try{const r=await fetch('/api/heater/'+(v?'on':'off')+'?ts='+Date.now());updateHeater(await r.json());}catch(e){document.getElementById('heater-state').textContent='Errore';}}");
+  html += F("async function setHeaterAuto(v){try{if(v&&!(await applyHomeProfile(false)))return;const r=await fetch('/api/heater/auto/'+(v?'on':'off')+'?ts='+Date.now());updateHeater(await r.json());}catch(e){const n=document.getElementById('home-profile-note');if(n){n.className='warn';n.textContent='Errore comando AUTO';}}}");
+  html += F("let manualHomeEdit=false;const profiles=[");
+  for (uint8_t i = 0; i < totalMaterialProfileCount(); i++) {
+    if (i > 0) html += F(",");
+    html += F("[\""); html += escapeJson(materialProfileName(i)); html += F("\",");
+    html += String(materialProfileTemp(i), 1); html += F(","); html += String(materialProfileMinutes(i)); html += F("]");
+  }
+  html += F("];const safetyLimit="); html += String(BED_SAFETY_LIMIT_C, 1); html += F(";");
+  html += F("function readNumber(id,fallback){const e=document.getElementById(id);if(!e)return fallback;const v=String(e.value).replace(',','.');const n=parseFloat(v);return Number.isFinite(n)?n:fallback;}");
+  html += F("function selectedProfile(){return profiles[Number(document.getElementById('material-profile').value)||0];}");
+  html += F("function syncSetpointWarning(){const p=selectedProfile();const v=readNumber('profile-temp',p[1]);const n=document.getElementById('profile-note');");
+  html += F("if(v>safetyLimit){n.className='warn';n.textContent='Sopra il limite sicurezza attuale: non applicabile.';return false;}");
+  html += F("if(v>p[1]){n.className='warn';n.textContent='Temperatura superiore al profilo consigliato.';return true;}");
+  html += F("n.className='ok';n.textContent='"); html += tr(TK_PROFILE_WITHIN_RECOMMENDED); html += F("';return true;}");
+  html += F("function fillProfile(){const p=selectedProfile();document.getElementById('profile-recommended').textContent=p[1].toFixed(1)+' C / '+Math.round(p[2]/60)+' h';syncSetpointWarning();}");
+  html += F("function loadRecommendedProfile(){const p=selectedProfile();document.getElementById('profile-temp').value=p[1];document.getElementById('profile-minutes').value=p[2];syncSetpointWarning();}");
+  html += F("async function applySetpoint(){if(!syncSetpointWarning())return;const p=selectedProfile();const v=readNumber('profile-temp',p[1]);");
+  html += F("if(v>p[1]&&!confirm('Temperatura superiore al profilo consigliato. Procedo comunque?'))return;");
+  html += F("const minutes=Math.round(readNumber('profile-minutes',p[2]));");
+  html += F("const r=await fetch('/api/settings/material?id='+document.getElementById('material-profile').value+'&setpoint='+v+'&minutes='+minutes+'&ts='+Date.now());const d=await r.json();document.getElementById('settings-status').textContent='Setpoint aggiornato a '+d.setpoint.toFixed(1)+' C, durata '+Math.round(d.cycleDurationSeconds/60)+' min';refreshHeater();}");
+  html += F("async function addCustomProfile(ev){if(ev)ev.preventDefault();const name=document.getElementById('custom-profile-name').value.trim();const temp=readNumber('custom-profile-temp',NaN);const minutes=Math.round(readNumber('custom-profile-minutes',NaN));const s=document.getElementById('settings-status');");
+  html += F("s.className='status';if(!name){s.textContent='Nome profilo mancante.';return;}if(!Number.isFinite(temp)||!Number.isFinite(minutes)||minutes<1){s.textContent='Temperatura o durata non validi.';return;}if(temp>safetyLimit){s.className='warn';s.textContent='Temperatura oltre il limite sicurezza.';return;}s.textContent='Aggiungo profilo...';");
+  html += F("try{const q=new URLSearchParams({name:name,setpoint:temp,minutes:minutes,ts:Date.now()});const r=await fetch('/api/settings/profile/add?'+q.toString());const t=await r.text();if(!r.ok){s.className='warn';s.textContent='Profilo non aggiunto: '+t;return;}location.href='/settings?ts='+Date.now();}catch(e){s.className='warn';s.textContent='Errore rete mentre aggiungevo il profilo.';}}");
+  html += F("async function saveGeneralSettings(){const s=document.getElementById('general-settings-status');s.className='status';s.textContent='"); html += tr(TK_SETTINGS_SAVING); html += F("';");
+  html += F("const q=new URLSearchParams({language:document.getElementById('ui-language').value,wifiSsid:document.getElementById('wifi-ssid').value,wifiPassword:document.getElementById('wifi-password').value,wifiClient:document.getElementById('wifi-client').value,debug:document.getElementById('debug-enabled').value,ts:Date.now()});");
+  html += F("try{const r=await fetch('/api/settings/general?'+q.toString());if(!r.ok){s.className='warn';s.textContent='"); html += tr(TK_SETTINGS_SAVE_FAILED); html += F("';return;}");
+  html += F("const d=await r.json();const connected=d.wifiConnected?'"); html += tr(TK_SETTINGS_WIFI_CONNECTED); html += F(" '+d.wifiIp:'"); html += tr(TK_SETTINGS_WIFI_NOT_CONNECTED); html += F(" --';");
+  html += F("const ws=document.getElementById('wifi-status-value');if(ws)ws.textContent=connected;s.className=d.wifiConnected?'ok':'status';s.textContent='"); html += tr(TK_SETTINGS_SAVED); html += F(" '+connected+'. "); html += tr(TK_SETTINGS_AP_FALLBACK); html += F("';}");
+  html += F("catch(e){s.className='warn';s.textContent='"); html += tr(TK_SETTINGS_SAVE_ERROR); html += F("';}}");
+  html += F("async function scanWifiNetworks(){const s=document.getElementById('general-settings-status');const list=document.getElementById('wifi-networks');s.className='status';s.textContent='"); html += tr(TK_SETTINGS_SCAN_START); html += F("';list.innerHTML='';");
+  html += F("try{const r=await fetch('/api/wifi/scan?ts='+Date.now());const d=await r.json();if(!d.networks.length){s.className='warn';s.textContent='"); html += tr(TK_SETTINGS_SCAN_NONE); html += F("';return;}");
+  html += F("d.networks.forEach((n,i)=>{const o=document.createElement('option');o.value=n.ssid;o.textContent=n.ssid+' ('+n.rssi+' dBm'+(n.secure?', "); html += tr(TK_SETTINGS_SECURED); html += F("':'')+')';list.appendChild(o);});");
+  html += F("list.disabled=false;document.getElementById('wifi-ssid').value=d.networks[0].ssid;s.className='ok';s.textContent='"); html += tr(TK_SETTINGS_SCAN_FOUND); html += F(": '+d.networks.length;}");
+  html += F("catch(e){s.className='warn';s.textContent='"); html += tr(TK_SETTINGS_SCAN_ERROR); html += F("';}}");
+  html += F("function chooseWifiNetwork(){const list=document.getElementById('wifi-networks');if(list&&list.value)document.getElementById('wifi-ssid').value=list.value;}");
+  html += F("function setManualHomeEdit(v){manualHomeEdit=v;const t=document.getElementById('home-profile-temp');const m=document.getElementById('home-cycle-minutes');const b=document.getElementById('home-manual-edit');if(t)t.readOnly=!v;if(m)m.readOnly=!v;if(b)b.textContent=v?'"); html += tr(TK_LOCK_EDIT); html += F("':'"); html += tr(TK_MANUAL_EDIT); html += F("';}");
+  html += F("function toggleManualHomeEdit(){setManualHomeEdit(!manualHomeEdit);const n=document.getElementById('home-profile-note');if(n&&manualHomeEdit){n.className='ok';n.textContent='Modifica manuale attiva: puoi cambiare temperatura e durata.';}}");
+  html += F("function fillHomeProfile(){const s=document.getElementById('home-profile');if(!s)return;const p=profiles[Number(s.value)||0];const n=document.getElementById('home-profile-note');");
+  html += F("if(!manualHomeEdit){document.getElementById('home-profile-temp').value=p[1].toFixed(1);document.getElementById('home-cycle-minutes').value=p[2];}");
+  html += F("document.getElementById('home-profile-recommended').textContent=p[1].toFixed(1)+' C / '+Math.round(p[2]/60)+' h';");
+  html += F("if(p[1]>safetyLimit){n.className='warn';n.textContent='Profilo oltre il limite sicurezza attuale.';}else{n.className='ok';n.textContent='"); html += tr(TK_PROFILE_APPLICABLE); html += F("';}}");
+  html += F("async function applyHomeProfile(showMessage=true){const s=document.getElementById('home-profile');const p=profiles[Number(s.value)||0];");
+  html += F("const setpoint=readNumber('home-profile-temp',p[1]);");
+  html += F("if(setpoint>safetyLimit){document.getElementById('home-profile-note').className='warn';document.getElementById('home-profile-note').textContent='Non applicato: oltre il limite sicurezza.';return;}");
+  html += F("const minutes=Math.round(readNumber('home-cycle-minutes',p[2]));");
+  html += F("const r=await fetch('/api/settings/material?id='+s.value+'&setpoint='+setpoint+'&minutes='+minutes+'&ts='+Date.now());const d=await r.json();");
+  html += F("document.getElementById('home-profile-note').className='ok';document.getElementById('home-profile-note').textContent=showMessage?('Ciclo '+p[0]+' applicato: '+d.setpoint.toFixed(1)+' C, '+Math.round(d.cycleDurationSeconds/60)+' min'):'Ciclo '+p[0]+' pronto';");
+  html += F("document.getElementById('heater-setpoint').textContent=d.setpoint.toFixed(1)+' C';document.getElementById('cycle-countdown').textContent=formatDuration(d.cycleRemainingSeconds);refreshHeater();return true;}");
+  html += F("setInterval(()=>{refreshData();refreshBed();},60000);setInterval(()=>{refreshBed();refreshHeater();},2000);");
+  html += F("window.addEventListener('load',()=>{syncColor();if(document.getElementById('material-profile'))fillProfile();fillHomeProfile();refreshData();refreshBed();refreshNfc();refreshHeater();});");
+  html += F("</script>");
+
+  html += pageMode == PAGE_TAGS     ? F("</head><body class=\"tags\"><main>")     :
+          pageMode == PAGE_SETPOINT ? F("</head><body class=\"setpoint\"><main>") :
+          pageMode == PAGE_SETTINGS ? F("</head><body class=\"settings\"><main>") :
+                                      F("</head><body class=\"home\"><main>");
+  html += F("<h1>"); html += tr(TK_APP_TITLE); html += F("</h1>");
+  html += F("<p class=\"sub\">"); html += tr(TK_APP_SUBTITLE); html += F("</p>");
+  html += F("<nav>");
+  html += F("<a href=\"/temperature\" title=\""); html += tr(TK_NAV_HOME_TIP); html += F("\""); html += pageMode == PAGE_HOME ? F(" class=\"active\">") : F(">"); html += tr(TK_NAV_HOME); html += F("</a>");
+  html += F("<a href=\"/tags\" title=\""); html += tr(TK_NAV_TAG_TIP); html += F("\""); html += pageMode == PAGE_TAGS ? F(" class=\"active\">") : F(">"); html += tr(TK_NAV_TAG); html += F("</a>");
+  html += F("<a href=\"/setpoint\" title=\""); html += tr(TK_NAV_SETPOINT_TIP); html += F("\""); html += pageMode == PAGE_SETPOINT ? F(" class=\"active\">") : F(">"); html += tr(TK_NAV_SETPOINT); html += F("</a>");
+  html += F("<a href=\"/settings\" title=\""); html += tr(TK_NAV_SETTINGS_TIP); html += F("\""); html += pageMode == PAGE_SETTINGS ? F(" class=\"active\">") : F(">"); html += tr(TK_NAV_SETTINGS); html += F("</a></nav>");
+
+  // ── Home panel
+  html += F("<section class=\"grid home-panel\">");
+  html += F("<article class=\"card\"><div class=\"label\">"); html += tr(TK_CARD_TEMPERATURE); html += F("</div><div class=\"value\" id=\"temperature\">"); html += valueOrDash(sensorData.temperature, " C"); html += F("</div></article>");
+  html += F("<article class=\"card\"><div class=\"label\">"); html += tr(TK_CARD_HUMIDITY); html += F("</div><div class=\"value\" id=\"humidity\">"); html += valueOrDash(sensorData.humidity, " %"); html += F("</div><div class=\"hum-bar-wrap\"><div class=\"hum-bar\" id=\"humidity-bar\"></div></div></article>");
+  html += F("<article class=\"card\"><div class=\"label\">"); html += tr(TK_CARD_BED); html += F("</div><div class=\"value\" id=\"bed-temp\">"); html += valueOrDash(bedData.temperature, " C"); html += F("</div></article>");
+  html += F("<article class=\"card\"><div class=\"label\">"); html += tr(TK_CYCLE_COUNTDOWN); html += F("</div><div class=\"value\" style=\"font-size:26px;font-variant-numeric:tabular-nums\" id=\"home-cycle-countdown\">--:--:--</div></article>");
+  // card riepilogativa riscaldatore
+  html += F("<article class=\"card\"><div class=\"label\">"); html += tr(TK_HEATER); html += F("</div>");
+  html += F("<div class=\"hcard-row\">");
+  html += F("<div><div class=\"stat\">"); html += tr(TK_STATE); html += F("</div><span class=\"badge\" id=\"hcard-state\">"); html += heaterEnabled ? "ON" : "OFF"; html += F("</span></div>");
+  html += F("<div><div class=\"stat\">"); html += tr(TK_MODE); html += F("</div><span class=\"badge\" id=\"hcard-mode\">"); html += heaterControl.automatic ? "AUTO" : "MAN"; html += F("</span></div>");
+  html += F("<div><div class=\"stat\">"); html += tr(TK_SETPOINT); html += F("</div><div class=\"stat-val\" id=\"hcard-sp\">"); html += String(heaterControl.setpoint, 1); html += F(" C</div></div>");
+  html += F("<div><div class=\"stat\">"); html += tr(TK_OUTPUT); html += F("</div><div class=\"stat-val\" id=\"hcard-out\">"); html += String(heaterControl.outputPercent, 1); html += F(" %</div></div>");
+  html += F("</div></article>");
+  html += F("</section>");
+  html += F("<div class=\"help home-panel\"><strong>&#x2139; Questa pagina</strong>");
+  html += F("<ul>");
+  html += F("<li><b>Temperatura / Umidità</b>: lettura BME280 dell'aria nella camera, aggiornata ogni 60 s.</li>");
+  html += F("<li><b>Piatto</b>: temperatura NTC sul riscaldatore, aggiornata ogni 2 s.</li>");
+  html += F("<li><b>Countdown</b>: tempo residuo del ciclo attivo; mostra --:--:-- se nessun ciclo è in corso.</li>");
+  html += F("<li><b>Riscaldatore</b>: stato ON/OFF, modo AUTO/MAN, setpoint e output PI corrente.</li>");
+  html += F("</ul>");
+  html += F("Le altre sezioni: <b>Lettura TAG</b> — leggi e scrivi bobine NFC &nbsp;|&nbsp; <b>SetPoint</b> — imposta profilo e avvia ciclo &nbsp;|&nbsp; <b>Settings</b> — WiFi, lingua, OTA.</div>");
+
+  // ── Tag panel
+  html += F("<section class=\"card wide tag-panel\"><div class=\"label\">OpenPrintTag</div><div class=\"small\">");
+  html += F("<div class=\"tag-summary\"><span><strong>"); html += tr(TK_TAG_STATUS); html += F(":</strong> <span id=\"pn5180-status\">");
+  html += nfcData.readerPresent ? (nfcData.rfReady ? tr(TK_NFC_READY) : tr(TK_NFC_RF_NOT_READY)) : tr(TK_NFC_NOT_DETECTED);
+  html += F("</span></span><span><strong>"); html += tr(TK_TAG_UID); html += F(":</strong> <span id=\"pn5180-uid\">");
+  html += nfcData.lastUidLength > 0 ? nfcData.lastUid : String(tr(TK_TAG_NO_UID));
+  html += F("</span></span><span><strong>"); html += tr(TK_TAG_LAST_READ); html += F(":</strong> <span id=\"pn5180-scan-status\">"); html += nfcData.lastStatus; html += F("</span></span></div>");
+  if (appSettings.debugEnabled) {
+    html += F("<div class=\"debug-box\"><div class=\"label\">"); html += tr(TK_TAG_DEBUG); html += F("</div>");
+    html += F("<span id=\"pn5180-version\">Product "); html += nfcData.productVersion; html += F(" / Firmware "); html += nfcData.firmwareVersion; html += F(" / EEPROM "); html += nfcData.eepromVersion; html += F("</span><br>");
+    html += tr(TK_TAG_TYPE); html += F(": <span id=\"pn5180-type\">"); html += nfcData.tagType; html += F("</span><br>");
+    html += tr(TK_TAG_TECH); html += F(": <span id=\"pn5180-tech\">"); html += nfcData.technologies; html += F("</span><br>");
+    html += F("ATQA: <span id=\"pn5180-atqa\">"); html += nfcData.atqa; html += F("</span><br>");
+    html += F("SAK: <span id=\"pn5180-sak\">"); html += nfcData.sak; html += F("</span><br>");
+    html += tr(TK_TAG_MEMORY); html += F(": <span id=\"pn5180-memory\">"); html += nfcData.memoryInfo; html += F("</span><br>");
+    html += tr(TK_TAG_FORMAT); html += F(": <span id=\"pn5180-format\">"); html += nfcData.dataFormat; html += F("</span></div>");
+  }
+  html += F("<div class=\"help\"><strong>&#x2139; Come usare questa pagina</strong><ul>");
+  html += F("<li>Appoggia una bobina NFC sul lettore PN5180 e premi <b>Leggi tag</b> per leggere i dati OpenPrintTag.</li>");
+  html += F("<li>Compila i campi (espandi le sezioni con la freccia), poi premi <b>Scrivi OpenPrintTag</b> per salvare i dati sulla bobina.</li>");
+  html += F("<li>Supporta tag <b>ISO 15693</b> (NFC-V, es. NXP ICODE — standard OpenPrintTag) e <b>ISO 14443A</b> (NFC-A, es. NTAG — sola lettura UID).</li>");
+  html += F("<li>Il colore letto dal tag viene mostrato nel selettore colore.</li>");
+  html += F("</ul></div>");
+  html += F("<form id=\"tag-form\" onsubmit=\"event.preventDefault();writeOpenPrintTag();\">");
+  // Gruppo 1: Identità bobina
+  html += F("<details open><summary>"); html += tr(TK_TAG_MATERIAL); html += F(" &amp; "); html += tr(TK_TAG_COLOR); html += F("</summary><div class=\"formgrid\">");
+  html += F("<label>"); html += tr(TK_TAG_BRAND);    html += F("<input name=\"brand\" maxlength=\"31\" value=\"ODIN\"></label>");
+  html += F("<label>"); html += tr(TK_TAG_MATERIAL);  html += F("<input name=\"name\" maxlength=\"31\" value=\"Test PLA\"></label>");
+  html += F("<label>"); html += tr(TK_TAG_TYPE);      html += F("<select name=\"type\"><option value=\"0\">PLA</option><option value=\"1\">PETG</option><option value=\"2\">TPU</option><option value=\"3\">ABS</option><option value=\"4\">ASA</option><option value=\"5\">PC</option></select></label>");
+  html += F("<label>"); html += tr(TK_TAG_COLOR);     html += F("<div class=\"colorline\"><input id=\"tag-color\" name=\"color\" type=\"color\" value=\"#ffffff\" oninput=\"syncColor()\"><span class=\"hex\" id=\"tag-color-hex\">#FFFFFF</span></div></label>");
+  html += F("<label>"); html += tr(TK_TAG_DENSITY);    html += F("<input name=\"density\" type=\"number\" min=\"0\" max=\"5\" step=\"0.01\" value=\"1.24\"></label>");
+  html += F("<label>"); html += tr(TK_TAG_DIAMETER);   html += F("<input name=\"diameter\" type=\"number\" min=\"0\" max=\"5\" step=\"0.01\" value=\"1.75\"></label>");
+  html += F("</div></details>");
+  // Gruppo 2: Pesi e lunghezze
+  html += F("<details><summary>"); html += tr(TK_TAG_NOMINAL_WEIGHT); html += F(" / "); html += tr(TK_TAG_NOMINAL_LENGTH); html += F("</summary><div class=\"formgrid\">");
+  html += F("<label>"); html += tr(TK_TAG_NOMINAL_WEIGHT); html += F("<input name=\"nomw\" type=\"number\" min=\"0\" max=\"9999\" value=\"1000\"></label>");
+  html += F("<label>"); html += tr(TK_TAG_ACTUAL_WEIGHT);  html += F("<input name=\"actw\" type=\"number\" min=\"0\" max=\"9999\" value=\"1000\"></label>");
+  html += F("<label>"); html += tr(TK_TAG_EMPTY_WEIGHT);   html += F("<input name=\"emptyw\" type=\"number\" min=\"0\" max=\"9999\" value=\"250\"></label>");
+  html += F("<label>"); html += tr(TK_TAG_NOMINAL_LENGTH); html += F("<input name=\"nomlen\" type=\"number\" min=\"0\" max=\"999999\" value=\"330000\"></label>");
+  html += F("<label>"); html += tr(TK_TAG_ACTUAL_LENGTH);  html += F("<input name=\"actlen\" type=\"number\" min=\"0\" max=\"999999\" value=\"330000\"></label>");
+  html += F("<label>"); html += tr(TK_TAG_MANUFACTURE_DATE); html += F("<input name=\"mdate\" type=\"date\"></label>");
+  html += F("<label>"); html += tr(TK_TAG_COUNTRY);    html += F("<input name=\"country\" maxlength=\"2\" value=\"IT\"></label>");
+  html += F("</div></details>");
+  // Gruppo 3: Parametri stampa ed essiccazione
+  html += F("<details><summary>"); html += tr(TK_TAG_NOZZLE_MIN); html += F(" / "); html += tr(TK_TAG_DRY_TEMP); html += F("</summary><div class=\"formgrid\">");
+  html += F("<label>"); html += tr(TK_TAG_NOZZLE_MIN); html += F("<input name=\"nmin\" type=\"number\" min=\"0\" max=\"350\" value=\"205\"></label>");
+  html += F("<label>"); html += tr(TK_TAG_NOZZLE_MAX); html += F("<input name=\"nmax\" type=\"number\" min=\"0\" max=\"350\" value=\"215\"></label>");
+  html += F("<label>"); html += tr(TK_TAG_BED_MIN);    html += F("<input name=\"bmin\" type=\"number\" min=\"0\" max=\"140\" value=\"55\"></label>");
+  html += F("<label>"); html += tr(TK_TAG_BED_MAX);    html += F("<input name=\"bmax\" type=\"number\" min=\"0\" max=\"140\" value=\"60\"></label>");
+  html += F("<label>"); html += tr(TK_TAG_DRY_TEMP);   html += F("<input name=\"drytemp\" type=\"number\" min=\"0\" max=\"120\" value=\"45\"></label>");
+  html += F("<label>"); html += tr(TK_TAG_DRY_TIME);   html += F("<input name=\"drytime\" type=\"number\" min=\"0\" max=\"9999\" value=\"240\"></label>");
+  html += F("</div></details>");
+  // Gruppo 4: Dimensioni bobina
+  html += F("<details><summary>"); html += tr(TK_TAG_SPOOL_WIDTH); html += F("</summary><div class=\"formgrid\">");
+  html += F("<label>"); html += tr(TK_TAG_SPOOL_WIDTH); html += F("<input name=\"spoolw\" type=\"number\" min=\"0\" max=\"999\" value=\"68\"></label>");
+  html += F("<label>"); html += tr(TK_TAG_SPOOL_OD);   html += F("<input name=\"spoolod\" type=\"number\" min=\"0\" max=\"999\" value=\"200\"></label>");
+  html += F("<label>"); html += tr(TK_TAG_SPOOL_ID);   html += F("<input name=\"spoolid\" type=\"number\" min=\"0\" max=\"999\" value=\"100\"></label>");
+  html += F("<label>"); html += tr(TK_TAG_SPOOL_HOLE); html += F("<input name=\"spoolhole\" type=\"number\" min=\"0\" max=\"999\" value=\"52\"></label>");
+  html += F("</div></details>");
+  html += F("</form><div class=\"tag-actions\">");
+  html += F("<button id=\"read-tag\" data-label=\""); html += tr(TK_TAG_READ); html += F("\" onclick=\"readTag()\">"); html += tr(TK_TAG_READ); html += F("</button>");
+  html += F("<button id=\"write-tag\" data-label=\""); html += tr(TK_TAG_WRITE); html += F("\" onclick=\"writeOpenPrintTag()\">"); html += tr(TK_TAG_WRITE); html += F("</button>");
+  html += F("</div></div></section>");
+
+  // ── Heater panel
+  html += F("<section class=\"card wide heater-panel\"><div class=\"label\">"); html += tr(TK_HEATER); html += F("</div><div class=\"small\">");
+  html += F("<div class=\"heater-summary\">");
+  html += F("<div class=\"metric\"><span>"); html += tr(TK_STATE);   html += F("</span><strong id=\"heater-state\">");   html += heaterEnabled ? "ON" : "OFF"; html += F("</strong></div>");
+  html += F("<div class=\"metric\"><span>"); html += tr(TK_MODE);    html += F("</span><strong id=\"heater-mode\">");    html += heaterControl.automatic ? F("AUTO") : tr(TK_MANUAL); html += F("</strong></div>");
+  html += F("<div class=\"metric\"><span>"); html += tr(TK_SETPOINT); html += F("</span><strong id=\"heater-setpoint\">"); html += String(heaterControl.setpoint, 1); html += F(" C</strong></div>");
+  html += F("</div><div class=\"profile-control\"><label>"); html += tr(TK_PROFILE_MATERIAL);
+  html += F("<select id=\"home-profile\" onchange=\"fillHomeProfile()\">");
+  for (uint8_t i = 0; i < totalMaterialProfileCount(); i++) {
+    html += F("<option value=\""); html += String(i); html += F("\""); if (i == selectedMaterialProfile) html += F(" selected"); html += F(">"); html += materialProfileName(i); html += F("</option>");
+  }
+  html += F("</select></label><label>"); html += tr(TK_CYCLE_SETPOINT);
+  html += F("<input id=\"home-profile-temp\" type=\"number\" min=\"20\" max=\"120\" step=\"0.5\" readonly value=\""); html += String(heaterControl.setpoint, 1); html += F("\"></label><label>"); html += tr(TK_CYCLE_DURATION_MIN);
+  html += F("<input id=\"home-cycle-minutes\" type=\"number\" min=\"1\" max=\"9999\" step=\"1\" readonly value=\""); html += String(heaterControl.cycleDurationSeconds / 60UL); html += F("\"></label>");
+  html += F("<button type=\"button\" onclick=\"applyHomeProfile()\">"); html += tr(TK_APPLY_CYCLE); html += F("</button>");
+  html += F("<button type=\"button\" class=\"secondary\" id=\"home-manual-edit\" onclick=\"toggleManualHomeEdit()\">"); html += tr(TK_MANUAL_EDIT); html += F("</button></div>");
+  html += F("<p class=\"status\">"); html += tr(TK_RECOMMENDED); html += F(": <span id=\"home-profile-recommended\">--</span></p>");
+  html += F("<p class=\"status\" id=\"home-profile-note\">--</p>");
+  html += F("<div class=\"cycle-caption\">"); html += tr(TK_CYCLE_COUNTDOWN); html += F("</div><div class=\"cycle-timer\" id=\"cycle-countdown\">--:--:--</div>");
+  html += F("<div class=\"button-row\">");
+  html += F("<button onclick=\"setHeaterAuto(true)\">AUTO</button>");
+  html += F("<button class=\"secondary\" onclick=\"setHeaterAuto(false)\">STOP AUTO</button>");
+  html += F("<button class=\"danger\" onclick=\"setHeaterState(true)\">"); html += tr(TK_MANUAL_ON); html += F("</button>");
+  html += F("<button class=\"secondary\" onclick=\"setHeaterState(false)\">OFF</button>");
+  html += F("<span class=\"output-inline\">"); html += tr(TK_OUTPUT); html += F(" <strong id=\"heater-output\">"); html += String(heaterControl.outputPercent, 1); html += F(" %</strong></span>");
+  html += F("</div></div></section>");
+
+  // ── Setpoint panel
+  html += F("<section class=\"card wide setpoint-panel\"><div class=\"label\">"); html += tr(TK_SETPOINT_SETTINGS); html += F("</div><div class=\"small\">");
+  html += F("<div class=\"help\"><strong>&#x2139; Come usare questa pagina</strong><ul>");
+  html += F("<li>Seleziona il <b>materiale</b> per caricare automaticamente setpoint e durata consigliati.</li>");
+  html += F("<li>Puoi modificare manualmente setpoint e durata, poi premi <b>Applica setpoint</b>.</li>");
+  html += F("<li>Premi <b>AUTO</b> nel pannello sopra per avviare il ciclo con controllo PI. Il ciclo si ferma al countdown o a 90 °C (limite sicurezza).</li>");
+  html += F("<li><b>ON manuale</b> accende il riscaldatore senza ciclo temporizzato. <b>OFF</b> spegne tutto.</li>");
+  html += F("<li>Puoi aggiungere profili personalizzati nella sezione in basso.</li>");
+  html += F("</ul></div>");
+  html += F("<div class=\"formgrid\"><label>"); html += tr(TK_TABLE_MATERIAL);
+  html += F("<select id=\"material-profile\" onchange=\"loadRecommendedProfile()\">");
+  for (uint8_t i = 0; i < totalMaterialProfileCount(); i++) {
+    html += F("<option value=\""); html += String(i); html += F("\""); if (i == selectedMaterialProfile) html += F(" selected"); html += F(">"); html += materialProfileName(i); html += F("</option>");
+  }
+  html += F("</select></label><label>"); html += tr(TK_DRYER_SETPOINT_C);
+  html += F("<input id=\"profile-temp\" type=\"number\" min=\"20\" max=\"120\" step=\"0.5\" value=\""); html += String(heaterControl.setpoint, 1); html += F("\" oninput=\"syncSetpointWarning()\"></label>");
+  html += F("<label>"); html += tr(TK_CYCLE_DURATION_MIN);
+  html += F("<input id=\"profile-minutes\" type=\"number\" min=\"1\" max=\"9999\" step=\"1\" value=\""); html += String(heaterControl.cycleDurationSeconds / 60UL); html += F("\"></label>");
+  html += F("<label>"); html += tr(TK_RECOMMENDED_PROFILE); html += F("<div class=\"hex\" id=\"profile-recommended\">--</div></label></div>");
+  html += F("<p class=\"status\" id=\"profile-note\">--</p>");
+  html += F("<button type=\"button\" onclick=\"applySetpoint()\">"); html += tr(TK_APPLY_SETPOINT); html += F("</button>");
+  html += F("<p class=\"status\" id=\"settings-status\">"); html += tr(TK_SETPOINT_HELP); html += F("</p>");
+  html += F("<div class=\"label\" style=\"margin-top:24px\">"); html += tr(TK_CUSTOM_PROFILE); html += F("</div>");
+  html += F("<div class=\"formgrid\"><label>"); html += tr(TK_PROFILE_NAME); html += F("<input id=\"custom-profile-name\" maxlength=\"24\" placeholder=\"PLA 0.5KG\"></label>");
+  html += F("<label>Setpoint C<input id=\"custom-profile-temp\" type=\"number\" min=\"20\" max=\"120\" step=\"0.5\" value=\"45\"></label>");
+  html += F("<label>"); html += tr(TK_DURATION_MIN); html += F("<input id=\"custom-profile-minutes\" type=\"number\" min=\"1\" max=\"9999\" step=\"1\" value=\"180\"></label>");
+  html += F("<label>&nbsp;<button type=\"button\" onclick=\"addCustomProfile(event)\">"); html += tr(TK_ADD_PROFILE); html += F("</button></label></div>");
+  html += F("<table><thead><tr><th>"); html += tr(TK_TABLE_MATERIAL); html += F("</th><th>"); html += tr(TK_TABLE_TEMP); html += F("</th><th>"); html += tr(TK_TABLE_TIME); html += F("</th><th>"); html += tr(TK_TABLE_STATUS); html += F("</th></tr></thead><tbody>");
+  for (uint8_t i = 0; i < totalMaterialProfileCount(); i++) {
+    const bool available = materialProfileTemp(i) <= BED_SAFETY_LIMIT_C;
+    html += F("<tr><td>"); html += materialProfileName(i); html += F("</td><td>"); html += String(materialProfileTemp(i), 0); html += F(" C</td><td>"); html += String(materialProfileMinutes(i) / 60.0F, 1); html += F(" h</td><td class=\""); html += available ? F("ok") : F("warn"); html += F("\">"); html += available ? tr(TK_APPLICABLE) : tr(TK_OVER_LIMIT); html += F("</td></tr>");
+  }
+  html += F("</tbody></table></div></section>");
+
+  // ── Settings panel
+  html += F("<section class=\"card wide settings-panel\"><div class=\"label\">"); html += tr(TK_SETTINGS_NETWORK); html += F("</div><div class=\"small\">");
+  html += F("<div class=\"help\"><strong>&#x2139; Come usare questa pagina</strong><ul>");
+  html += F("<li><b>Lingua</b>: cambia la lingua dell'interfaccia (richiede salvataggio).</li>");
+  html += F("<li><b>WiFi</b>: premi <b>Scansiona reti</b>, scegli la rete, inserisci la password e premi <b>Salva</b>. L'access point <i>ODIN</i> rimane sempre attivo come fallback.</li>");
+  html += F("<li><b>Debug hardware</b>: se visibile mostra le informazioni di debug PN5180 nella pagina Lettura TAG.</li>");
+  html += F("<li><b>Aggiornamento OTA</b>: apri <b>/update</b> nel browser, carica il file <code>.bin</code> generato da PlatformIO.</li>");
+  html += F("</ul></div>");
+  html += F("<div class=\"formgrid\"><label>"); html += tr(TK_SETTINGS_LANGUAGE);
+  html += F("<select id=\"ui-language\"><option value=\""); html += UI_LOCALE_CODE; html += appSettings.language == UI_LOCALE_CODE ? F("\" selected>") : F("\">"); html += UI_LOCALE_NAME;
+  html += F("</option><option value=\"en\""); html += appSettings.language == "en" ? F(" selected") : F(""); html += F(">English</option></select></label>");
+  html += F("<label>"); html += tr(TK_SETTINGS_WIFI_SSID); html += F("<input id=\"wifi-ssid\" maxlength=\"32\" value=\""); html += escapeHtml(appSettings.wifiSsid); html += F("\"></label>");
+  html += F("<label>"); html += tr(TK_SETTINGS_WIFI_NETWORKS); html += F("<select id=\"wifi-networks\" onchange=\"chooseWifiNetwork()\" disabled><option value=\"\">--</option></select></label>");
+  html += F("<label>"); html += tr(TK_SETTINGS_WIFI_PASSWORD); html += F("<input id=\"wifi-password\" type=\"password\" maxlength=\"64\" value=\""); html += escapeHtml(appSettings.wifiPassword); html += F("\"></label>");
+  html += F("<label>"); html += tr(TK_SETTINGS_WIFI_MODE);
+  html += F("<select id=\"wifi-client\"><option value=\"0\""); html += appSettings.wifiClientEnabled ? F("") : F(" selected"); html += F(">"); html += tr(TK_SETTINGS_WIFI_DISABLED);
+  html += F("</option><option value=\"1\""); html += appSettings.wifiClientEnabled ? F(" selected") : F(""); html += F(">"); html += tr(TK_SETTINGS_WIFI_SAVED); html += F("</option></select></label>");
+  html += F("<label>"); html += tr(TK_SETTINGS_DEBUG);
+  html += F("<select id=\"debug-enabled\"><option value=\"0\""); html += appSettings.debugEnabled ? F("") : F(" selected"); html += F(">"); html += tr(TK_SETTINGS_DEBUG_OFF);
+  html += F("</option><option value=\"1\""); html += appSettings.debugEnabled ? F(" selected") : F(""); html += F(">"); html += tr(TK_SETTINGS_DEBUG_ON); html += F("</option></select></label></div>");
+  html += F("<div class=\"status\"><strong>"); html += tr(TK_FIRMWARE_LOCALE); html += F(":</strong> "); html += UI_LOCALE_NAME;
+  html += F(" / <strong>"); html += tr(TK_FALLBACK_LOCALE); html += F(":</strong> English</div>");
+  html += F("<div class=\"status\"><strong>"); html += tr(TK_SETTINGS_WIFI_STATUS); html += F(":</strong> <span id=\"wifi-status-value\">");
+  html += wifiClientConnected() ? tr(TK_SETTINGS_WIFI_CONNECTED) : tr(TK_SETTINGS_WIFI_NOT_CONNECTED); html += F(" "); html += wifiClientIp(); html += F("</span></div>");
+  html += F("<button type=\"button\" class=\"secondary\" onclick=\"scanWifiNetworks()\">"); html += tr(TK_SETTINGS_WIFI_SCAN); html += F("</button>");
+  html += F("<button type=\"button\" onclick=\"saveGeneralSettings()\">"); html += tr(TK_SETTINGS_SAVE); html += F("</button>");
+  html += F("<p class=\"status\" id=\"general-settings-status\">"); html += tr(TK_SETTINGS_NOTE); html += F("</p>");
+  // OTA section
+  html += F("<div class=\"label\" style=\"margin-top:24px\">"); html += tr(TK_SETTINGS_OTA); html += F("</div>");
+  html += F("<p class=\"status\">"); html += tr(TK_SETTINGS_OTA_BTN); html += F(": <a href=\"/update\" target=\"_blank\" style=\"color:#0f766e;font-weight:700\">/update</a></p>");
+  html += F("</div></section>");
+  html += F("</main></body></html>");
+  return html;
+}
+
+// ── HTTP handlers ─────────────────────────────────────────────────────────────
+
+static void handleRoot()            { Serial.println("HTTP GET /");           server.sendHeader("Cache-Control","no-store"); server.send(200,"text/html",dashboardHtml(PAGE_HOME)); }
+static void handleTemperaturePage() { Serial.println("HTTP GET /temperature"); server.sendHeader("Cache-Control","no-store"); server.send(200,"text/html",dashboardHtml(PAGE_HOME)); }
+static void handleTagsPage()        { Serial.println("HTTP GET /tags");        server.sendHeader("Cache-Control","no-store"); server.send(200,"text/html",dashboardHtml(PAGE_TAGS)); }
+static void handleSetpointPage()    { Serial.println("HTTP GET /setpoint");    server.sendHeader("Cache-Control","no-store"); server.send(200,"text/html",dashboardHtml(PAGE_SETPOINT)); }
+static void handleSettingsPage()    { Serial.println("HTTP GET /settings");    server.sendHeader("Cache-Control","no-store"); server.send(200,"text/html",dashboardHtml(PAGE_SETTINGS)); }
+
+static void handleApiBme280() {
+  Serial.println("HTTP GET /api/bme280");
+  server.sendHeader("Cache-Control","no-store"); server.send(200,"application/json",sensorJson());
+}
+static void handleApiBed() {
+  Serial.println("HTTP GET /api/bed");
+  server.sendHeader("Cache-Control","no-store"); server.send(200,"application/json",bedJson());
+}
+static void handleApiNfc() {
+  Serial.println("HTTP GET /api/nfc");
+  server.sendHeader("Cache-Control","no-store"); server.send(200,"application/json",nfcJson());
+}
+static void handleApiNfcRead() {
+  Serial.println("HTTP /api/nfc/read");
+  readNfcTag();
+  server.sendHeader("Cache-Control","no-store"); server.send(200,"application/json",nfcJson());
+}
+static void handleApiNfcWriteTest() {
+  Serial.println("HTTP /api/nfc/write");
+  const uint8_t materialType = constrain(server.arg("type").toInt(), 0, 255);
+  String brandName    = server.arg("brand"); if (brandName.length() == 0)    brandName = "ODIN";
+  String materialName = server.arg("name");  if (materialName.length() == 0) materialName = "Test PLA";
+  writeOpenPrintTag(materialType, brandName, materialName,
+    constrain(server.arg("nmin").toInt(),0,350), constrain(server.arg("nmax").toInt(),0,350),
+    constrain(server.arg("bmin").toInt(),0,140), constrain(server.arg("bmax").toInt(),0,140),
+    constrain(server.arg("drytemp").toInt(),0,120), constrain(server.arg("drytime").toInt(),0,9999),
+    server.arg("color"),
+    constrain(server.arg("nomw").toInt(),0,9999), constrain(server.arg("actw").toInt(),0,9999),
+    constrain(server.arg("emptyw").toInt(),0,9999), constrain(server.arg("density").toFloat(),0.0F,5.0F),
+    constrain(server.arg("diameter").toFloat(),0.0F,5.0F),
+    constrain((uint32_t)server.arg("nomlen").toInt(),(uint32_t)0,(uint32_t)999999),
+    constrain((uint32_t)server.arg("actlen").toInt(),(uint32_t)0,(uint32_t)999999),
+    server.arg("mdate").toInt()>0?(uint32_t)server.arg("mdate").toInt():0,
+    server.arg("country"),
+    constrain(server.arg("spoolw").toInt(),0,999), constrain(server.arg("spoolod").toInt(),0,999),
+    constrain(server.arg("spoolid").toInt(),0,999), constrain(server.arg("spoolhole").toInt(),0,999));
+  server.sendHeader("Cache-Control","no-store"); server.send(200,"application/json",nfcJson());
+}
+static void handleApiHeater() {
+  Serial.println("HTTP GET /api/heater");
+  updateHeaterControl(); server.sendHeader("Cache-Control","no-store"); server.send(200,"application/json",heaterJson());
+}
+static void handleApiHeaterOn() {
+  Serial.println("HTTP GET /api/heater/on");
+  heaterControl.automatic = false; heaterControl.outputPercent = 0.0F; heaterControl.status = "Manuale"; setHeater(true);
+  server.sendHeader("Cache-Control","no-store"); server.send(200,"application/json",heaterJson());
+}
+static void handleApiHeaterOff() {
+  Serial.println("HTTP GET /api/heater/off");
+  stopHeaterAutomation("Manuale"); server.sendHeader("Cache-Control","no-store"); server.send(200,"application/json",heaterJson());
+}
+static void handleApiHeaterAutoOn() {
+  Serial.println("HTTP GET /api/heater/auto/on");
+  readBedTemperature(true);
+  if (!bedData.valid)                             stopHeaterAutomation("STOP: NTC non valida");
+  else if (bedData.temperature >= BED_SAFETY_LIMIT_C) stopHeaterAutomation("STOP: limite sicurezza");
+  else { startHeaterAutomation(); updateHeaterControl(); }
+  server.sendHeader("Cache-Control","no-store"); server.send(200,"application/json",heaterJson());
+}
+static void handleApiHeaterAutoOff() {
+  Serial.println("HTTP GET /api/heater/auto/off");
+  stopHeaterAutomation("Manuale"); server.sendHeader("Cache-Control","no-store"); server.send(200,"application/json",heaterJson());
+}
+static void handleApiSettingsMaterial() {
+  Serial.println("HTTP GET /api/settings/material");
+  if (server.hasArg("id")) {
+    const int id = server.arg("id").toInt();
+    if (id >= 0 && id < totalMaterialProfileCount()) {
+      selectedMaterialProfile = (uint8_t)id;
+      heaterControl.cycleDurationSeconds = (uint32_t)materialProfileMinutes(selectedMaterialProfile) * 60UL;
+      if (!heaterControl.cycleRunning) heaterControl.cycleRemainingSeconds = heaterControl.cycleDurationSeconds;
+    }
+  }
+  if (server.hasArg("setpoint")) {
+    heaterControl.setpoint = constrain(server.arg("setpoint").toFloat(), 20.0F, BED_SAFETY_LIMIT_C);
+    heaterControl.integral = 0.0F;
+  }
+  if (server.hasArg("minutes")) {
+    heaterControl.cycleDurationSeconds = constrain((uint32_t)server.arg("minutes").toInt(), (uint32_t)1, (uint32_t)9999) * 60UL;
+    if (!heaterControl.cycleRunning) heaterControl.cycleRemainingSeconds = heaterControl.cycleDurationSeconds;
+  }
+  server.sendHeader("Cache-Control","no-store"); server.send(200,"application/json",settingsJson());
+}
+static void handleApiSettingsProfileAdd() {
+  Serial.println("HTTP GET /api/settings/profile/add");
+  if (!server.hasArg("name") || !server.hasArg("setpoint") || !server.hasArg("minutes")) { server.send(400,"application/json","{\"error\":\"missing_args\"}"); return; }
+  const float    requestedSetpoint = server.arg("setpoint").toFloat();
+  const uint16_t requestedMinutes  = constrain((uint16_t)server.arg("minutes").toInt(),(uint16_t)1,(uint16_t)9999);
+  if (isnan(requestedSetpoint) || requestedSetpoint < 20.0F || requestedSetpoint > BED_SAFETY_LIMIT_C || requestedMinutes < 1) { server.send(400,"application/json","{\"error\":\"invalid_args\"}"); return; }
+  uint8_t newId = 0;
+  if (!addCustomMaterialProfile(server.arg("name"), requestedSetpoint, requestedMinutes, newId)) { server.send(400,"application/json","{\"error\":\"profile_not_added\"}"); return; }
+  saveCustomProfiles();
+  selectedMaterialProfile = newId;
+  heaterControl.setpoint  = materialProfileTemp(selectedMaterialProfile);
+  heaterControl.integral  = 0.0F;
+  heaterControl.cycleDurationSeconds = (uint32_t)materialProfileMinutes(selectedMaterialProfile) * 60UL;
+  if (!heaterControl.cycleRunning) heaterControl.cycleRemainingSeconds = heaterControl.cycleDurationSeconds;
+  server.sendHeader("Cache-Control","no-store"); server.send(200,"application/json",settingsJson());
+}
+static void handleApiWifiScan() {
+  Serial.println("HTTP GET /api/wifi/scan");
+  WiFi.mode(WIFI_AP_STA); WiFi.setSleep(false);
+  const int networkCount = WiFi.scanNetworks(false, true);
+  String json = "{\"networks\":[";
+  for (int i = 0; i < networkCount; i++) {
+    if (WiFi.SSID(i).length() == 0) continue;
+    if (json.endsWith("}")) json += ",";
+    json += "{\"ssid\":\""; json += escapeJson(WiFi.SSID(i));
+    json += "\",\"rssi\":"; json += String(WiFi.RSSI(i));
+    json += ",\"secure\":"; json += WiFi.encryptionType(i) == WIFI_AUTH_OPEN ? "false" : "true";
+    json += "}";
+  }
+  json += "]}"; WiFi.scanDelete();
+  server.sendHeader("Cache-Control","no-store"); server.send(200,"application/json",json);
+}
+static void handleApiSettingsGeneral() {
+  Serial.println("HTTP GET /api/settings/general");
+  if (server.hasArg("language")) { const String l=server.arg("language"); appSettings.language=(l=="en")?"en":UI_LOCALE_CODE; }
+  if (server.hasArg("wifiSsid")) { appSettings.wifiSsid=server.arg("wifiSsid"); appSettings.wifiSsid.trim(); if(appSettings.wifiSsid.length()>32)appSettings.wifiSsid=appSettings.wifiSsid.substring(0,32); }
+  if (server.hasArg("wifiPassword")) { appSettings.wifiPassword=server.arg("wifiPassword"); if(appSettings.wifiPassword.length()>64)appSettings.wifiPassword=appSettings.wifiPassword.substring(0,64); }
+  if (server.hasArg("wifiClient")) appSettings.wifiClientEnabled = server.arg("wifiClient") == "1";
+  if (server.hasArg("debug"))      appSettings.debugEnabled      = server.arg("debug") == "1";
+  saveAppSettings();
+  server.sendHeader("Cache-Control","no-store"); server.send(200,"application/json",settingsJson());
+  scheduleWifiReconnect();
+}
+static void handleNotFound() {
+  Serial.print("HTTP 404 "); Serial.println(server.uri());
+  server.send(404,"text/plain","Not found");
+}
+
+// ── Server setup ──────────────────────────────────────────────────────────────
+
+void setupWebServer() {
+  server.on("/",            handleRoot);
+  server.on("/temperature", handleTemperaturePage);
+  server.on("/tags",        handleTagsPage);
+  server.on("/setpoint",    handleSetpointPage);
+  server.on("/settings",    handleSettingsPage);
+  server.on("/api/bme280",                  handleApiBme280);
+  server.on("/api/bed",           HTTP_GET, handleApiBed);
+  server.on("/api/settings/material",  HTTP_GET, handleApiSettingsMaterial);
+  server.on("/api/settings/profile/add", HTTP_GET, handleApiSettingsProfileAdd);
+  server.on("/api/settings/general", HTTP_GET, handleApiSettingsGeneral);
+  server.on("/api/wifi/scan",       HTTP_GET, handleApiWifiScan);
+  server.on("/api/nfc",             handleApiNfc);
+  server.on("/api/nfc/read",   HTTP_GET, handleApiNfcRead);
+  server.on("/api/nfc/write",  HTTP_GET, handleApiNfcWriteTest);
+  server.on("/api/heater",          HTTP_GET, handleApiHeater);
+  server.on("/api/heater/on",       HTTP_GET, handleApiHeaterOn);
+  server.on("/api/heater/off",      HTTP_GET, handleApiHeaterOff);
+  server.on("/api/heater/auto/on",  HTTP_GET, handleApiHeaterAutoOn);
+  server.on("/api/heater/auto/off", HTTP_GET, handleApiHeaterAutoOff);
+  server.onNotFound(handleNotFound);
+
+  ElegantOTA.begin(&server);
+  server.begin();
+  Serial.println("Server web avviato. OTA su /update");
+}
+
+void webLoop() {
+  server.handleClient();
+  ElegantOTA.loop();
+}
