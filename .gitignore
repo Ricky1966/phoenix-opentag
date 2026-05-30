@@ -6,3 +6,5 @@ hardware/*.dsn
 hardware/*.ses
 hardware/*.gbr
 hardware/*.gbrjob
+essiccatore_log.csv
+logger_console.txt
