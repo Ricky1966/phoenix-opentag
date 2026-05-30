@@ -16,20 +16,20 @@ Chip rilevato durante l'upload:
 
 ### Tabella completa
 
-| GPIO | Serigrafia | Funzione firmware | Periferica | Connettore PCB | Note |
-|------|-----------|-------------------|-----------|----------------|------|
-| 5    | G5        | `PN5180_NSS`      | PN5180 SPI CS   | J4 PN5180_SPI (pin 4) | Bootstrap, attenzione al boot |
-| 16   | G16       | `PN5180_BUSY`     | PN5180 CTRL     | J5 PN5180_CTRL (pin 2) | |
-| 17   | G17       | `PN5180_RST`      | PN5180 CTRL     | J5 PN5180_CTRL (pin 1) | |
-| 18   | G18       | SPI SCK           | PN5180 SPI CLK  | J4 PN5180_SPI (pin 1) | VSPI default |
-| 19   | G19       | SPI MISO          | PN5180 SPI MISO | J4 PN5180_SPI (pin 2) | VSPI default |
-| 21   | G21       | I2C SDA           | BME280          | J7 BME280 (pin 3) | |
-| 22   | G22       | I2C SCL           | BME280          | J7 BME280 (pin 4) | |
-| 23   | G23       | SPI MOSI          | PN5180 SPI MOSI | J4 PN5180_SPI (pin 3) | VSPI default |
-| 25   | G25       | `HEATER_PIN`      | MOSFET riscaldatore | **da aggiungere** | Active-low |
-| 34   | G34       | `BED_THERMISTOR_PIN` | NTC piatto   | J8 NTC_SENSOR (pin 1) | Solo input, ADC |
-| 27   | G27       | *(riservato)*     | Ventola 1 PWM   | **da aggiungere** | Futuro |
-| 32   | G32       | *(riservato)*     | Ventola 2 PWM   | **da aggiungere** | Futuro |
+| GPIO | Serigrafia | Funzione firmware   | Periferica          | Connettore PCB        | Note                    |
+|------|-----------|----------------------|---------------------|-----------------------|-------------------------|
+| 5    | G5        | `PN5180_NSS`         | PN5180 SPI CS       | J4 PN5180_SPI (pin 4) | Bootstrap, att. al boot |
+| 16   | G16       | `PN5180_BUSY`        | PN5180 CTRL         | J5 PN5180_CTRL (pin 2)|                         |
+| 17   | G17       | `PN5180_RST`         | PN5180 CTRL         | J5 PN5180_CTRL (pin 1)|                         |
+| 18   | G18       | SPI SCK              | PN5180 SPI CLK      | J4 PN5180_SPI (pin 1) | VSPI default            |
+| 19   | G19       | SPI MISO             | PN5180 SPI MISO     | J4 PN5180_SPI (pin 2) | VSPI default            |
+| 21   | G21       | I2C SDA              | BME280              | J7 BME280 (pin 3)     |                         |
+| 22   | G22       | I2C SCL              | BME280              | J7 BME280 (pin 4)     |                         |
+| 23   | G23       | SPI MOSI             | PN5180 SPI MOSI     | J4 PN5180_SPI (pin 3) | VSPI default            |
+| 25   | G25       | `HEATER_PIN`         | MOSFET riscaldatore | **da aggiungere**     | Active-low              |
+| 34   | G34       | `BED_THERMISTOR_PIN` | NTC piatto          | J8 NTC_SENSOR (pin 1) | Solo input, ADC         |
+| 27   | G27       | *(riservato)*        | Ventola 1 PWM       | **da aggiungere**     | Futuro                  |
+| 32   | G32       | *(riservato)*        | Ventola 2 PWM       | **da aggiungere**     | Futuro                  |
 
 ### Pin liberi (breakout disponibile, non usati dal firmware)
 
