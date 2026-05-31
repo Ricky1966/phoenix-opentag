@@ -17,16 +17,22 @@ WebServer server(80);
 
 static String pi5ProxyRequest(const String& method, const String& path) {
   if (!wifiClientConnected()) return "";
+  WiFiClient wifiClient;
   HTTPClient http;
   String url = "http://";
   url += PI5_LOCAL_IP; url += ":"; url += String(PI5_LOCAL_PORT); url += path;
-  http.begin(url);
-  http.setTimeout(5000);
+  Serial.print("pi5Proxy "); Serial.print(method); Serial.print(" "); Serial.println(url);
+  if (!http.begin(wifiClient, url)) {
+    Serial.println("pi5Proxy: begin() failed");
+    return "";
+  }
+  http.setTimeout(8000);
   int code;
   if      (method == "DELETE") code = http.sendRequest("DELETE");
   else if (method == "PUT")    code = http.sendRequest("PUT");
-  else if (method == "POST")   code = http.sendRequest("POST", "");
+  else if (method == "POST")   code = http.POST("");
   else                         code = http.GET();
+  Serial.print("pi5Proxy code: "); Serial.println(code);
   String result = (code > 0 && code < 400) ? http.getString() : "";
   http.end();
   return result;
