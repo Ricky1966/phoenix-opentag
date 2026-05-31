@@ -2,6 +2,24 @@
 
 Lista di lavoro provvisoria, aggiornata mentre il progetto prende forma.
 
+## App mobile (odin_mobile)
+
+### Completato (2026-05-31)
+- ✅ Banner Tailscale in home: avviso permanente quando l'URL è un IP Tailscale (100.x.x.x).
+- ✅ Rilevamento intelligente errore connessione: distingue tra "Tailscale non attivo" e "Raspberry spento" tramite check TCP su 100.100.100.100:53.
+- ✅ Ping proattivo al Raspberry (TCP su 100.97.249.32:8000 ogni 15 s): banner arancio "Raspberry non raggiungibile — accendilo!" appare in 2 s senza aspettare timeout HTTP.
+- ✅ Settings screen: URL base configurabile con preset Tailscale/LAN, pulsante Test connessione, persistenza con shared_preferences.
+- ✅ Notifica push al termine del ciclo di essiccazione (flutter_local_notifications), con rilevamento transizione cycleRunning true→false.
+- ✅ Icona app aggiornata con odin_mobile_fav.png.
+- ✅ Splash screen Flutter con odin.jpeg grande (BoxFit.contain, sfondo #102A43, fade-out dopo 2.2 s).
+- ✅ Splash nativa Android 12+ con PNG trasparente: cerchio icona invisibile, transizione seamless verso la splash Flutter.
+
+### Da fare
+- Schermata Tag NFC: lettura/scrittura OpenPrintTag dall'app (richiede NFC sul telefono).
+- Grafici storici: temperatura e umidità dalle ultime ore (dati dal log CSV sul Pi5).
+- Localizzazione: testi app hardcoded in italiano, valutare supporto EN.
+- Profili materiale custom gestibili dall'app (oggi solo dal portale web).
+
 ## Firmware e portale
 
 - Completare la traduzione dei messaggi JavaScript rimasti hardcoded nelle pagine Home, SetPoint, Settings e Lettura TAG.
