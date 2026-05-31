@@ -14,6 +14,9 @@ WebServer server(80);
 static bool          wifiReconnectPending = false;
 static unsigned long wifiReconnectAtMs    = 0;
 
+static bool pi5Reachable  = false;
+static bool pi5CheckDone  = false;
+
 static const IPAddress AP_IP(192, 168, 4, 1);
 static const IPAddress AP_GATEWAY(192, 168, 4, 1);
 static const IPAddress AP_SUBNET(255, 255, 255, 0);
@@ -40,6 +43,17 @@ void connectWifiClient(uint16_t timeoutMs) {
   Serial.println();
   if (WiFi.status() == WL_CONNECTED) { Serial.print("WiFi connesso, IP: "); Serial.println(WiFi.localIP()); }
   else { Serial.println("WiFi non connesso: AP di emergenza resta attivo."); }
+}
+
+static void checkPi5Reachable() {
+  static unsigned long lastCheckMs = 0;
+  if (!wifiClientConnected()) { pi5Reachable = false; return; }
+  if (pi5CheckDone && millis() - lastCheckMs < PI5_CHECK_INTERVAL_MS) return;
+  lastCheckMs = millis();
+  pi5CheckDone = true;
+  WiFiClient client;
+  pi5Reachable = client.connect(PI5_LOCAL_IP, PI5_LOCAL_PORT, 500);
+  if (pi5Reachable) client.stop();
 }
 
 static void scheduleWifiReconnect(uint16_t delayMs = 1500) {
@@ -256,7 +270,13 @@ String dashboardHtml(PageMode pageMode) {
   html += F("<a href=\"/temperature\" title=\""); html += tr(TK_NAV_HOME_TIP); html += F("\""); html += pageMode == PAGE_HOME ? F(" class=\"active\">") : F(">"); html += tr(TK_NAV_HOME); html += F("</a>");
   html += F("<a href=\"/tags\" title=\""); html += tr(TK_NAV_TAG_TIP); html += F("\""); html += pageMode == PAGE_TAGS ? F(" class=\"active\">") : F(">"); html += tr(TK_NAV_TAG); html += F("</a>");
   html += F("<a href=\"/setpoint\" title=\""); html += tr(TK_NAV_SETPOINT_TIP); html += F("\""); html += pageMode == PAGE_SETPOINT ? F(" class=\"active\">") : F(">"); html += tr(TK_NAV_SETPOINT); html += F("</a>");
-  html += F("<a href=\"/settings\" title=\""); html += tr(TK_NAV_SETTINGS_TIP); html += F("\""); html += pageMode == PAGE_SETTINGS ? F(" class=\"active\">") : F(">"); html += tr(TK_NAV_SETTINGS); html += F("</a></nav>");
+  html += F("<a href=\"/settings\" title=\""); html += tr(TK_NAV_SETTINGS_TIP); html += F("\""); html += pageMode == PAGE_SETTINGS ? F(" class=\"active\">") : F(">"); html += tr(TK_NAV_SETTINGS); html += F("</a>");
+  html += F("<span style=\"margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap\">");
+  html += F("<span style=\"font-size:13px;color:#1e40af;background:#dbeafe;padding:3px 10px;border-radius:20px;font-weight:600\">&#x1F512; Tailscale</span>");
+  if (wifiClientConnected() && pi5CheckDone && !pi5Reachable) {
+    html += F("<span style=\"font-size:13px;color:#b91c1c;background:#fee2e2;padding:3px 10px;border-radius:20px;font-weight:700\">&#x26A0; Accendi il Raspberry!</span>");
+  }
+  html += F("</span></nav>");
 
   // ── Home panel
   html += F("<section class=\"grid home-panel\">");
@@ -437,12 +457,6 @@ String dashboardHtml(PageMode pageMode) {
   // OTA section
   html += F("<div class=\"label\" style=\"margin-top:24px\">"); html += tr(TK_SETTINGS_OTA); html += F("</div>");
   html += F("<p class=\"status\">"); html += tr(TK_SETTINGS_OTA_BTN); html += F(": <a href=\"/update\" target=\"_blank\" style=\"color:#0f766e;font-weight:700\">/update</a></p>");
-  // Tailscale info
-  html += F("<div class=\"help\" style=\"margin-top:18px\"><strong>&#x1F512; Accesso remoto (Tailscale)</strong><ul>");
-  html += F("<li>Per raggiungere ODIN da fuori casa (app o browser), <b>Tailscale deve essere attivo</b> sul dispositivo.</li>");
-  html += F("<li>Se Tailscale &egrave; attivo in modalit&agrave; <i>full tunnel</i>, la navigazione normale pu&ograve; risultare bloccata: <b>disattiva Tailscale</b> quando non ti serve l'accesso remoto.</li>");
-  html += F("<li>L'access point <i>ODIN</i> (192.168.4.1) &egrave; sempre raggiungibile direttamente, senza VPN.</li>");
-  html += F("</ul></div>");
   html += F("</div></section>");
   html += F("</main></body></html>");
   return html;
@@ -619,4 +633,5 @@ void setupWebServer() {
 void webLoop() {
   server.handleClient();
   ElegantOTA.loop();
+  checkPi5Reachable();
 }
