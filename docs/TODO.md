@@ -18,8 +18,11 @@ Lista di lavoro provvisoria, aggiornata mentre il progetto prende forma.
 - ✅ Grafici storici: 4 grafici (temp/umidità/piatto/riscaldatore) con selezione range 6h/24h/2gg/7gg, dati dal log CSV su Pi5 con downsampling adattivo.
 - ✅ Localizzazione IT/EN completa: flutter_localizations + ARB files, lingua segue il dispositivo.
 
+### Completato (2026-05-31 cont.)
+- ✅ Profili materiale su Pi5: fonte di verità condivisa tra app e web UI. CRUD dall'app Flutter e dalla web UI ESP32 (proxy GET verso Pi5). Fallback ai profili firmware se Pi5 non raggiungibile.
+
 ### Da fare
-- Profili materiale custom gestibili dall'app (oggi solo dal portale web).
+- (nessun task aperto per l'app mobile)
 
 ## Firmware e portale
 
