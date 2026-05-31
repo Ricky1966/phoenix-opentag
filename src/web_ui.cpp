@@ -682,34 +682,43 @@ static void handleApiProfilesGet() {
 static void handleApiProfilesPost() {
   server.sendHeader("Cache-Control","no-store");
   if (!appSettings.wifiClientEnabled) {
-    server.send(503,"application/json","{\"error\":\"WiFi client non abilitato — abilitalo in Settings\"}"); return;
+    server.send(503,"application/json","{\"error\":\"WiFi client non abilitato\"}"); return;
   }
   if (WiFi.status() != WL_CONNECTED) {
     server.send(503,"application/json","{\"error\":\"ESP32 non connesso al router\"}"); return;
   }
-  String path = "/api/profiles?name=" + urlEncode(server.arg("name"));
+  String path = "/api/profiles/add?name=" + urlEncode(server.arg("name"));
   path += "&temperature=" + server.arg("temperature");
   path += "&minutes=" + server.arg("minutes");
-  Serial.print("POST Pi5: "); Serial.println(path);
-  String result = pi5ProxyRequest("POST", path);
-  Serial.print("POST Pi5 result: "); Serial.println(result.isEmpty() ? "EMPTY" : result);
+  Serial.print("Profiles add GET: "); Serial.println(path);
+  String result = pi5ProxyRequest("GET", path);
+  Serial.print("Result: "); Serial.println(result.isEmpty() ? "EMPTY" : result.substring(0,80));
   server.send(result.isEmpty() ? 503 : 200, "application/json",
-    result.isEmpty() ? "{\"error\":\"Pi5 non raggiungibile (timeout o IP errato)\"}" : result);
+    result.isEmpty() ? "{\"error\":\"Pi5 non raggiungibile\"}" : result);
 }
 
 static void handleApiProfilesDelete() {
   server.sendHeader("Cache-Control","no-store");
   if (!appSettings.wifiClientEnabled) {
-    server.send(503,"application/json","{\"error\":\"WiFi client non abilitato — abilitalo in Settings\"}"); return;
+    server.send(503,"application/json","{\"error\":\"WiFi client non abilitato\"}"); return;
   }
   if (WiFi.status() != WL_CONNECTED) {
     server.send(503,"application/json","{\"error\":\"ESP32 non connesso al router\"}"); return;
   }
   String id = server.arg("id");
   if (id.isEmpty()) { server.send(400,"application/json","{\"error\":\"id mancante\"}"); return; }
-  String result = pi5ProxyRequest("DELETE", "/api/profiles/" + id);
+  String result = pi5ProxyRequest("GET", "/api/profiles/remove?id=" + id);
   server.send(result.isEmpty() ? 503 : 200, "application/json",
-    result.isEmpty() ? "{\"error\":\"Pi5 non raggiungibile (timeout o IP errato)\"}" : result);
+    result.isEmpty() ? "{\"error\":\"Pi5 non raggiungibile\"}" : result);
+}
+
+static void handleApiPi5Test() {
+  Serial.println("Pi5 test GET /health");
+  String result = pi5ProxyRequest("GET", "/health");
+  Serial.print("Pi5 test result: "); Serial.println(result.isEmpty() ? "EMPTY" : result);
+  server.send(200, "application/json",
+    result.isEmpty() ? "{\"pi5\":false,\"wifi\":true,\"ip\":\"" + WiFi.localIP().toString() + "\"}"
+                     : "{\"pi5\":true,\"health\":" + result + "}");
 }
 
 static void handleNotFound() {
@@ -743,6 +752,7 @@ void setupWebServer() {
   server.on("/api/profiles",        HTTP_GET,    handleApiProfilesGet);
   server.on("/api/profiles",        HTTP_POST,   handleApiProfilesPost);
   server.on("/api/profiles",        HTTP_DELETE, handleApiProfilesDelete);
+  server.on("/api/pi5test",         HTTP_GET,    handleApiPi5Test);
   server.onNotFound(handleNotFound);
 
   ElegantOTA.begin(&server);
