@@ -1,47 +1,93 @@
-# Essiccatore
+# ODIN — Open Dryer with Intelligent NFC
 
-Sistema per la gestione e l'essiccazione dei filamenti, basato su ESP32 e sullo standard NFC OpenPrintTag di Prusa per il riconoscimento delle bobine.
+Stazione intelligente per l'essiccazione e la gestione dei filamenti per stampa 3D, basata su **ESP32** con PCB custom, **Raspberry Pi 5** come backend cloud locale e **app mobile Flutter** cross-platform.
 
-Il sistema usera un lettore PN5180 per leggere i tag NFC/RFID delle bobine, un sensore BME280 per misurare temperatura e umidita della camera e un controllo PID per gestire da 1 a 4 riscaldatori a 24 V, infine un sistema OPT4048 per leggere il colore del filamento.
+ODIN integra lettura/scrittura tag NFC OpenPrintTag, rilevamento colore OPT4048, controllo PI multi-zona della temperatura, gestione umidità con valvola solenoide e dashboard web embedded.
 
-L'idea iniziale è di realizzare uno spazio comune per 4 bobine, in base al contenitore disponibile, con un motore stepper per far ruotare le bobine durante la lettura o la gestione del filamento.
+---
 
-## Obiettivi
+## Repository correlati
 
-- Gestire un vano comune per 4 bobine di filamento.
-- Riconoscere i filamenti tramite tag NFC/RFID compatibili OpenPrintTag.
-- Leggere i tag tramite modulo PN5180 collegato a ESP32.
-- Leggerne il colore attraverso un sensore OPT4048.
-- Monitorare temperatura e umidità interna con BME280.
-- Controllare il riscaldamento con regolazione PID su quattro zone indipendenti.
-- Utilizzare elementi riscaldanti a 24V adatti alla geometria del contenitore scelto.
-- Far ruotare le bobine con uno stepper, per facilitare lettura e gestione.
+| Repository | Descrizione |
+|---|---|
+| **[Ricky1966/Odin](https://github.com/Ricky1966/Odin)** ← questo | Firmware ESP32, PCB KiCad, backend Pi5, documentazione |
+| **[Ricky1966/odin-mobile](https://github.com/Ricky1966/odin-mobile)** | App mobile Flutter (Android/iOS) |
 
-## Hardware previsto
+---
 
-- ESP32.
-- Lettore NFC PN5180.
-- Sensore temperatura/umidita BME280.
-- Quattro elementi riscaldanti a 24V.
-- Alimentatore 24 V 15 A.
-- Convertitore buck 24 V / 5 V per alimentare ESP32 ed elettronica a bassa tensione.
-- Motore stepper per rotazione bobine.
-- Sensore OPT4048 e 2 Led bianchi.
-- Alloggiamento per 4 bobine di filamento.
+## Funzionalità
+
+- Essiccazione filamenti con controllo PI su 4 zone indipendenti a 24V
+- Lettura e scrittura tag NFC/RFID OpenPrintTag (standard Prusa Research) tramite PN5180
+- Rilevamento colore filamento con sensore OPT4048 + 2 LED bianchi
+- Monitoraggio temperatura e umidità della camera con BME280
+- Valvola solenoide 24V per espulsione aria umida (ciclo heat → vent → repeat)
+- Fan 24V per circolazione aria
+- Motore stepper NEMA17 per rotazione bobine durante la lettura
+- Dashboard web embedded su ESP32 (accesso via WiFi AP o rete locale)
+- Aggiornamento firmware OTA via browser (`/update`)
+- Backend FastAPI su Raspberry Pi 5 con accesso remoto via Tailscale
+- App mobile Flutter con controllo completo del ciclo di essiccazione
+
+---
+
+## Hardware
+
+- ESP32 AZ-Delivery 38-pin su PCB custom (KiCad)
+- Lettore NFC PN5180 (FPC 10-pin)
+- Sensore colore OPT4048 + runout filamento (FPC 8-pin)
+- Sensore T°/umidità BME280
+- 4× riscaldatori kapton 24V + 4× NTC 100kΩ β=3950
+- Alimentatore 24V 15A + buck converter 24V→5V
+- Motore stepper NEMA17 con driver esterno (A4988/DRV8825/TMC2209)
+- Ventola 24V + valvola solenoide NC 24V
+- Raspberry Pi 5 come backend cloud locale
+- Box plexiglass 440×340×330mm (~49L)
+
+---
+
+## Struttura repository
+
+```
+src/                  Firmware ESP32 (PlatformIO / Arduino)
+  config.h            Costanti, pin, struct
+  sensor.h/.cpp       BME280 + NTC ADC
+  heater.h/.cpp       Controllo PI riscaldatore
+  nfc.h/.cpp          Driver PN5180 + OpenPrintTag CBOR
+  web_ui.h/.cpp       Dashboard web + API HTTP
+  i18n.h/.cpp         Sistema multilingua (IT/EN)
+  materials.h/.cpp    Profili materiali
+  utils.h/.cpp        Utility generali
+  main.cpp            setup() + loop()
+
+hardware/             PCB KiCad + Gerber per PCBWay
+  gerber/Archivio.zip Gerber + drill + BOM + CPL pronti per produzione
+
+backend/              (in sviluppo) FastAPI su Raspberry Pi 5
+docs/hardware/        Documentazione elettronica e GPIO
+```
+
+---
+
+## Accesso alla dashboard
+
+- **WiFi AP**: SSID `ODIN`, password `odindryer` → `http://192.168.4.1`
+- **Rete locale**: `http://<IP_ESP32>`
+- **OTA**: `http://<IP_ESP32>/update`
+
+---
 
 ## Riferimenti
 
-- OpenPrintTag: standard NFC open-source di Prusa Research per bobine smart.
-- Specifiche OpenPrintTag: https://openprinttag.org/
-- Note hardware ESP32: [docs/hardware/esp32.md](docs/hardware/esp32.md)
-- TODO di progetto: [docs/TODO.md](docs/TODO.md)
+- [OpenPrintTag](https://openprinttag.org/) — standard NFC open-source di Prusa Research
+- [App mobile ODIN](https://github.com/Ricky1966/odin-mobile) — Flutter app (Android/iOS)
+- [docs/hardware/design.md](docs/hardware/design.md) — architettura elettronica
+- [docs/hardware/esp32.md](docs/hardware/esp32.md) — GPIO map e pinout
 
-## Stato del progetto
-
-Repository inizializzato. La documentazione raccoglie le prime specifiche funzionali e hardware; il codice verrà aggiunto durante lo sviluppo.
+---
 
 ## Licenza
 
-Questo progetto e distribuito con licenza GNU Affero General Public License v3.0.
+Distribuito con licenza GNU Affero General Public License v3.0.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
