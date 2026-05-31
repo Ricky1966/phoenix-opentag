@@ -9,8 +9,43 @@
 #include "log.h"
 #include <WiFi.h>
 #include <ElegantOTA.h>
+#include <HTTPClient.h>
 
 WebServer server(80);
+
+// ── Pi5 proxy helpers ─────────────────────────────────────────────────────────
+
+static String pi5ProxyRequest(const String& method, const String& path) {
+  if (!wifiClientConnected()) return "";
+  HTTPClient http;
+  String url = "http://";
+  url += PI5_LOCAL_IP; url += ":"; url += String(PI5_LOCAL_PORT); url += path;
+  http.begin(url);
+  http.setTimeout(5000);
+  int code;
+  if      (method == "DELETE") code = http.sendRequest("DELETE");
+  else if (method == "PUT")    code = http.sendRequest("PUT");
+  else if (method == "POST")   code = http.sendRequest("POST", "");
+  else                         code = http.GET();
+  String result = (code > 0 && code < 400) ? http.getString() : "";
+  http.end();
+  return result;
+}
+
+static String profilesFallbackJson() {
+  String json = "[";
+  for (uint8_t i = 0; i < totalMaterialProfileCount(); i++) {
+    if (i > 0) json += ",";
+    json += "{\"id\":"; json += String(i);
+    json += ",\"name\":\""; json += escapeJson(materialProfileName(i));
+    json += "\",\"temperature\":"; json += String(materialProfileTemp(i), 1);
+    json += ",\"minutes\":"; json += String(materialProfileMinutes(i));
+    json += ",\"custom\":"; json += i >= MATERIAL_PROFILE_COUNT ? "true" : "false";
+    json += "}";
+  }
+  json += "]";
+  return json;
+}
 
 static bool          wifiReconnectPending = false;
 static unsigned long wifiReconnectAtMs    = 0;
@@ -207,28 +242,29 @@ String dashboardHtml(PageMode pageMode) {
   html += F("async function refreshHeater(){try{const r=await fetch('/api/heater');updateHeater(await r.json());}catch(e){}}");
   html += F("async function setHeaterState(v){try{const r=await fetch('/api/heater/'+(v?'on':'off')+'?ts='+Date.now());updateHeater(await r.json());}catch(e){document.getElementById('heater-state').textContent='Errore';}}");
   html += F("async function setHeaterAuto(v){try{if(v&&!(await applyHomeProfile(false)))return;const r=await fetch('/api/heater/auto/'+(v?'on':'off')+'?ts='+Date.now());updateHeater(await r.json());}catch(e){const n=document.getElementById('home-profile-note');if(n){n.className='warn';n.textContent='Errore comando AUTO';}}}");
-  html += F("let manualHomeEdit=false;const profiles=[");
-  for (uint8_t i = 0; i < totalMaterialProfileCount(); i++) {
-    if (i > 0) html += F(",");
-    html += F("[\""); html += escapeJson(materialProfileName(i)); html += F("\",");
-    html += String(materialProfileTemp(i), 1); html += F(","); html += String(materialProfileMinutes(i)); html += F("]");
-  }
-  html += F("];const safetyLimit="); html += String(BED_SAFETY_LIMIT_C, 1); html += F(";");
+  html += F("let manualHomeEdit=false,profiles=[];");
+  html += F("const safetyLimit="); html += String(BED_SAFETY_LIMIT_C, 1); html += F(";");
   html += F("function readNumber(id,fallback){const e=document.getElementById(id);if(!e)return fallback;const v=String(e.value).replace(',','.');const n=parseFloat(v);return Number.isFinite(n)?n:fallback;}");
-  html += F("function selectedProfile(){return profiles[Number(document.getElementById('material-profile').value)||0];}");
-  html += F("function syncSetpointWarning(){const p=selectedProfile();const v=readNumber('profile-temp',p[1]);const n=document.getElementById('profile-note');");
+  html += F("function profileById(id){return profiles.find(p=>p.id===id)||profiles[0];}");
+  html += F("function selectedProfile(){return profileById(Number(document.getElementById('material-profile').value));}");
+  html += F("function selectedHomeProfile(){const s=document.getElementById('home-profile');return profileById(Number(s?s.value:0));}");
+  html += F("function buildProfileOptions(){['material-profile','home-profile'].forEach(id=>{const sel=document.getElementById(id);if(!sel)return;const prev=Number(sel.value)||0;sel.innerHTML='';profiles.forEach(p=>{const o=document.createElement('option');o.value=p.id;o.textContent=p.name+(p.custom?' ★':'');if(p.id===prev)o.selected=true;sel.appendChild(o);});});}");
+  html += F("function buildProfileTable(){const tb=document.getElementById('profiles-tbody');if(!tb)return;tb.innerHTML='';profiles.forEach(p=>{const a=p.temperature<=safetyLimit;const d=p.custom?'<button class=\"danger\" style=\"margin-top:0;padding:4px 10px;font-size:13px\" onclick=\"deleteProfile('+p.id+')\">&#x2715;</button>':'';tb.innerHTML+='<tr><td>'+p.name+(p.custom?' ★':'')+'</td><td>'+p.temperature.toFixed(0)+' C</td><td>'+(p.minutes/60).toFixed(1)+' h</td><td class=\"'+(a?'ok':'warn')+'\">'+(a?'Applicabile':'Oltre limite')+'</td><td>'+d+'</td></tr>';});}");
+  html += F("async function loadProfiles(){try{const r=await fetch('/api/profiles?ts='+Date.now());profiles=await r.json();buildProfileOptions();if(document.getElementById('material-profile'))fillProfile();fillHomeProfile();buildProfileTable();}catch(e){}}");
+  html += F("function syncSetpointWarning(){const p=selectedProfile();if(!p)return false;const v=readNumber('profile-temp',p.temperature);const n=document.getElementById('profile-note');");
   html += F("if(v>safetyLimit){n.className='warn';n.textContent='Sopra il limite sicurezza attuale: non applicabile.';return false;}");
-  html += F("if(v>p[1]){n.className='warn';n.textContent='Temperatura superiore al profilo consigliato.';return true;}");
+  html += F("if(v>p.temperature){n.className='warn';n.textContent='Temperatura superiore al profilo consigliato.';return true;}");
   html += F("n.className='ok';n.textContent='"); html += tr(TK_PROFILE_WITHIN_RECOMMENDED); html += F("';return true;}");
-  html += F("function fillProfile(){const p=selectedProfile();document.getElementById('profile-recommended').textContent=p[1].toFixed(1)+' C / '+Math.round(p[2]/60)+' h';syncSetpointWarning();}");
-  html += F("function loadRecommendedProfile(){const p=selectedProfile();document.getElementById('profile-temp').value=p[1];document.getElementById('profile-minutes').value=p[2];syncSetpointWarning();}");
-  html += F("async function applySetpoint(){if(!syncSetpointWarning())return;const p=selectedProfile();const v=readNumber('profile-temp',p[1]);");
-  html += F("if(v>p[1]&&!confirm('Temperatura superiore al profilo consigliato. Procedo comunque?'))return;");
-  html += F("const minutes=Math.round(readNumber('profile-minutes',p[2]));");
-  html += F("const r=await fetch('/api/settings/material?id='+document.getElementById('material-profile').value+'&setpoint='+v+'&minutes='+minutes+'&ts='+Date.now());const d=await r.json();document.getElementById('settings-status').textContent='Setpoint aggiornato a '+d.setpoint.toFixed(1)+' C, durata '+Math.round(d.cycleDurationSeconds/60)+' min';refreshHeater();}");
+  html += F("function fillProfile(){const p=selectedProfile();if(!p)return;document.getElementById('profile-recommended').textContent=p.temperature.toFixed(1)+' C / '+Math.round(p.minutes/60)+' h';syncSetpointWarning();}");
+  html += F("function loadRecommendedProfile(){const p=selectedProfile();if(!p)return;document.getElementById('profile-temp').value=p.temperature;document.getElementById('profile-minutes').value=p.minutes;syncSetpointWarning();}");
+  html += F("async function applySetpoint(){if(!syncSetpointWarning())return;const p=selectedProfile();if(!p)return;const v=readNumber('profile-temp',p.temperature);");
+  html += F("if(v>p.temperature&&!confirm('Temperatura superiore al profilo consigliato. Procedo comunque?'))return;");
+  html += F("const minutes=Math.round(readNumber('profile-minutes',p.minutes));");
+  html += F("const r=await fetch('/api/settings/material?id='+p.id+'&setpoint='+v+'&minutes='+minutes+'&ts='+Date.now());const d=await r.json();document.getElementById('settings-status').textContent='Setpoint aggiornato a '+d.setpoint.toFixed(1)+' C, durata '+Math.round(d.cycleDurationSeconds/60)+' min';refreshHeater();}");
   html += F("async function addCustomProfile(ev){if(ev)ev.preventDefault();const name=document.getElementById('custom-profile-name').value.trim();const temp=readNumber('custom-profile-temp',NaN);const minutes=Math.round(readNumber('custom-profile-minutes',NaN));const s=document.getElementById('settings-status');");
   html += F("s.className='status';if(!name){s.textContent='Nome profilo mancante.';return;}if(!Number.isFinite(temp)||!Number.isFinite(minutes)||minutes<1){s.textContent='Temperatura o durata non validi.';return;}if(temp>safetyLimit){s.className='warn';s.textContent='Temperatura oltre il limite sicurezza.';return;}s.textContent='Aggiungo profilo...';");
-  html += F("try{const q=new URLSearchParams({name:name,setpoint:temp,minutes:minutes,ts:Date.now()});const r=await fetch('/api/settings/profile/add?'+q.toString());const t=await r.text();if(!r.ok){s.className='warn';s.textContent='Profilo non aggiunto: '+t;return;}location.href='/settings?ts='+Date.now();}catch(e){s.className='warn';s.textContent='Errore rete mentre aggiungevo il profilo.';}}");
+  html += F("try{const q=new URLSearchParams({name,temperature:temp,minutes});const r=await fetch('/api/profiles?'+q.toString(),{method:'POST'});if(!r.ok){s.className='warn';s.textContent='Errore: '+(await r.text());return;}await loadProfiles();s.className='ok';s.textContent='Profilo \"'+name+'\" aggiunto.';}catch(e){s.className='warn';s.textContent='Errore rete.';}}");
+  html += F("async function deleteProfile(id){const p=profiles.find(x=>x.id===id);if(!p||!confirm('Eliminare profilo \"'+p.name+'\"?'))return;try{const r=await fetch('/api/profiles?id='+id,{method:'DELETE'});if(r.ok)await loadProfiles();}catch(e){}}");
   html += F("async function saveGeneralSettings(){const s=document.getElementById('general-settings-status');s.className='status';s.textContent='"); html += tr(TK_SETTINGS_SAVING); html += F("';");
   html += F("const q=new URLSearchParams({language:document.getElementById('ui-language').value,wifiSsid:document.getElementById('wifi-ssid').value,wifiPassword:document.getElementById('wifi-password').value,wifiClient:document.getElementById('wifi-client').value,debug:document.getElementById('debug-enabled').value,ts:Date.now()});");
   html += F("try{const r=await fetch('/api/settings/general?'+q.toString());if(!r.ok){s.className='warn';s.textContent='"); html += tr(TK_SETTINGS_SAVE_FAILED); html += F("';return;}");
@@ -243,19 +279,19 @@ String dashboardHtml(PageMode pageMode) {
   html += F("function chooseWifiNetwork(){const list=document.getElementById('wifi-networks');if(list&&list.value)document.getElementById('wifi-ssid').value=list.value;}");
   html += F("function setManualHomeEdit(v){manualHomeEdit=v;const t=document.getElementById('home-profile-temp');const m=document.getElementById('home-cycle-minutes');const b=document.getElementById('home-manual-edit');if(t)t.readOnly=!v;if(m)m.readOnly=!v;if(b)b.textContent=v?'"); html += tr(TK_LOCK_EDIT); html += F("':'"); html += tr(TK_MANUAL_EDIT); html += F("';}");
   html += F("function toggleManualHomeEdit(){setManualHomeEdit(!manualHomeEdit);const n=document.getElementById('home-profile-note');if(n&&manualHomeEdit){n.className='ok';n.textContent='Modifica manuale attiva: puoi cambiare temperatura e durata.';}}");
-  html += F("function fillHomeProfile(){const s=document.getElementById('home-profile');if(!s)return;const p=profiles[Number(s.value)||0];const n=document.getElementById('home-profile-note');");
-  html += F("if(!manualHomeEdit){document.getElementById('home-profile-temp').value=p[1].toFixed(1);document.getElementById('home-cycle-minutes').value=p[2];}");
-  html += F("document.getElementById('home-profile-recommended').textContent=p[1].toFixed(1)+' C / '+Math.round(p[2]/60)+' h';");
-  html += F("if(p[1]>safetyLimit){n.className='warn';n.textContent='Profilo oltre il limite sicurezza attuale.';}else{n.className='ok';n.textContent='"); html += tr(TK_PROFILE_APPLICABLE); html += F("';}}");
-  html += F("async function applyHomeProfile(showMessage=true){const s=document.getElementById('home-profile');const p=profiles[Number(s.value)||0];");
-  html += F("const setpoint=readNumber('home-profile-temp',p[1]);");
-  html += F("if(setpoint>safetyLimit){document.getElementById('home-profile-note').className='warn';document.getElementById('home-profile-note').textContent='Non applicato: oltre il limite sicurezza.';return;}");
-  html += F("const minutes=Math.round(readNumber('home-cycle-minutes',p[2]));");
-  html += F("const r=await fetch('/api/settings/material?id='+s.value+'&setpoint='+setpoint+'&minutes='+minutes+'&ts='+Date.now());const d=await r.json();");
-  html += F("document.getElementById('home-profile-note').className='ok';document.getElementById('home-profile-note').textContent=showMessage?('Ciclo '+p[0]+' applicato: '+d.setpoint.toFixed(1)+' C, '+Math.round(d.cycleDurationSeconds/60)+' min'):'Ciclo '+p[0]+' pronto';");
+  html += F("function fillHomeProfile(){const p=selectedHomeProfile();if(!p)return;const n=document.getElementById('home-profile-note');");
+  html += F("if(!manualHomeEdit){document.getElementById('home-profile-temp').value=p.temperature.toFixed(1);document.getElementById('home-cycle-minutes').value=p.minutes;}");
+  html += F("document.getElementById('home-profile-recommended').textContent=p.temperature.toFixed(1)+' C / '+Math.round(p.minutes/60)+' h';");
+  html += F("if(p.temperature>safetyLimit){n.className='warn';n.textContent='Profilo oltre il limite sicurezza attuale.';}else{n.className='ok';n.textContent='"); html += tr(TK_PROFILE_APPLICABLE); html += F("';}}");
+  html += F("async function applyHomeProfile(showMessage=true){const p=selectedHomeProfile();if(!p)return false;");
+  html += F("const setpoint=readNumber('home-profile-temp',p.temperature);");
+  html += F("if(setpoint>safetyLimit){document.getElementById('home-profile-note').className='warn';document.getElementById('home-profile-note').textContent='Non applicato: oltre il limite sicurezza.';return false;}");
+  html += F("const minutes=Math.round(readNumber('home-cycle-minutes',p.minutes));");
+  html += F("const r=await fetch('/api/settings/material?id='+p.id+'&setpoint='+setpoint+'&minutes='+minutes+'&ts='+Date.now());const d=await r.json();");
+  html += F("document.getElementById('home-profile-note').className='ok';document.getElementById('home-profile-note').textContent=showMessage?('Ciclo '+p.name+' applicato: '+d.setpoint.toFixed(1)+' C, '+Math.round(d.cycleDurationSeconds/60)+' min'):'Ciclo '+p.name+' pronto';");
   html += F("document.getElementById('heater-setpoint').textContent=d.setpoint.toFixed(1)+' C';document.getElementById('cycle-countdown').textContent=formatDuration(d.cycleRemainingSeconds);refreshHeater();return true;}");
   html += F("setInterval(()=>{refreshData();refreshBed();},60000);setInterval(()=>{refreshBed();refreshHeater();},2000);");
-  html += F("window.addEventListener('load',()=>{syncColor();if(document.getElementById('material-profile'))fillProfile();fillHomeProfile();refreshData();refreshBed();refreshNfc();refreshHeater();});");
+  html += F("window.addEventListener('load',()=>{syncColor();loadProfiles();refreshData();refreshBed();refreshNfc();refreshHeater();});");
   html += F("</script>");
 
   html += pageMode == PAGE_TAGS     ? F("</head><body class=\"tags\"><main>")     :
@@ -401,11 +437,7 @@ String dashboardHtml(PageMode pageMode) {
   html += F("<div class=\"metric\"><span>"); html += tr(TK_MODE);    html += F("</span><strong id=\"heater-mode\">");    html += heaterControl.automatic ? F("AUTO") : tr(TK_MANUAL); html += F("</strong></div>");
   html += F("<div class=\"metric\"><span>"); html += tr(TK_SETPOINT); html += F("</span><strong id=\"heater-setpoint\">"); html += String(heaterControl.setpoint, 1); html += F(" C</strong></div>");
   html += F("</div><div class=\"profile-control\"><label>"); html += tr(TK_PROFILE_MATERIAL);
-  html += F("<select id=\"home-profile\" onchange=\"fillHomeProfile()\">");
-  for (uint8_t i = 0; i < totalMaterialProfileCount(); i++) {
-    html += F("<option value=\""); html += String(i); html += F("\""); if (i == selectedMaterialProfile) html += F(" selected"); html += F(">"); html += materialProfileName(i); html += F("</option>");
-  }
-  html += F("</select></label><label>"); html += tr(TK_CYCLE_SETPOINT);
+  html += F("<select id=\"home-profile\" onchange=\"fillHomeProfile()\"></select></label><label>"); html += tr(TK_CYCLE_SETPOINT);
   html += F("<input id=\"home-profile-temp\" type=\"number\" min=\"20\" max=\"120\" step=\"0.5\" readonly value=\""); html += String(heaterControl.setpoint, 1); html += F("\"></label><label>"); html += tr(TK_CYCLE_DURATION_MIN);
   html += F("<input id=\"home-cycle-minutes\" type=\"number\" min=\"1\" max=\"9999\" step=\"1\" readonly value=\""); html += String(heaterControl.cycleDurationSeconds / 60UL); html += F("\"></label>");
   html += F("<button type=\"button\" onclick=\"applyHomeProfile()\">"); html += tr(TK_APPLY_CYCLE); html += F("</button>");
@@ -431,11 +463,7 @@ String dashboardHtml(PageMode pageMode) {
   html += F("<li>Puoi aggiungere profili personalizzati nella sezione in basso.</li>");
   html += F("</ul></div>");
   html += F("<div class=\"formgrid\"><label>"); html += tr(TK_TABLE_MATERIAL);
-  html += F("<select id=\"material-profile\" onchange=\"loadRecommendedProfile()\">");
-  for (uint8_t i = 0; i < totalMaterialProfileCount(); i++) {
-    html += F("<option value=\""); html += String(i); html += F("\""); if (i == selectedMaterialProfile) html += F(" selected"); html += F(">"); html += materialProfileName(i); html += F("</option>");
-  }
-  html += F("</select></label><label>"); html += tr(TK_DRYER_SETPOINT_C);
+  html += F("<select id=\"material-profile\" onchange=\"loadRecommendedProfile()\"></select></label><label>"); html += tr(TK_DRYER_SETPOINT_C);
   html += F("<input id=\"profile-temp\" type=\"number\" min=\"20\" max=\"120\" step=\"0.5\" value=\""); html += String(heaterControl.setpoint, 1); html += F("\" oninput=\"syncSetpointWarning()\"></label>");
   html += F("<label>"); html += tr(TK_CYCLE_DURATION_MIN);
   html += F("<input id=\"profile-minutes\" type=\"number\" min=\"1\" max=\"9999\" step=\"1\" value=\""); html += String(heaterControl.cycleDurationSeconds / 60UL); html += F("\"></label>");
@@ -448,12 +476,7 @@ String dashboardHtml(PageMode pageMode) {
   html += F("<label>Setpoint C<input id=\"custom-profile-temp\" type=\"number\" min=\"20\" max=\"120\" step=\"0.5\" value=\"45\"></label>");
   html += F("<label>"); html += tr(TK_DURATION_MIN); html += F("<input id=\"custom-profile-minutes\" type=\"number\" min=\"1\" max=\"9999\" step=\"1\" value=\"180\"></label>");
   html += F("<label>&nbsp;<button type=\"button\" onclick=\"addCustomProfile(event)\">"); html += tr(TK_ADD_PROFILE); html += F("</button></label></div>");
-  html += F("<table><thead><tr><th>"); html += tr(TK_TABLE_MATERIAL); html += F("</th><th>"); html += tr(TK_TABLE_TEMP); html += F("</th><th>"); html += tr(TK_TABLE_TIME); html += F("</th><th>"); html += tr(TK_TABLE_STATUS); html += F("</th></tr></thead><tbody>");
-  for (uint8_t i = 0; i < totalMaterialProfileCount(); i++) {
-    const bool available = materialProfileTemp(i) <= BED_SAFETY_LIMIT_C;
-    html += F("<tr><td>"); html += materialProfileName(i); html += F("</td><td>"); html += String(materialProfileTemp(i), 0); html += F(" C</td><td>"); html += String(materialProfileMinutes(i) / 60.0F, 1); html += F(" h</td><td class=\""); html += available ? F("ok") : F("warn"); html += F("\">"); html += available ? tr(TK_APPLICABLE) : tr(TK_OVER_LIMIT); html += F("</td></tr>");
-  }
-  html += F("</tbody></table></div></section>");
+  html += F("<table><thead><tr><th>"); html += tr(TK_TABLE_MATERIAL); html += F("</th><th>"); html += tr(TK_TABLE_TEMP); html += F("</th><th>"); html += tr(TK_TABLE_TIME); html += F("</th><th>"); html += tr(TK_TABLE_STATUS); html += F("</th><th></th></tr></thead><tbody id=\"profiles-tbody\"></tbody></table></div></section>");
 
   // ── Settings panel
   html += F("<section class=\"card wide settings-panel\"><div class=\"label\">"); html += tr(TK_SETTINGS_NETWORK); html += F("</div><div class=\"small\">");
@@ -629,6 +652,32 @@ static void handleApiLog() {
   server.send(200,"application/json",logJson());
 }
 
+static void handleApiProfilesGet() {
+  server.sendHeader("Cache-Control","no-store");
+  String result = pi5ProxyRequest("GET", "/api/profiles");
+  server.send(200,"application/json", result.isEmpty() ? profilesFallbackJson() : result);
+}
+
+static void handleApiProfilesPost() {
+  server.sendHeader("Cache-Control","no-store");
+  if (!wifiClientConnected()) { server.send(503,"application/json","{\"error\":\"WiFi non connesso\"}"); return; }
+  String path = "/api/profiles?name=" + server.arg("name");
+  path += "&temperature=" + server.arg("temperature");
+  path += "&minutes=" + server.arg("minutes");
+  String result = pi5ProxyRequest("POST", path);
+  server.send(result.isEmpty() ? 503 : 200, "application/json",
+    result.isEmpty() ? "{\"error\":\"Pi5 non raggiungibile\"}" : result);
+}
+
+static void handleApiProfilesDelete() {
+  server.sendHeader("Cache-Control","no-store");
+  String id = server.arg("id");
+  if (id.isEmpty()) { server.send(400,"application/json","{\"error\":\"id mancante\"}"); return; }
+  String result = pi5ProxyRequest("DELETE", "/api/profiles/" + id);
+  server.send(result.isEmpty() ? 503 : 200, "application/json",
+    result.isEmpty() ? "{\"error\":\"Pi5 non raggiungibile\"}" : result);
+}
+
 static void handleNotFound() {
   Serial.print("HTTP 404 "); Serial.println(server.uri());
   server.send(404,"text/plain","Not found");
@@ -657,6 +706,9 @@ void setupWebServer() {
   server.on("/api/heater/auto/on",  HTTP_GET, handleApiHeaterAutoOn);
   server.on("/api/heater/auto/off", HTTP_GET, handleApiHeaterAutoOff);
   server.on("/api/log",             HTTP_GET, handleApiLog);
+  server.on("/api/profiles",        HTTP_GET,    handleApiProfilesGet);
+  server.on("/api/profiles",        HTTP_POST,   handleApiProfilesPost);
+  server.on("/api/profiles",        HTTP_DELETE, handleApiProfilesDelete);
   server.onNotFound(handleNotFound);
 
   ElegantOTA.begin(&server);
