@@ -11,13 +11,14 @@ Lista di lavoro provvisoria, aggiornata mentre il progetto prende forma.
 - ✅ Settings screen: URL base configurabile con preset Tailscale/LAN, pulsante Test connessione, persistenza con shared_preferences.
 - ✅ Notifica push al termine del ciclo di essiccazione (flutter_local_notifications), con rilevamento transizione cycleRunning true→false.
 - ✅ Icona app aggiornata con odin_mobile_fav.png.
-- ✅ Splash screen Flutter con odin.jpeg grande (BoxFit.contain, sfondo #102A43, fade-out dopo 2.2 s).
+- ✅ Splash screen Flutter con odin.jpeg grande (BoxFit.contain, sfondo #102A43, fade-out dopo 2.2 s) — mostrata solo al primo avvio.
 - ✅ Splash nativa Android 12+ con PNG trasparente: cerchio icona invisibile, transizione seamless verso la splash Flutter.
+- ✅ Schermata Tag NFC: lettura OpenPrintTag via nfc_manager, parsing CBOR, visualizzazione dati bobina, pulsante Applica profilo.
+- ✅ NFC intercept: intent filter NDEF + MethodChannel + StreamController — avvicina il tag da qualsiasi schermata e l'app naviga automaticamente alla tab NFC.
+- ✅ Grafici storici: 4 grafici (temp/umidità/piatto/riscaldatore) con selezione range 6h/24h/2gg/7gg, dati dal log CSV su Pi5 con downsampling adattivo.
+- ✅ Localizzazione IT/EN completa: flutter_localizations + ARB files, lingua segue il dispositivo.
 
 ### Da fare
-- Schermata Tag NFC: lettura/scrittura OpenPrintTag dall'app (richiede NFC sul telefono).
-- Grafici storici: temperatura e umidità dalle ultime ore (dati dal log CSV sul Pi5).
-- Localizzazione: testi app hardcoded in italiano, valutare supporto EN.
 - Profili materiale custom gestibili dall'app (oggi solo dal portale web).
 
 ## Firmware e portale
