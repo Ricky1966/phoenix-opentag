@@ -6,6 +6,7 @@
 #include "sensor.h"
 #include "heater.h"
 #include "nfc.h"
+#include "log.h"
 #include <WiFi.h>
 #include <ElegantOTA.h>
 
@@ -301,6 +302,33 @@ String dashboardHtml(PageMode pageMode) {
   html += F("<li><b>Riscaldatore</b>: stato ON/OFF, modo AUTO/MAN, setpoint e output PI corrente.</li>");
   html += F("</ul>");
   html += F("Le altre sezioni: <b>Lettura TAG</b> — leggi e scrivi bobine NFC &nbsp;|&nbsp; <b>SetPoint</b> — imposta profilo e avvia ciclo &nbsp;|&nbsp; <b>Settings</b> — WiFi, lingua, OTA.</div>");
+  // ── Grafico storico (Home) ─────────────────────────────────────────────
+  html += F("<div class=\"card wide home-panel\" style=\"margin-top:14px\"><div class=\"label\">Storico (ultime 4 ore)</div>");
+  html += F("<canvas id=\"log-chart\" width=\"700\" height=\"180\" style=\"width:100%;height:180px\"></canvas>");
+  html += F("<script>");
+  html += F("(async()=>{try{const r=await fetch('/api/log');const d=await r.json();");
+  html += F("if(!d.entries||!d.entries.length){document.getElementById('log-chart').style.display='none';return;}");
+  html += F("const c=document.getElementById('log-chart');const ctx=c.getContext('2d');");
+  html += F("const W=c.offsetWidth||700,H=180;c.width=W;");
+  html += F("const now=d.nowMs;const entries=d.entries;");
+  html += F("const pad={l:38,r:10,t:10,b:28};const cw=W-pad.l-pad.r,ch=H-pad.t-pad.b;");
+  html += F("const minT=Math.min(...entries.map(e=>e.t));const maxT=now;");
+  html += F("const tx=t=>pad.l+cw*(t-minT)/(maxT-minT||1);");
+  html += F("const vals=(k)=>entries.filter(e=>e[k]!==null).map(e=>e[k]);");
+  html += F("const allV=[...vals('temp'),...vals('hum'),...vals('bed')];");
+  html += F("if(!allV.length)return;");
+  html += F("const minV=Math.min(...allV)-2,maxV=Math.max(...allV)+2;");
+  html += F("const ty=v=>pad.t+ch*(1-(v-minV)/(maxV-minV||1));");
+  html += F("ctx.clearRect(0,0,W,H);");
+  html += F("ctx.strokeStyle='#d9e2ec';ctx.lineWidth=1;");
+  html += F("for(let v=Math.ceil(minV/10)*10;v<=maxV;v+=10){const y=ty(v);ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(W-pad.r,y);ctx.stroke();ctx.fillStyle='#52606d';ctx.font='10px system-ui';ctx.textAlign='right';ctx.fillText(v+'',pad.l-3,y+3);}");
+  html += F("const drawLine=(key,color)=>{const pts=entries.filter(e=>e[key]!==null);if(pts.length<2)return;ctx.strokeStyle=color;ctx.lineWidth=2;ctx.beginPath();pts.forEach((e,i)=>i===0?ctx.moveTo(tx(e.t),ty(e[key])):ctx.lineTo(tx(e.t),ty(e[key])));ctx.stroke();};");
+  html += F("drawLine('temp','#0f766e');drawLine('hum','#3b82f6');drawLine('bed','#f97316');");
+  html += F("ctx.fillStyle='#0f766e';ctx.font='11px system-ui';ctx.textAlign='left';ctx.fillText('Temp',pad.l+4,pad.t+13);");
+  html += F("ctx.fillStyle='#3b82f6';ctx.fillText('Umid',pad.l+52,pad.t+13);");
+  html += F("ctx.fillStyle='#f97316';ctx.fillText('Piatto',pad.l+100,pad.t+13);");
+  html += F("}catch(e){}})();");
+  html += F("</script></div>");
 
   // ── Tag panel
   html += F("<section class=\"card wide tag-panel\"><div class=\"label\">OpenPrintTag</div><div class=\"small\">");
@@ -596,6 +624,11 @@ static void handleApiSettingsGeneral() {
   server.sendHeader("Cache-Control","no-store"); server.send(200,"application/json",settingsJson());
   scheduleWifiReconnect();
 }
+static void handleApiLog() {
+  server.sendHeader("Cache-Control","no-store");
+  server.send(200,"application/json",logJson());
+}
+
 static void handleNotFound() {
   Serial.print("HTTP 404 "); Serial.println(server.uri());
   server.send(404,"text/plain","Not found");
@@ -623,6 +656,7 @@ void setupWebServer() {
   server.on("/api/heater/off",      HTTP_GET, handleApiHeaterOff);
   server.on("/api/heater/auto/on",  HTTP_GET, handleApiHeaterAutoOn);
   server.on("/api/heater/auto/off", HTTP_GET, handleApiHeaterAutoOff);
+  server.on("/api/log",             HTTP_GET, handleApiLog);
   server.onNotFound(handleNotFound);
 
   ElegantOTA.begin(&server);

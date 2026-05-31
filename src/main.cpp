@@ -6,6 +6,7 @@
 #include "sensor.h"
 #include "heater.h"
 #include "web_ui.h"
+#include "log.h"
 
 static const IPAddress AP_IP(192, 168, 4, 1);
 static const IPAddress AP_SUBNET(255, 255, 255, 0);
@@ -42,4 +43,5 @@ void loop() {
   readSensor();
   readBedTemperature();
   updateHeaterControl();
+  logCheck();
 }
