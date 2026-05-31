@@ -660,22 +660,35 @@ static void handleApiProfilesGet() {
 
 static void handleApiProfilesPost() {
   server.sendHeader("Cache-Control","no-store");
-  if (!wifiClientConnected()) { server.send(503,"application/json","{\"error\":\"WiFi non connesso\"}"); return; }
+  if (!appSettings.wifiClientEnabled) {
+    server.send(503,"application/json","{\"error\":\"WiFi client non abilitato — abilitalo in Settings\"}"); return;
+  }
+  if (WiFi.status() != WL_CONNECTED) {
+    server.send(503,"application/json","{\"error\":\"ESP32 non connesso al router\"}"); return;
+  }
   String path = "/api/profiles?name=" + server.arg("name");
   path += "&temperature=" + server.arg("temperature");
   path += "&minutes=" + server.arg("minutes");
+  Serial.print("POST Pi5: "); Serial.println(path);
   String result = pi5ProxyRequest("POST", path);
+  Serial.print("POST Pi5 result: "); Serial.println(result.isEmpty() ? "EMPTY" : result);
   server.send(result.isEmpty() ? 503 : 200, "application/json",
-    result.isEmpty() ? "{\"error\":\"Pi5 non raggiungibile\"}" : result);
+    result.isEmpty() ? "{\"error\":\"Pi5 non raggiungibile (timeout o IP errato)\"}" : result);
 }
 
 static void handleApiProfilesDelete() {
   server.sendHeader("Cache-Control","no-store");
+  if (!appSettings.wifiClientEnabled) {
+    server.send(503,"application/json","{\"error\":\"WiFi client non abilitato — abilitalo in Settings\"}"); return;
+  }
+  if (WiFi.status() != WL_CONNECTED) {
+    server.send(503,"application/json","{\"error\":\"ESP32 non connesso al router\"}"); return;
+  }
   String id = server.arg("id");
   if (id.isEmpty()) { server.send(400,"application/json","{\"error\":\"id mancante\"}"); return; }
   String result = pi5ProxyRequest("DELETE", "/api/profiles/" + id);
   server.send(result.isEmpty() ? 503 : 200, "application/json",
-    result.isEmpty() ? "{\"error\":\"Pi5 non raggiungibile\"}" : result);
+    result.isEmpty() ? "{\"error\":\"Pi5 non raggiungibile (timeout o IP errato)\"}" : result);
 }
 
 static void handleNotFound() {
