@@ -38,6 +38,21 @@ static String pi5ProxyRequest(const String& method, const String& path) {
   return result;
 }
 
+static String urlEncode(const String& s) {
+  String enc = "";
+  for (unsigned int i = 0; i < s.length(); i++) {
+    char c = s[i];
+    if (isAlphaNumeric(c) || c == '-' || c == '_' || c == '.' || c == '~') {
+      enc += c;
+    } else {
+      char buf[4];
+      sprintf(buf, "%%%02X", (unsigned char)c);
+      enc += buf;
+    }
+  }
+  return enc;
+}
+
 static String profilesFallbackJson() {
   String json = "[";
   for (uint8_t i = 0; i < totalMaterialProfileCount(); i++) {
@@ -672,7 +687,7 @@ static void handleApiProfilesPost() {
   if (WiFi.status() != WL_CONNECTED) {
     server.send(503,"application/json","{\"error\":\"ESP32 non connesso al router\"}"); return;
   }
-  String path = "/api/profiles?name=" + server.arg("name");
+  String path = "/api/profiles?name=" + urlEncode(server.arg("name"));
   path += "&temperature=" + server.arg("temperature");
   path += "&minutes=" + server.arg("minutes");
   Serial.print("POST Pi5: "); Serial.println(path);
