@@ -26,7 +26,7 @@ Lista di lavoro provvisoria, aggiornata mentre il progetto prende forma.
 
 ## Firmware e portale
 
-- Completare la traduzione dei messaggi JavaScript rimasti hardcoded nelle pagine Home, SetPoint, Settings e Lettura TAG.
+- ✅ Traduzione completa IT/EN dei testi hardcoded: help box Home, TAG, SetPoint, Settings + label JS.
 - Rendere piu robusto il cambio lingua, evitando testi misti dopo azioni asincrone.
 - Rifinire la gestione WiFi:
   - verificare salvataggio credenziali da rete router e da AP;
@@ -35,8 +35,8 @@ Lista di lavoro provvisoria, aggiornata mentre il progetto prende forma.
   - preparare la base per OTA.
 - ✅ Migliorare la pagina Lettura TAG: parser CBOR completo, form ripopolato automaticamente con tutti i campi OpenPrintTag dopo lettura.
 - Migliorare la pagina SetPoint:
-  - completare i messaggi localizzati;
-  - chiarire la differenza tra profilo consigliato, ciclo applicato e modifica manuale;
+  - ✅ messaggi localizzati completati;
+  - chiarire la differenza tra profilo consigliato, ciclo applicato e modifica manuale (indicatore visivo);
   - verificare profili personalizzati dopo riavvio.
 
 ## Controllo termico
