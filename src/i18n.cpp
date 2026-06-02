@@ -116,6 +116,25 @@ static const __FlashStringHelper *textEn(TextKey key) {
     case TK_TAG_SPOOL_HOLE:  return F("Hub hole mm");
     case TK_SETTINGS_OTA:     return F("Firmware update (OTA)");
     case TK_SETTINGS_OTA_BTN: return F("Open update page");
+    case TK_HELP_HOW_TO_USE:  return F("&#x2139;  How to use this page");
+    case TK_HOME_HELP1:  return F("<b>Temperature / Humidity</b>: BME280 reading of chamber air, updated every 60 s.");
+    case TK_HOME_HELP2:  return F("<b>Bed</b>: NTC temperature on the heater, updated every 2 s.");
+    case TK_HOME_HELP3:  return F("<b>Countdown</b>: remaining time of the active cycle; shows --:--:-- if no cycle is running.");
+    case TK_HOME_HELP4:  return F("<b>Heater</b>: ON/OFF state, AUTO/MAN mode, setpoint and current PI output.");
+    case TK_TAG_HELP1:   return F("Place an NFC spool on the PN5180 reader and press <b>Read tag</b> to read OpenPrintTag data.");
+    case TK_TAG_HELP2:   return F("Fill in the fields (expand sections with the arrow), then press <b>Write OpenPrintTag</b> to save data to the spool.");
+    case TK_TAG_HELP3:   return F("Supports <b>ISO 15693</b> tags (NFC-V, e.g. NXP ICODE — OpenPrintTag standard) and <b>ISO 14443A</b> (NFC-A, e.g. NTAG — UID read only).");
+    case TK_TAG_HELP4:   return F("The color read from the tag is shown in the color picker.");
+    case TK_SETPOINT_HELP1: return F("Select a <b>material</b> to automatically load the recommended setpoint and duration.");
+    case TK_SETPOINT_HELP2: return F("You can manually edit setpoint and duration, then press <b>Apply setpoint</b>.");
+    case TK_SETPOINT_HELP3: return F("Press <b>AUTO</b> in the panel above to start the cycle with PI control. The cycle stops at countdown end or at 90 °C (safety limit).");
+    case TK_SETPOINT_HELP4: return F("<b>Manual ON</b> turns the heater on without a timed cycle. <b>OFF</b> turns everything off.");
+    case TK_SETPOINT_HELP5: return F("You can add custom profiles in the section below.");
+    case TK_SETTINGS_HELP1: return F("<b>Language</b>: changes the interface language (requires save).");
+    case TK_SETTINGS_HELP2: return F("<b>WiFi</b>: press <b>Scan networks</b>, choose a network, enter password and press <b>Save</b>. The <i>ODIN</i> access point stays active as fallback.");
+    case TK_SETTINGS_HELP3: return F("<b>Hardware debug</b>: if enabled, shows PN5180 debug info on the Tag page.");
+    case TK_SETTINGS_HELP4: return F("<b>OTA update</b>: open <b>/update</b> in the browser, upload the <code>.bin</code> file built by PlatformIO.");
+    case TK_MANUAL_EDIT_ACTIVE: return F("Manual edit active: you can change temperature and duration.");
   }
   return F("");
 }
@@ -235,6 +254,25 @@ static const __FlashStringHelper *textLocal(TextKey key) {
     case TK_TAG_SPOOL_HOLE:  return F("Foro centrale mm");
     case TK_SETTINGS_OTA:     return F("Aggiornamento firmware (OTA)");
     case TK_SETTINGS_OTA_BTN: return F("Apri pagina aggiornamento");
+    case TK_HELP_HOW_TO_USE:  return F("&#x2139;  Come usare questa pagina");
+    case TK_HOME_HELP1:  return F("<b>Temperatura / Umidità</b>: lettura BME280 dell'aria nella camera, aggiornata ogni 60 s.");
+    case TK_HOME_HELP2:  return F("<b>Piatto</b>: temperatura NTC sul riscaldatore, aggiornata ogni 2 s.");
+    case TK_HOME_HELP3:  return F("<b>Countdown</b>: tempo residuo del ciclo attivo; mostra --:--:-- se nessun ciclo è in corso.");
+    case TK_HOME_HELP4:  return F("<b>Riscaldatore</b>: stato ON/OFF, modo AUTO/MAN, setpoint e output PI corrente.");
+    case TK_TAG_HELP1:   return F("Appoggia una bobina NFC sul lettore PN5180 e premi <b>Leggi tag</b> per leggere i dati OpenPrintTag.");
+    case TK_TAG_HELP2:   return F("Compila i campi (espandi le sezioni con la freccia), poi premi <b>Scrivi OpenPrintTag</b> per salvare i dati sulla bobina.");
+    case TK_TAG_HELP3:   return F("Supporta tag <b>ISO 15693</b> (NFC-V, es. NXP ICODE — standard OpenPrintTag) e <b>ISO 14443A</b> (NFC-A, es. NTAG — sola lettura UID).");
+    case TK_TAG_HELP4:   return F("Il colore letto dal tag viene mostrato nel selettore colore.");
+    case TK_SETPOINT_HELP1: return F("Seleziona il <b>materiale</b> per caricare automaticamente setpoint e durata consigliati.");
+    case TK_SETPOINT_HELP2: return F("Puoi modificare manualmente setpoint e durata, poi premi <b>Applica setpoint</b>.");
+    case TK_SETPOINT_HELP3: return F("Premi <b>AUTO</b> nel pannello sopra per avviare il ciclo con controllo PI. Il ciclo si ferma al countdown o a 90 °C (limite sicurezza).");
+    case TK_SETPOINT_HELP4: return F("<b>ON manuale</b> accende il riscaldatore senza ciclo temporizzato. <b>OFF</b> spegne tutto.");
+    case TK_SETPOINT_HELP5: return F("Puoi aggiungere profili personalizzati nella sezione in basso.");
+    case TK_SETTINGS_HELP1: return F("<b>Lingua</b>: cambia la lingua dell'interfaccia (richiede salvataggio).");
+    case TK_SETTINGS_HELP2: return F("<b>WiFi</b>: premi <b>Scansiona reti</b>, scegli la rete, inserisci la password e premi <b>Salva</b>. L'access point <i>ODIN</i> rimane sempre attivo come fallback.");
+    case TK_SETTINGS_HELP3: return F("<b>Debug hardware</b>: se visibile mostra le informazioni di debug PN5180 nella pagina Lettura TAG.");
+    case TK_SETTINGS_HELP4: return F("<b>Aggiornamento OTA</b>: apri <b>/update</b> nel browser, carica il file <code>.bin</code> generato da PlatformIO.");
+    case TK_MANUAL_EDIT_ACTIVE: return F("Modifica manuale attiva: puoi cambiare temperatura e durata.");
   }
 #endif
   return textEn(key);

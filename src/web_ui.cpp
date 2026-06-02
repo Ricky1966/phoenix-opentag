@@ -322,7 +322,7 @@ String dashboardHtml(PageMode pageMode) {
   html += F("catch(e){s.className='warn';s.textContent='"); html += tr(TK_SETTINGS_SCAN_ERROR); html += F("';}}");
   html += F("function chooseWifiNetwork(){const list=document.getElementById('wifi-networks');if(list&&list.value)document.getElementById('wifi-ssid').value=list.value;}");
   html += F("function setManualHomeEdit(v){manualHomeEdit=v;const t=document.getElementById('home-profile-temp');const m=document.getElementById('home-cycle-minutes');const b=document.getElementById('home-manual-edit');if(t)t.readOnly=!v;if(m)m.readOnly=!v;if(b)b.textContent=v?'"); html += tr(TK_LOCK_EDIT); html += F("':'"); html += tr(TK_MANUAL_EDIT); html += F("';}");
-  html += F("function toggleManualHomeEdit(){setManualHomeEdit(!manualHomeEdit);const n=document.getElementById('home-profile-note');if(n&&manualHomeEdit){n.className='ok';n.textContent='Modifica manuale attiva: puoi cambiare temperatura e durata.';}}");
+  html += F("function toggleManualHomeEdit(){setManualHomeEdit(!manualHomeEdit);const n=document.getElementById('home-profile-note');if(n&&manualHomeEdit){n.className='ok';n.textContent='"); html += tr(TK_MANUAL_EDIT_ACTIVE); html += F("';}}");
   html += F("function fillHomeProfile(){const p=selectedHomeProfile();if(!p)return;const n=document.getElementById('home-profile-note');");
   html += F("if(!manualHomeEdit){document.getElementById('home-profile-temp').value=p.temperature.toFixed(1);document.getElementById('home-cycle-minutes').value=p.minutes;}");
   html += F("document.getElementById('home-profile-recommended').textContent=p.temperature.toFixed(1)+' C / '+Math.round(p.minutes/60)+' h';");
@@ -376,10 +376,10 @@ String dashboardHtml(PageMode pageMode) {
   html += F("</section>");
   html += F("<div class=\"help home-panel\"><strong>&#x2139; Questa pagina</strong>");
   html += F("<ul>");
-  html += F("<li><b>Temperatura / Umidità</b>: lettura BME280 dell'aria nella camera, aggiornata ogni 60 s.</li>");
-  html += F("<li><b>Piatto</b>: temperatura NTC sul riscaldatore, aggiornata ogni 2 s.</li>");
-  html += F("<li><b>Countdown</b>: tempo residuo del ciclo attivo; mostra --:--:-- se nessun ciclo è in corso.</li>");
-  html += F("<li><b>Riscaldatore</b>: stato ON/OFF, modo AUTO/MAN, setpoint e output PI corrente.</li>");
+  html += F("<li>"); html += tr(TK_HOME_HELP1); html += F("</li>");
+  html += F("<li>"); html += tr(TK_HOME_HELP2); html += F("</li>");
+  html += F("<li>"); html += tr(TK_HOME_HELP3); html += F("</li>");
+  html += F("<li>"); html += tr(TK_HOME_HELP4); html += F("</li>");
   html += F("</ul>");
   html += F("Le altre sezioni: <b>Lettura TAG</b> — leggi e scrivi bobine NFC &nbsp;|&nbsp; <b>SetPoint</b> — imposta profilo e avvia ciclo &nbsp;|&nbsp; <b>Settings</b> — WiFi, lingua, OTA.</div>");
   // ── Grafico storico (Home) ─────────────────────────────────────────────
@@ -427,11 +427,11 @@ String dashboardHtml(PageMode pageMode) {
     html += tr(TK_TAG_MEMORY); html += F(": <span id=\"pn5180-memory\">"); html += nfcData.memoryInfo; html += F("</span><br>");
     html += tr(TK_TAG_FORMAT); html += F(": <span id=\"pn5180-format\">"); html += nfcData.dataFormat; html += F("</span></div>");
   }
-  html += F("<div class=\"help\"><strong>&#x2139; Come usare questa pagina</strong><ul>");
-  html += F("<li>Appoggia una bobina NFC sul lettore PN5180 e premi <b>Leggi tag</b> per leggere i dati OpenPrintTag.</li>");
-  html += F("<li>Compila i campi (espandi le sezioni con la freccia), poi premi <b>Scrivi OpenPrintTag</b> per salvare i dati sulla bobina.</li>");
-  html += F("<li>Supporta tag <b>ISO 15693</b> (NFC-V, es. NXP ICODE — standard OpenPrintTag) e <b>ISO 14443A</b> (NFC-A, es. NTAG — sola lettura UID).</li>");
-  html += F("<li>Il colore letto dal tag viene mostrato nel selettore colore.</li>");
+  html += F("<div class=\"help\"><strong>"); html += tr(TK_HELP_HOW_TO_USE); html += F("</strong><ul>");
+  html += F("<li>"); html += tr(TK_TAG_HELP1); html += F("</li>");
+  html += F("<li>"); html += tr(TK_TAG_HELP2); html += F("</li>");
+  html += F("<li>"); html += tr(TK_TAG_HELP3); html += F("</li>");
+  html += F("<li>"); html += tr(TK_TAG_HELP4); html += F("</li>");
   html += F("</ul></div>");
   html += F("<form id=\"tag-form\" onsubmit=\"event.preventDefault();writeOpenPrintTag();\">");
   // Gruppo 1: Identità bobina
@@ -499,12 +499,12 @@ String dashboardHtml(PageMode pageMode) {
 
   // ── Setpoint panel
   html += F("<section class=\"card wide setpoint-panel\"><div class=\"label\">"); html += tr(TK_SETPOINT_SETTINGS); html += F("</div><div class=\"small\">");
-  html += F("<div class=\"help\"><strong>&#x2139; Come usare questa pagina</strong><ul>");
-  html += F("<li>Seleziona il <b>materiale</b> per caricare automaticamente setpoint e durata consigliati.</li>");
-  html += F("<li>Puoi modificare manualmente setpoint e durata, poi premi <b>Applica setpoint</b>.</li>");
-  html += F("<li>Premi <b>AUTO</b> nel pannello sopra per avviare il ciclo con controllo PI. Il ciclo si ferma al countdown o a 90 °C (limite sicurezza).</li>");
-  html += F("<li><b>ON manuale</b> accende il riscaldatore senza ciclo temporizzato. <b>OFF</b> spegne tutto.</li>");
-  html += F("<li>Puoi aggiungere profili personalizzati nella sezione in basso.</li>");
+  html += F("<div class=\"help\"><strong>"); html += tr(TK_HELP_HOW_TO_USE); html += F("</strong><ul>");
+  html += F("<li>"); html += tr(TK_SETPOINT_HELP1); html += F("</li>");
+  html += F("<li>"); html += tr(TK_SETPOINT_HELP2); html += F("</li>");
+  html += F("<li>"); html += tr(TK_SETPOINT_HELP3); html += F("</li>");
+  html += F("<li>"); html += tr(TK_SETPOINT_HELP4); html += F("</li>");
+  html += F("<li>"); html += tr(TK_SETPOINT_HELP5); html += F("</li>");
   html += F("</ul></div>");
   html += F("<div class=\"formgrid\"><label>"); html += tr(TK_TABLE_MATERIAL);
   html += F("<select id=\"material-profile\" onchange=\"loadRecommendedProfile()\"></select></label><label>"); html += tr(TK_DRYER_SETPOINT_C);
@@ -517,18 +517,18 @@ String dashboardHtml(PageMode pageMode) {
   html += F("<p class=\"status\" id=\"settings-status\">"); html += tr(TK_SETPOINT_HELP); html += F("</p>");
   html += F("<div class=\"label\" style=\"margin-top:24px\">"); html += tr(TK_CUSTOM_PROFILE); html += F("</div>");
   html += F("<div class=\"formgrid\"><label>"); html += tr(TK_PROFILE_NAME); html += F("<input id=\"custom-profile-name\" maxlength=\"24\" placeholder=\"PLA 0.5KG\"></label>");
-  html += F("<label>Setpoint C<input id=\"custom-profile-temp\" type=\"number\" min=\"20\" max=\"120\" step=\"0.5\" value=\"45\"></label>");
+  html += F("<label>"); html += tr(TK_DRYER_SETPOINT_C); html += F("<input id=\"custom-profile-temp\" type=\"number\" min=\"20\" max=\"120\" step=\"0.5\" value=\"45\"></label>");
   html += F("<label>"); html += tr(TK_DURATION_MIN); html += F("<input id=\"custom-profile-minutes\" type=\"number\" min=\"1\" max=\"9999\" step=\"1\" value=\"180\"></label>");
   html += F("<label>&nbsp;<button type=\"button\" onclick=\"addCustomProfile(event)\">"); html += tr(TK_ADD_PROFILE); html += F("</button></label></div>");
   html += F("<table><thead><tr><th>"); html += tr(TK_TABLE_MATERIAL); html += F("</th><th>"); html += tr(TK_TABLE_TEMP); html += F("</th><th>"); html += tr(TK_TABLE_TIME); html += F("</th><th>"); html += tr(TK_TABLE_STATUS); html += F("</th><th></th></tr></thead><tbody id=\"profiles-tbody\"></tbody></table></div></section>");
 
   // ── Settings panel
   html += F("<section class=\"card wide settings-panel\"><div class=\"label\">"); html += tr(TK_SETTINGS_NETWORK); html += F("</div><div class=\"small\">");
-  html += F("<div class=\"help\"><strong>&#x2139; Come usare questa pagina</strong><ul>");
-  html += F("<li><b>Lingua</b>: cambia la lingua dell'interfaccia (richiede salvataggio).</li>");
-  html += F("<li><b>WiFi</b>: premi <b>Scansiona reti</b>, scegli la rete, inserisci la password e premi <b>Salva</b>. L'access point <i>ODIN</i> rimane sempre attivo come fallback.</li>");
-  html += F("<li><b>Debug hardware</b>: se visibile mostra le informazioni di debug PN5180 nella pagina Lettura TAG.</li>");
-  html += F("<li><b>Aggiornamento OTA</b>: apri <b>/update</b> nel browser, carica il file <code>.bin</code> generato da PlatformIO.</li>");
+  html += F("<div class=\"help\"><strong>"); html += tr(TK_HELP_HOW_TO_USE); html += F("</strong><ul>");
+  html += F("<li>"); html += tr(TK_SETTINGS_HELP1); html += F("</li>");
+  html += F("<li>"); html += tr(TK_SETTINGS_HELP2); html += F("</li>");
+  html += F("<li>"); html += tr(TK_SETTINGS_HELP3); html += F("</li>");
+  html += F("<li>"); html += tr(TK_SETTINGS_HELP4); html += F("</li>");
   html += F("</ul></div>");
   html += F("<div class=\"formgrid\"><label>"); html += tr(TK_SETTINGS_LANGUAGE);
   html += F("<select id=\"ui-language\"><option value=\""); html += UI_LOCALE_CODE; html += appSettings.language == UI_LOCALE_CODE ? F("\" selected>") : F("\">"); html += UI_LOCALE_NAME;
