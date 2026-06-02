@@ -9,6 +9,8 @@
             "name": "PlatformIO",
             "includePath": [
                 "/home/ricky/Projects/essiccatore/src",
+                "/home/ricky/.platformio/packages/framework-arduinoespressif32/libraries/HTTPClient/src",
+                "/home/ricky/.platformio/packages/framework-arduinoespressif32/libraries/WiFiClientSecure/src",
                 "/home/ricky/Projects/essiccatore/lib/PN5180-Library",
                 "/home/ricky/.platformio/packages/framework-arduinoespressif32/libraries/Preferences/src",
                 "/home/ricky/Projects/essiccatore/.pio/libdeps/esp32dev/ElegantOTA/src",
@@ -230,7 +232,6 @@
                 "/home/ricky/.platformio/packages/framework-arduinoespressif32/libraries/ESPmDNS/src",
                 "/home/ricky/.platformio/packages/framework-arduinoespressif32/libraries/Ethernet/src",
                 "/home/ricky/.platformio/packages/framework-arduinoespressif32/libraries/FFat/src",
-                "/home/ricky/.platformio/packages/framework-arduinoespressif32/libraries/HTTPClient/src",
                 "/home/ricky/.platformio/packages/framework-arduinoespressif32/libraries/HTTPUpdate/src",
                 "/home/ricky/.platformio/packages/framework-arduinoespressif32/libraries/HTTPUpdateServer/src",
                 "/home/ricky/.platformio/packages/framework-arduinoespressif32/libraries/I2S/src",
@@ -243,7 +244,6 @@
                 "/home/ricky/.platformio/packages/framework-arduinoespressif32/libraries/SimpleBLE/src",
                 "/home/ricky/.platformio/packages/framework-arduinoespressif32/libraries/Ticker/src",
                 "/home/ricky/.platformio/packages/framework-arduinoespressif32/libraries/USB/src",
-                "/home/ricky/.platformio/packages/framework-arduinoespressif32/libraries/WiFiClientSecure/src",
                 "/home/ricky/.platformio/packages/framework-arduinoespressif32/libraries/WiFiProv/src",
                 ""
             ],
@@ -251,6 +251,8 @@
                 "limitSymbolsToIncludedHeaders": true,
                 "path": [
                     "/home/ricky/Projects/essiccatore/src",
+                    "/home/ricky/.platformio/packages/framework-arduinoespressif32/libraries/HTTPClient/src",
+                    "/home/ricky/.platformio/packages/framework-arduinoespressif32/libraries/WiFiClientSecure/src",
                     "/home/ricky/Projects/essiccatore/lib/PN5180-Library",
                     "/home/ricky/.platformio/packages/framework-arduinoespressif32/libraries/Preferences/src",
                     "/home/ricky/Projects/essiccatore/.pio/libdeps/esp32dev/ElegantOTA/src",
@@ -472,7 +474,6 @@
                     "/home/ricky/.platformio/packages/framework-arduinoespressif32/libraries/ESPmDNS/src",
                     "/home/ricky/.platformio/packages/framework-arduinoespressif32/libraries/Ethernet/src",
                     "/home/ricky/.platformio/packages/framework-arduinoespressif32/libraries/FFat/src",
-                    "/home/ricky/.platformio/packages/framework-arduinoespressif32/libraries/HTTPClient/src",
                     "/home/ricky/.platformio/packages/framework-arduinoespressif32/libraries/HTTPUpdate/src",
                     "/home/ricky/.platformio/packages/framework-arduinoespressif32/libraries/HTTPUpdateServer/src",
                     "/home/ricky/.platformio/packages/framework-arduinoespressif32/libraries/I2S/src",
@@ -485,7 +486,6 @@
                     "/home/ricky/.platformio/packages/framework-arduinoespressif32/libraries/SimpleBLE/src",
                     "/home/ricky/.platformio/packages/framework-arduinoespressif32/libraries/Ticker/src",
                     "/home/ricky/.platformio/packages/framework-arduinoespressif32/libraries/USB/src",
-                    "/home/ricky/.platformio/packages/framework-arduinoespressif32/libraries/WiFiClientSecure/src",
                     "/home/ricky/.platformio/packages/framework-arduinoespressif32/libraries/WiFiProv/src",
                     ""
                 ]
