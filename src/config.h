@@ -103,6 +103,22 @@ struct NfcData {
   String dataFormat      = "--";
   String memoryDump      = "--";
   String openPrintTagColor = "#ffffff";
+  // OpenPrintTag parsed fields
+  bool    optParsed    = false;
+  String  optBrand;
+  String  optMaterial;
+  uint8_t optMatType   = 0;
+  uint16_t optDryTemp  = 0;
+  uint16_t optDryTime  = 0;
+  uint16_t optNozzleMin = 0, optNozzleMax = 0;
+  uint16_t optBedMin   = 0, optBedMax    = 0;
+  float    optDensity  = 0.0f;
+  float    optDiameter = 0.0f;
+  uint16_t optNomWeight = 0, optActWeight = 0, optEmptyWeight = 0;
+  uint32_t optNomLength = 0, optActLength = 0;
+  uint16_t optSpoolW = 0, optSpoolOd = 0, optSpoolId = 0, optSpoolHole = 0;
+  uint16_t optMdate    = 0;
+  String   optCountry;
   uint8_t lastUidLength  = 0;
   bool readArmed         = true;
 };

@@ -121,26 +121,122 @@ static uint16_t buildOpenPrintTagMemory(uint8_t *memory, uint16_t memorySize,
   return pos;
 }
 
-static bool extractOpenPrintTagColor(const uint8_t *memory, uint16_t memoryLength, String &color) {
+// ── Minimal CBOR parser for OpenPrintTag ─────────────────────────────────────
+
+static uint32_t cborReadArg(const uint8_t *p, uint16_t &pos, uint16_t end) {
+  if (pos >= end) return 0;
+  uint8_t info = p[pos++] & 0x1F;
+  if (info < 24) return info;
+  if (info == 24 && pos < end) return p[pos++];
+  if (info == 25 && pos + 1 < end) { uint32_t v = ((uint32_t)p[pos]<<8)|p[pos+1]; pos+=2; return v; }
+  if (info == 26 && pos + 3 < end) { uint32_t v = ((uint32_t)p[pos]<<24)|((uint32_t)p[pos+1]<<16)|((uint32_t)p[pos+2]<<8)|p[pos+3]; pos+=4; return v; }
+  return 0;
+}
+
+static String cborReadText(const uint8_t *p, uint16_t &pos, uint16_t end) {
+  uint32_t len = cborReadArg(p, pos, end);
+  if (pos + len > end) return "";
+  String s = String((const char*)(p + pos), len);
+  pos += len; return s;
+}
+
+static float cborReadFloat32(const uint8_t *p, uint16_t &pos, uint16_t end) {
+  pos++; // skip 0xFA
+  if (pos + 3 >= end) return 0.0f;
+  union { uint32_t u; float f; } c;
+  c.u = ((uint32_t)p[pos]<<24)|((uint32_t)p[pos+1]<<16)|((uint32_t)p[pos+2]<<8)|p[pos+3];
+  pos += 4; return c.f;
+}
+
+static void cborSkipValue(const uint8_t *p, uint16_t &pos, uint16_t end) {
+  if (pos >= end) return;
+  uint8_t b = p[pos];
+  uint8_t maj = (b >> 5) & 0x7;
+  if (maj == 7 && (b & 0x1F) == 26) { pos += 5; return; } // float32
+  uint32_t len = cborReadArg(p, pos, end);
+  if (maj == 2 || maj == 3) pos += len; // bytes/text: skip payload
+}
+
+static bool parseOpenPrintTag(const uint8_t *memory, uint16_t memLen) {
   const uint16_t mimeLength = sizeof(OPENPRINTTAG_MIME_TYPE);
-  if (memoryLength <= mimeLength + 4) return false;
-  for (uint16_t mimePos = 0; mimePos + mimeLength < memoryLength; mimePos++) {
-    if (memcmp(&memory[mimePos], OPENPRINTTAG_MIME_TYPE, mimeLength) != 0) continue;
-    const uint16_t payloadPos = mimePos + mimeLength;
-    const uint16_t payloadEnd = memoryLength;
-    for (uint16_t pos = payloadPos; pos + 2 < payloadEnd; pos++) {
-      if (memory[pos] != 0x13 || (memory[pos+1] & 0xE0) != 0x40) continue;
-      const uint8_t byteCount = memory[pos+1] & 0x1F;
-      if (pos + 2 + byteCount > payloadEnd) break;
-      color = "#";
-      for (uint8_t i = 0; i < byteCount && i < 3; i++) {
-        if (memory[pos+2+i] < 0x10) color += "0";
-        String hex = String(memory[pos+2+i], HEX); hex.toUpperCase(); color += hex;
-      }
-      return true;
+  if (memLen <= mimeLength + 4) return false;
+
+  uint16_t payloadStart = 0; bool found = false;
+  for (uint16_t i = 0; i + mimeLength < memLen; i++) {
+    if (memcmp(&memory[i], OPENPRINTTAG_MIME_TYPE, mimeLength) == 0) {
+      payloadStart = i + mimeLength; found = true; break;
     }
   }
-  return false;
+  if (!found) return false;
+
+  const uint8_t *p = memory + payloadStart;
+  uint16_t end = memLen - payloadStart;
+  uint16_t pos = 0;
+
+  // Skip 0xA0 (empty map header), then expect 0xB8 <count>
+  if (pos >= end || p[pos++] != 0xA0) return false;
+  if (pos + 1 >= end || p[pos++] != 0xB8) return false;
+  uint8_t count = p[pos++];
+
+  nfcData.optParsed = false;
+  for (uint8_t i = 0; i < count && pos < end; i++) {
+    if ((p[pos] >> 5) != 0) break; // key must be uint
+    uint16_t kp = pos;
+    uint32_t key = cborReadArg(p, kp, end); pos = kp;
+    if (pos >= end) break;
+    uint8_t valMaj = (p[pos] >> 5) & 0x7;
+
+    if (valMaj == 0) { // unsigned int
+      uint32_t val = cborReadArg(p, pos, end);
+      switch (key) {
+        case 9:  nfcData.optMatType   = (uint8_t)val;  break;
+        case 14: nfcData.optMdate     = (uint16_t)val; break;
+        case 16: nfcData.optNomWeight = (uint16_t)val; break;
+        case 17: nfcData.optActWeight = (uint16_t)val; break;
+        case 18: nfcData.optEmptyWeight=(uint16_t)val; break;
+        case 34: nfcData.optNozzleMin = (uint16_t)val; break;
+        case 35: nfcData.optNozzleMax = (uint16_t)val; break;
+        case 37: nfcData.optBedMin    = (uint16_t)val; break;
+        case 38: nfcData.optBedMax    = (uint16_t)val; break;
+        case 42: nfcData.optSpoolW    = (uint16_t)val; break;
+        case 43: nfcData.optSpoolOd   = (uint16_t)val; break;
+        case 44: nfcData.optSpoolId   = (uint16_t)val; break;
+        case 45: nfcData.optSpoolHole = (uint16_t)val; break;
+        case 53: nfcData.optNomLength = val;            break;
+        case 54: nfcData.optActLength = val;            break;
+        case 57: nfcData.optDryTemp   = (uint16_t)val; break;
+        case 58: nfcData.optDryTime   = (uint16_t)val; break;
+      }
+    } else if (valMaj == 3) { // text
+      String s = cborReadText(p, pos, end);
+      switch (key) {
+        case 10: nfcData.optMaterial = s; break;
+        case 11: nfcData.optBrand    = s; break;
+        case 55: nfcData.optCountry  = s; break;
+      }
+    } else if (valMaj == 2) { // bytes
+      uint32_t len = cborReadArg(p, pos, end);
+      if (key == 19 && len >= 3 && pos + (int)len <= end) {
+        nfcData.openPrintTagColor = "#";
+        for (uint8_t c = 0; c < 3; c++) {
+          if (p[pos+c] < 0x10) nfcData.openPrintTagColor += "0";
+          String h = String(p[pos+c], HEX); h.toUpperCase();
+          nfcData.openPrintTagColor += h;
+        }
+      }
+      pos += len;
+    } else if (valMaj == 7 && p[pos] == 0xFA) { // float32
+      float f = cborReadFloat32(p, pos, end);
+      switch (key) {
+        case 29: nfcData.optDensity  = f; break;
+        case 30: nfcData.optDiameter = f; break;
+      }
+    } else {
+      cborSkipValue(p, pos, end);
+    }
+  }
+  nfcData.optParsed = true;
+  return true;
 }
 
 static void setNfcTagData(const String &uidText, uint8_t uidLength) {
@@ -208,10 +304,9 @@ static bool readIso15693Tag() {
       nfcData.memoryDump += " | ";
       for (uint8_t i = 0; i < blockSize; i++) nfcData.memoryDump += printableAscii(blockData[i]);
     }
-    String parsedColor;
-    if (extractOpenPrintTagColor(tagMemory, tagMemoryLength, parsedColor)) {
-      nfcData.openPrintTagColor = parsedColor;
-      Serial.print("OpenPrintTag colore: "); Serial.println(nfcData.openPrintTagColor);
+    if (parseOpenPrintTag(tagMemory, tagMemoryLength)) {
+      Serial.print("OpenPrintTag parsed: "); Serial.print(nfcData.optBrand);
+      Serial.print(" / "); Serial.println(nfcData.optMaterial);
     } else { nfcData.openPrintTagColor = "#ffffff"; }
   } else { nfcData.memoryDump = "Memoria non identificata"; nfcData.openPrintTagColor = "#ffffff"; }
 
@@ -272,6 +367,15 @@ void clearNfcReadState() {
   nfcData.atqa = "--"; nfcData.sak = "--";
   nfcData.memoryInfo = "--"; nfcData.dataFormat = "--";
   nfcData.memoryDump = "--"; nfcData.openPrintTagColor = "#ffffff";
+  nfcData.optParsed = false; nfcData.optBrand = ""; nfcData.optMaterial = "";
+  nfcData.optMatType = 0; nfcData.optDryTemp = 0; nfcData.optDryTime = 0;
+  nfcData.optNozzleMin = 0; nfcData.optNozzleMax = 0;
+  nfcData.optBedMin = 0; nfcData.optBedMax = 0;
+  nfcData.optDensity = 0.0f; nfcData.optDiameter = 0.0f;
+  nfcData.optNomWeight = 0; nfcData.optActWeight = 0; nfcData.optEmptyWeight = 0;
+  nfcData.optNomLength = 0; nfcData.optActLength = 0;
+  nfcData.optSpoolW = 0; nfcData.optSpoolOd = 0; nfcData.optSpoolId = 0; nfcData.optSpoolHole = 0;
+  nfcData.optCountry = "";
   nfcData.lastStatus = "Pronto: appoggia il tag e premi Leggi tag";
 }
 
@@ -324,6 +428,31 @@ String nfcJson() {
   json += "\",\"dataFormat\":\"";    json += escapeJson(nfcData.dataFormat);
   json += "\",\"memoryDump\":\"";    json += escapeJson(nfcData.memoryDump);
   json += "\",\"openPrintTagColor\":\""; json += escapeJson(nfcData.openPrintTagColor);
-  json += "\"}";
+  json += "\",\"optParsed\":";  json += nfcData.optParsed ? "true" : "false";
+  if (nfcData.optParsed) {
+    json += ",\"optBrand\":\"";    json += escapeJson(nfcData.optBrand);
+    json += "\",\"optMaterial\":\""; json += escapeJson(nfcData.optMaterial);
+    json += "\",\"optMatType\":";  json += String(nfcData.optMatType);
+    json += ",\"optDryTemp\":";    json += String(nfcData.optDryTemp);
+    json += ",\"optDryTime\":";    json += String(nfcData.optDryTime);
+    json += ",\"optNozzleMin\":";  json += String(nfcData.optNozzleMin);
+    json += ",\"optNozzleMax\":";  json += String(nfcData.optNozzleMax);
+    json += ",\"optBedMin\":";     json += String(nfcData.optBedMin);
+    json += ",\"optBedMax\":";     json += String(nfcData.optBedMax);
+    json += ",\"optDensity\":";    json += String(nfcData.optDensity, 3);
+    json += ",\"optDiameter\":";   json += String(nfcData.optDiameter, 2);
+    json += ",\"optNomWeight\":";  json += String(nfcData.optNomWeight);
+    json += ",\"optActWeight\":";  json += String(nfcData.optActWeight);
+    json += ",\"optEmptyWeight\":";json += String(nfcData.optEmptyWeight);
+    json += ",\"optNomLength\":";  json += String(nfcData.optNomLength);
+    json += ",\"optActLength\":";  json += String(nfcData.optActLength);
+    json += ",\"optSpoolW\":";     json += String(nfcData.optSpoolW);
+    json += ",\"optSpoolOd\":";    json += String(nfcData.optSpoolOd);
+    json += ",\"optSpoolId\":";    json += String(nfcData.optSpoolId);
+    json += ",\"optSpoolHole\":";  json += String(nfcData.optSpoolHole);
+    json += ",\"optCountry\":\"";  json += escapeJson(nfcData.optCountry);
+    json += "\"";
+  }
+  json += "}";
   return json;
 }
