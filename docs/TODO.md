@@ -33,10 +33,7 @@ Lista di lavoro provvisoria, aggiornata mentre il progetto prende forma.
   - mostrare sempre l'indirizzo corretto raggiungibile;
   - valutare un riavvio guidato dopo il cambio modalita rete;
   - preparare la base per OTA.
-- Migliorare la pagina Lettura TAG:
-  - parsare tutti i campi OpenPrintTag letti dal tag, non solo il colore;
-  - ripopolare il form con brand, materiale, temperature, pesi, lunghezze e dimensioni bobina;
-  - distinguere meglio dati tag, stato lettore e debug PN5180.
+- ✅ Migliorare la pagina Lettura TAG: parser CBOR completo, form ripopolato automaticamente con tutti i campi OpenPrintTag dopo lettura.
 - Migliorare la pagina SetPoint:
   - completare i messaggi localizzati;
   - chiarire la differenza tra profilo consigliato, ciclo applicato e modifica manuale;
