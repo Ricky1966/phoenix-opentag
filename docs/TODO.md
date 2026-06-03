@@ -38,7 +38,7 @@ Lista di lavoro provvisoria, aggiornata mentre il progetto prende forma.
 - Migliorare la pagina SetPoint:
   - ✅ messaggi localizzati completati;
   - ✅ indicatore visivo: 5 stati (corrisponde al ciclo, diverso dal ciclo, sopra consigliato, OK, limite sicurezza) — identico in web UI e app Flutter;
-  - verificare profili personalizzati dopo riavvio.
+  - ✅ profili personalizzati sopravvivono al reboot ESP32: vivono su Pi5 (profiles.json), indipendenti dall'ESP32.
 
 ## Controllo termico
 
