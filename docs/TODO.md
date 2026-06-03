@@ -34,9 +34,10 @@ Lista di lavoro provvisoria, aggiornata mentre il progetto prende forma.
   - valutare un riavvio guidato dopo il cambio modalita rete;
   - preparare la base per OTA.
 - ✅ Migliorare la pagina Lettura TAG: parser CBOR completo, form ripopolato automaticamente con tutti i campi OpenPrintTag dopo lettura.
+- ✅ Settings: ricarica pagina automaticamente dopo salvataggio (500ms).
 - Migliorare la pagina SetPoint:
   - ✅ messaggi localizzati completati;
-  - ✅ indicatore visivo: 5 stati (corrisponde al ciclo, diverso dal ciclo, sopra consigliato, OK, limite sicurezza);
+  - ✅ indicatore visivo: 5 stati (corrisponde al ciclo, diverso dal ciclo, sopra consigliato, OK, limite sicurezza) — identico in web UI e app Flutter;
   - verificare profili personalizzati dopo riavvio.
 
 ## Controllo termico
