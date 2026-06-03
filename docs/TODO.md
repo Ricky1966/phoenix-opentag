@@ -27,10 +27,10 @@ Lista di lavoro provvisoria, aggiornata mentre il progetto prende forma.
 ## Firmware e portale
 
 - ✅ Traduzione completa IT/EN dei testi hardcoded: help box Home, TAG, SetPoint, Settings + label JS.
-- Rendere piu robusto il cambio lingua, evitando testi misti dopo azioni asincrone.
+- ✅ Testi misti dopo cambio lingua: stringhe JS dinamiche iniettate come oggetto T{} tradotto al render.
 - Rifinire la gestione WiFi:
   - verificare salvataggio credenziali da rete router e da AP;
-  - mostrare sempre l'indirizzo corretto raggiungibile;
+  - ✅ mostrare sempre l'indirizzo corretto: badge IP verde (LAN) o giallo (AP) in navbar;
   - valutare un riavvio guidato dopo il cambio modalita rete;
   - preparare la base per OTA.
 - ✅ Migliorare la pagina Lettura TAG: parser CBOR completo, form ripopolato automaticamente con tutti i campi OpenPrintTag dopo lettura.
