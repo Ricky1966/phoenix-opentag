@@ -31,8 +31,8 @@ Lista di lavoro provvisoria, aggiornata mentre il progetto prende forma.
 - Rifinire la gestione WiFi:
   - verificare salvataggio credenziali da rete router e da AP;
   - ✅ mostrare sempre l'indirizzo corretto: badge IP verde (LAN) o giallo (AP) in navbar;
-  - valutare un riavvio guidato dopo il cambio modalita rete;
-  - preparare la base per OTA.
+  - ✅ riavvio guidato: pulsante ↺ Riavvia ESP32 in Settings con confirm + ricarica automatica;
+  - ✅ OTA verificato: aggiornamento firmware via /update senza cavo USB.
 - ✅ Migliorare la pagina Lettura TAG: parser CBOR completo, form ripopolato automaticamente con tutti i campi OpenPrintTag dopo lettura.
 - ✅ Settings: ricarica pagina automaticamente dopo salvataggio (500ms).
 - Migliorare la pagina SetPoint:
