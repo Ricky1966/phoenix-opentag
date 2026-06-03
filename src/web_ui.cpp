@@ -281,12 +281,14 @@ String dashboardHtml(PageMode pageMode) {
   html += F("const pt=document.getElementById('profile-temp');if(pt&&document.activeElement!==pt&&!d.automatic)pt.value=d.setpoint.toFixed(1);");
   html += F("const hm=document.getElementById('home-cycle-minutes');if(hm&&document.activeElement!==hm&&!d.automatic&&!manualHomeEdit)hm.value=Math.round(d.cycleDurationSeconds/60);");
   html += F("const pm=document.getElementById('profile-minutes');if(pm&&document.activeElement!==pm&&!d.automatic)pm.value=Math.round(d.cycleDurationSeconds/60);");
-  html += F("const hp=document.getElementById('home-profile');if(hp)hp.disabled=d.automatic;}");
+  html += F("const hp=document.getElementById('home-profile');if(hp)hp.disabled=d.automatic;");
+  html += F("liveSetpoint=d.setpoint||0;liveDurMin=Math.round((d.cycleDurationSeconds||0)/60);liveRunning=!!d.cycleRunning;");
+  html += F("if(document.getElementById('profile-note'))syncSetpointWarning();}");
   html += F("function formatDuration(s){s=Number(s)||0;const h=Math.floor(s/3600);const m=Math.floor((s%3600)/60);const sec=s%60;return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0');}");
   html += F("async function refreshHeater(){try{const r=await fetch('/api/heater');updateHeater(await r.json());}catch(e){}}");
   html += F("async function setHeaterState(v){try{const r=await fetch('/api/heater/'+(v?'on':'off')+'?ts='+Date.now());updateHeater(await r.json());}catch(e){document.getElementById('heater-state').textContent='Errore';}}");
   html += F("async function setHeaterAuto(v){try{if(v&&!(await applyHomeProfile(false)))return;const r=await fetch('/api/heater/auto/'+(v?'on':'off')+'?ts='+Date.now());updateHeater(await r.json());}catch(e){const n=document.getElementById('home-profile-note');if(n){n.className='warn';n.textContent='Errore comando AUTO';}}}");
-  html += F("let manualHomeEdit=false,profiles=[];");
+  html += F("let manualHomeEdit=false,profiles=[],liveSetpoint=0,liveDurMin=0,liveRunning=false;");
   html += F("const safetyLimit="); html += String(BED_SAFETY_LIMIT_C, 1); html += F(";");
   html += F("function readNumber(id,fallback){const e=document.getElementById(id);if(!e)return fallback;const v=String(e.value).replace(',','.');const n=parseFloat(v);return Number.isFinite(n)?n:fallback;}");
   html += F("function profileById(id){return profiles.find(p=>p.id===id)||profiles[0];}");
@@ -295,8 +297,17 @@ String dashboardHtml(PageMode pageMode) {
   html += F("function buildProfileOptions(){['material-profile','home-profile'].forEach(id=>{const sel=document.getElementById(id);if(!sel)return;const prev=Number(sel.value)||0;sel.innerHTML='';profiles.forEach(p=>{const o=document.createElement('option');o.value=p.id;o.textContent=p.name+(p.custom?' ★':'');if(p.id===prev)o.selected=true;sel.appendChild(o);});});}");
   html += F("function buildProfileTable(){const tb=document.getElementById('profiles-tbody');if(!tb)return;tb.innerHTML='';profiles.forEach(p=>{const a=p.temperature<=safetyLimit;const d=p.custom?'<button class=\"danger\" style=\"margin-top:0;padding:4px 10px;font-size:13px\" onclick=\"deleteProfile('+p.id+')\">&#x2715;</button>':'';tb.innerHTML+='<tr><td>'+p.name+(p.custom?' ★':'')+'</td><td>'+p.temperature.toFixed(0)+' C</td><td>'+(p.minutes/60).toFixed(1)+' h</td><td class=\"'+(a?'ok':'warn')+'\">'+(a?'Applicabile':'Oltre limite')+'</td><td>'+d+'</td></tr>';});}");
   html += F("async function loadProfiles(){try{const r=await fetch('/api/profiles?ts='+Date.now());profiles=await r.json();buildProfileOptions();if(document.getElementById('material-profile'))fillProfile();fillHomeProfile();buildProfileTable();}catch(e){}}");
-  html += F("function syncSetpointWarning(){const p=selectedProfile();if(!p)return false;const v=readNumber('profile-temp',p.temperature);const n=document.getElementById('profile-note');");
-  html += F("if(v>safetyLimit){n.className='warn';n.textContent='Sopra il limite sicurezza attuale: non applicabile.';return false;}");
+  html += F("function syncSetpointWarning(){const p=selectedProfile();if(!p)return false;");
+  html += F("const v=readNumber('profile-temp',p.temperature);const m=readNumber('profile-minutes',p.minutes);");
+  html += F("const n=document.getElementById('profile-note');if(!n)return true;");
+  html += F("if(v>safetyLimit){n.className='warn';n.textContent='"); html += tr(TK_SETPOINT_HELP3); html += F("';return false;}");
+  // Matches running cycle (within tolerance: 0.5°C, 1 min)
+  html += F("if(liveRunning&&Math.abs(v-liveSetpoint)<0.5&&Math.abs(m-liveDurMin)<=1){");
+  html += F("n.className='ok';n.textContent='"); html += tr(TK_SP_CYCLE_MATCH); html += F(" ('+liveSetpoint.toFixed(1)+' C, '+liveDurMin+' min)';return true;}");
+  // Values differ from running cycle
+  html += F("if(liveRunning&&(Math.abs(v-liveSetpoint)>=0.5||Math.abs(m-liveDurMin)>1)){");
+  html += F("n.className='warn';n.textContent='"); html += tr(TK_SP_CYCLE_DIFFERS); html += F("';return true;}");
+  // Above profile recommendation
   html += F("if(v>p.temperature){n.className='warn';n.textContent='Temperatura superiore al profilo consigliato.';return true;}");
   html += F("n.className='ok';n.textContent='"); html += tr(TK_PROFILE_WITHIN_RECOMMENDED); html += F("';return true;}");
   html += F("function fillProfile(){const p=selectedProfile();if(!p)return;document.getElementById('profile-recommended').textContent=p.temperature.toFixed(1)+' C / '+Math.round(p.minutes/60)+' h';syncSetpointWarning();}");

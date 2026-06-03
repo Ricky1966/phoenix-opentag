@@ -135,6 +135,8 @@ static const __FlashStringHelper *textEn(TextKey key) {
     case TK_SETTINGS_HELP3: return F("<b>Hardware debug</b>: if enabled, shows PN5180 debug info on the Tag page.");
     case TK_SETTINGS_HELP4: return F("<b>OTA update</b>: open <b>/update</b> in the browser, upload the <code>.bin</code> file built by PlatformIO.");
     case TK_MANUAL_EDIT_ACTIVE: return F("Manual edit active: you can change temperature and duration.");
+    case TK_SP_CYCLE_MATCH:    return F("✓ Matches running cycle");
+    case TK_SP_CYCLE_DIFFERS:  return F("⚠ Different from running cycle — press Apply to update");
   }
   return F("");
 }
@@ -273,6 +275,8 @@ static const __FlashStringHelper *textLocal(TextKey key) {
     case TK_SETTINGS_HELP3: return F("<b>Debug hardware</b>: se visibile mostra le informazioni di debug PN5180 nella pagina Lettura TAG.");
     case TK_SETTINGS_HELP4: return F("<b>Aggiornamento OTA</b>: apri <b>/update</b> nel browser, carica il file <code>.bin</code> generato da PlatformIO.");
     case TK_MANUAL_EDIT_ACTIVE: return F("Modifica manuale attiva: puoi cambiare temperatura e durata.");
+    case TK_SP_CYCLE_MATCH:    return F("✓ Corrisponde al ciclo in corso");
+    case TK_SP_CYCLE_DIFFERS:  return F("⚠ Diverso dal ciclo in corso — premi Applica per aggiornare");
   }
 #endif
   return textEn(key);
