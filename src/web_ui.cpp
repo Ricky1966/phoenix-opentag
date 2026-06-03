@@ -345,6 +345,10 @@ String dashboardHtml(PageMode pageMode) {
   html += F("list.disabled=false;document.getElementById('wifi-ssid').value=d.networks[0].ssid;s.className='ok';s.textContent='"); html += tr(TK_SETTINGS_SCAN_FOUND); html += F(": '+d.networks.length;}");
   html += F("catch(e){s.className='warn';s.textContent='"); html += tr(TK_SETTINGS_SCAN_ERROR); html += F("';}}");
   html += F("function chooseWifiNetwork(){const list=document.getElementById('wifi-networks');if(list&&list.value)document.getElementById('wifi-ssid').value=list.value;}");
+  html += F("async function restartDevice(){if(!confirm('"); html += tr(TK_RESTART_CONFIRM); html += F("'))return;");
+  html += F("const s=document.getElementById('general-settings-status');if(s){s.className='status';s.textContent='"); html += tr(TK_RESTARTING); html += F("';}");
+  html += F("try{await fetch('/api/restart');}catch(e){}");
+  html += F("setTimeout(()=>location.reload(),5000);}");
   html += F("function setManualHomeEdit(v){manualHomeEdit=v;const t=document.getElementById('home-profile-temp');const m=document.getElementById('home-cycle-minutes');const b=document.getElementById('home-manual-edit');if(t)t.readOnly=!v;if(m)m.readOnly=!v;if(b)b.textContent=v?'"); html += tr(TK_LOCK_EDIT); html += F("':'"); html += tr(TK_MANUAL_EDIT); html += F("';}");
   html += F("function toggleManualHomeEdit(){setManualHomeEdit(!manualHomeEdit);const n=document.getElementById('home-profile-note');if(n&&manualHomeEdit){n.className='ok';n.textContent='"); html += tr(TK_MANUAL_EDIT_ACTIVE); html += F("';}}");
   html += F("function fillHomeProfile(){const p=selectedHomeProfile();if(!p)return;const n=document.getElementById('home-profile-note');");
@@ -579,6 +583,7 @@ String dashboardHtml(PageMode pageMode) {
   html += wifiClientConnected() ? tr(TK_SETTINGS_WIFI_CONNECTED) : tr(TK_SETTINGS_WIFI_NOT_CONNECTED); html += F(" "); html += wifiClientIp(); html += F("</span></div>");
   html += F("<button type=\"button\" class=\"secondary\" onclick=\"scanWifiNetworks()\">"); html += tr(TK_SETTINGS_WIFI_SCAN); html += F("</button>");
   html += F("<button type=\"button\" onclick=\"saveGeneralSettings()\">"); html += tr(TK_SETTINGS_SAVE); html += F("</button>");
+  html += F("<button type=\"button\" class=\"danger\" onclick=\"restartDevice()\">&#x21BA; "); html += tr(TK_RESTART); html += F("</button>");
   html += F("<p class=\"status\" id=\"general-settings-status\">"); html += tr(TK_SETTINGS_NOTE); html += F("</p>");
   // OTA section
   html += F("<div class=\"label\" style=\"margin-top:24px\">"); html += tr(TK_SETTINGS_OTA); html += F("</div>");
@@ -766,6 +771,14 @@ static void handleApiProfilesDelete() {
     result.isEmpty() ? "{\"error\":\"Pi5 non raggiungibile\"}" : result);
 }
 
+static void handleApiRestart() {
+  Serial.println("HTTP GET /api/restart — riavvio ESP32");
+  server.sendHeader("Cache-Control","no-store");
+  server.send(200,"application/json","{\"restarting\":true}");
+  delay(300);
+  ESP.restart();
+}
+
 static void handleApiPi5Test() {
   Serial.println("Pi5 test GET /health");
   String result = pi5ProxyRequest("GET", "/health");
@@ -807,6 +820,7 @@ void setupWebServer() {
   server.on("/api/profiles",        HTTP_POST,   handleApiProfilesPost);
   server.on("/api/profiles",        HTTP_DELETE, handleApiProfilesDelete);
   server.on("/api/pi5test",         HTTP_GET,    handleApiPi5Test);
+  server.on("/api/restart",         HTTP_GET,    handleApiRestart);
   server.onNotFound(handleNotFound);
 
   ElegantOTA.begin(&server);

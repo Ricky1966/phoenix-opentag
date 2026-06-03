@@ -137,6 +137,9 @@ static const __FlashStringHelper *textEn(TextKey key) {
     case TK_MANUAL_EDIT_ACTIVE: return F("Manual edit active: you can change temperature and duration.");
     case TK_SP_CYCLE_MATCH:    return F("✓ Matches running cycle");
     case TK_SP_CYCLE_DIFFERS:  return F("⚠ Different from running cycle — press Apply to update");
+    case TK_RESTART:           return F("Restart ESP32");
+    case TK_RESTART_CONFIRM:   return F("Restart ESP32? The page will reload automatically after ~5 seconds.");
+    case TK_RESTARTING:        return F("Restarting… page will reload shortly.");
   }
   return F("");
 }
@@ -277,6 +280,9 @@ static const __FlashStringHelper *textLocal(TextKey key) {
     case TK_MANUAL_EDIT_ACTIVE: return F("Modifica manuale attiva: puoi cambiare temperatura e durata.");
     case TK_SP_CYCLE_MATCH:    return F("✓ Corrisponde al ciclo in corso");
     case TK_SP_CYCLE_DIFFERS:  return F("⚠ Diverso dal ciclo in corso — premi Applica per aggiornare");
+    case TK_RESTART:           return F("Riavvia ESP32");
+    case TK_RESTART_CONFIRM:   return F("Riavviare l'ESP32? La pagina si ricaricherà automaticamente dopo ~5 secondi.");
+    case TK_RESTARTING:        return F("Riavvio in corso… la pagina si ricaricherà a breve.");
   }
 #endif
   return textEn(key);
