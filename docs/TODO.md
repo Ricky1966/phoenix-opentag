@@ -36,7 +36,7 @@ Lista di lavoro provvisoria, aggiornata mentre il progetto prende forma.
 - ✅ Migliorare la pagina Lettura TAG: parser CBOR completo, form ripopolato automaticamente con tutti i campi OpenPrintTag dopo lettura.
 - Migliorare la pagina SetPoint:
   - ✅ messaggi localizzati completati;
-  - chiarire la differenza tra profilo consigliato, ciclo applicato e modifica manuale (indicatore visivo);
+  - ✅ indicatore visivo: 5 stati (corrisponde al ciclo, diverso dal ciclo, sopra consigliato, OK, limite sicurezza);
   - verificare profili personalizzati dopo riavvio.
 
 ## Controllo termico
