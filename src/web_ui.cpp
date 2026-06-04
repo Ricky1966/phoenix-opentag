@@ -291,18 +291,12 @@ String dashboardHtml(PageMode pageMode) {
   html += F("let manualHomeEdit=false,profiles=[],liveSetpoint=0,liveDurMin=0,liveRunning=false;");
   html += F("const safetyLimit="); html += String(BED_SAFETY_LIMIT_C, 1); html += F(";");
   // Inject translated strings for JS dynamic content
-  html += F("const T={");
-  html += F("applicable:'");    html += tr(TK_APPLICABLE);    html += F("',");
-  html += F("overlimit:'");     html += tr(TK_OVER_LIMIT);    html += F("',");
-  html += F("profileMissing:'"); html += tr(TK_PROFILE_NAME); html += F(" mancante.',");
-  html += F("invalidInput:'Temperatura o durata non validi.',");
-  html += F("overSafety:'Temperatura oltre il limite sicurezza.',");
-  html += F("adding:'Aggiungo...',");
-  html += F("added:'Profilo aggiunto.',");
-  html += F("netError:'Errore rete.',");
-  html += F("confirmDelete:'Eliminare profilo \"',");
-  html += F("applied:'"); html += tr(TK_APPLICABLE); html += F("'");
-  html += F("};");
+  String appl = tr(TK_APPLICABLE);
+  String overlim = tr(TK_OVER_LIMIT);
+  String restartConf = tr(TK_RESTART_CONFIRM);
+  String restarting = tr(TK_RESTARTING);
+  html += F("const T={applicable:\""); html += appl; html += F("\",overlimit:\""); html += overlim;
+  html += F("\",restartConfirm:\""); html += restartConf; html += F("\",restarting:\""); html += restarting; html += F("\"};");
   html += F("function readNumber(id,fallback){const e=document.getElementById(id);if(!e)return fallback;const v=String(e.value).replace(',','.');const n=parseFloat(v);return Number.isFinite(n)?n:fallback;}");
   html += F("function profileById(id){return profiles.find(p=>p.id===id)||profiles[0];}");
   html += F("function selectedProfile(){return profileById(Number(document.getElementById('material-profile').value));}");
@@ -345,8 +339,8 @@ String dashboardHtml(PageMode pageMode) {
   html += F("list.disabled=false;document.getElementById('wifi-ssid').value=d.networks[0].ssid;s.className='ok';s.textContent='"); html += tr(TK_SETTINGS_SCAN_FOUND); html += F(": '+d.networks.length;}");
   html += F("catch(e){s.className='warn';s.textContent='"); html += tr(TK_SETTINGS_SCAN_ERROR); html += F("';}}");
   html += F("function chooseWifiNetwork(){const list=document.getElementById('wifi-networks');if(list&&list.value)document.getElementById('wifi-ssid').value=list.value;}");
-  html += F("async function restartDevice(){if(!confirm('"); html += tr(TK_RESTART_CONFIRM); html += F("'))return;");
-  html += F("const s=document.getElementById('general-settings-status');if(s){s.className='status';s.textContent='"); html += tr(TK_RESTARTING); html += F("';}");
+  html += F("async function restartDevice(){if(!confirm(T.restartConfirm))return;");
+  html += F("const s=document.getElementById('general-settings-status');if(s){s.className='status';s.textContent=T.restarting;}");
   html += F("try{await fetch('/api/restart');}catch(e){}");
   html += F("setTimeout(()=>location.reload(),5000);}");
   html += F("function setManualHomeEdit(v){manualHomeEdit=v;const t=document.getElementById('home-profile-temp');const m=document.getElementById('home-cycle-minutes');const b=document.getElementById('home-manual-edit');if(t)t.readOnly=!v;if(m)m.readOnly=!v;if(b)b.textContent=v?'"); html += tr(TK_LOCK_EDIT); html += F("':'"); html += tr(TK_MANUAL_EDIT); html += F("';}");
