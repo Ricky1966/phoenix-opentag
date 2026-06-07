@@ -1,6 +1,9 @@
 #pragma once
 #include <Arduino.h>
 
+// Firmware version
+#define FIRMWARE_VERSION "0.9.0"
+
 // I2C
 constexpr uint8_t I2C_SDA = 21;
 constexpr uint8_t I2C_SCL = 22;
