@@ -507,7 +507,7 @@ String dashboardHtml(PageMode pageMode) {
 
   // ── Slots panel
   html += F("<section class=\"card wide slots-panel\"><div class=\"label\">Slot Bobine (Essiccazione Differenziata)</div><div class=\"small\">");
-  html += F("<div id=\"slots-container\" style=\"display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-top:14px\"></div>");
+  html += F("<div id=\"slots-container\" style=\"display:grid;grid-template-columns:1fr;gap:14px;margin-top:14px\"></div>");
   html += F("<div style=\"margin-top:14px;text-align:center\">");
   html += F("<button type=\"button\" onclick=\"clearAllSlots()\">Cancella tutti slot</button>");
   html += F("</div>");
