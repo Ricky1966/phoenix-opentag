@@ -177,7 +177,7 @@ String dashboardHtml(PageMode pageMode) {
   html += F("nav{display:flex;gap:10px;margin:0 0 12px;align-items:center;flex-wrap:wrap}");
   html += F("nav a{border-radius:6px;background:#d9e2ec;color:#102a43;text-decoration:none;padding:10px 15px;font-weight:700;font-size:16px}");
   html += F("nav a.active{background:#0f766e;color:white}");
-  html += F(".tags .home-panel,.tags .heater-panel,.tags .setpoint-panel,.tags .settings-panel,.home .tag-panel,.home .heater-panel,.home .setpoint-panel,.home .settings-panel,.setpoint .home-panel,.setpoint .tag-panel,.setpoint .settings-panel,.settings .home-panel,.settings .tag-panel,.settings .heater-panel,.settings .setpoint-panel{display:none}");
+  html += F(".tags .home-panel,.tags .heater-panel,.tags .setpoint-panel,.tags .settings-panel,.tags .slots-panel,.slots .home-panel,.slots .tag-panel,.slots .heater-panel,.slots .setpoint-panel,.slots .settings-panel,.home .tag-panel,.home .heater-panel,.home .setpoint-panel,.home .settings-panel,.home .slots-panel,.setpoint .home-panel,.setpoint .tag-panel,.setpoint .settings-panel,.setpoint .slots-panel,.settings .home-panel,.settings .tag-panel,.settings .heater-panel,.settings .setpoint-panel,.settings .slots-panel{display:none}");
   html += F(".grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px}");
   html += F(".card{background:white;border:1px solid #d9e2ec;border-radius:8px;padding:20px}.wide{margin-top:14px}");
   html += F(".label{font-size:15px;color:#52606d;margin-bottom:10px;font-weight:600}.value{font-size:36px;font-weight:700;color:#102a43}");
@@ -361,6 +361,7 @@ String dashboardHtml(PageMode pageMode) {
   html += F("</script>");
 
   html += pageMode == PAGE_TAGS     ? F("</head><body class=\"tags\"><main>")     :
+          pageMode == PAGE_SLOTS    ? F("</head><body class=\"slots\"><main>")    :
           pageMode == PAGE_SETPOINT ? F("</head><body class=\"setpoint\"><main>") :
           pageMode == PAGE_SETTINGS ? F("</head><body class=\"settings\"><main>") :
                                       F("</head><body class=\"home\"><main>");
@@ -372,6 +373,7 @@ String dashboardHtml(PageMode pageMode) {
   html += F("<nav>");
   html += F("<a href=\"/temperature\" title=\""); html += tr(TK_NAV_HOME_TIP); html += F("\""); html += pageMode == PAGE_HOME ? F(" class=\"active\">") : F(">"); html += tr(TK_NAV_HOME); html += F("</a>");
   html += F("<a href=\"/tags\" title=\""); html += tr(TK_NAV_TAG_TIP); html += F("\""); html += pageMode == PAGE_TAGS ? F(" class=\"active\">") : F(">"); html += tr(TK_NAV_TAG); html += F("</a>");
+  html += F("<a href=\"/slots\" title=\"Gestione slot bobine\""); html += pageMode == PAGE_SLOTS ? F(" class=\"active\">") : F(">"); html += F("Slot Bobine</a>");
   html += F("<a href=\"/setpoint\" title=\""); html += tr(TK_NAV_SETPOINT_TIP); html += F("\""); html += pageMode == PAGE_SETPOINT ? F(" class=\"active\">") : F(">"); html += tr(TK_NAV_SETPOINT); html += F("</a>");
   html += F("<a href=\"/settings\" title=\""); html += tr(TK_NAV_SETTINGS_TIP); html += F("\""); html += pageMode == PAGE_SETTINGS ? F(" class=\"active\">") : F(">"); html += tr(TK_NAV_SETTINGS); html += F("</a>");
   html += F("<span style=\"margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap\">");
@@ -503,6 +505,35 @@ String dashboardHtml(PageMode pageMode) {
   html += F("<button id=\"write-tag\" data-label=\""); html += tr(TK_TAG_WRITE); html += F("\" onclick=\"writeOpenPrintTag()\">"); html += tr(TK_TAG_WRITE); html += F("</button>");
   html += F("</div></div></section>");
 
+  // ── Slots panel
+  html += F("<section class=\"card wide slots-panel\"><div class=\"label\">Slot Bobine (Essiccazione Differenziata)</div><div class=\"small\">");
+  html += F("<div id=\"slots-container\" style=\"display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-top:14px\"></div>");
+  html += F("<div style=\"margin-top:14px;text-align:center\">");
+  html += F("<button type=\"button\" onclick=\"clearAllSlots()\">Cancella tutti slot</button>");
+  html += F("</div>");
+  html += F("</div></section>");
+
+  html += F("<script>");
+  html += F("async function refreshSlots(){try{const r=await fetch('/api/slots');const d=await r.json();const container=document.getElementById('slots-container');if(!container)return;");
+  html += F("container.innerHTML='';for(let i=0;i<d.slots.length;i++){const s=d.slots[i];const card=document.createElement('div');card.className='card';");
+  html += F("let html='<div class=\"label\">Slot '+s.index+'</div>';");
+  html += F("if(!s.occupied){html+='<div style=\"color:#52606d;padding:20px;text-align:center\">Vuoto</div>';}");
+  html += F("else{html+='<div style=\"margin-bottom:12px\"><strong>'+s.brand+' / '+s.material+'</strong><br><small>UID: '+s.uid+'</small></div>';");
+  html += F("html+='<div style=\"display:grid;gap:6px;margin-bottom:12px\"><div><small>Temperatura:</small> <strong>'+s.dryingTemp+' °C</strong></div><div><small>Durata:</small> <strong>'+s.dryingMinutes+' min</strong></div>';");
+  html += F("if(s.cycleRunning){html+='<div><small>Ciclo in corso:</small> <span style=\"color:#0f766e;font-weight:700\">'+formatDuration(s.cycleRemainingSeconds)+'</span></div>';}");
+  html += F("html+='</div>';");
+  html += F("html+='<div style=\"display:grid;grid-template-columns:1fr 1fr;gap:8px\"><input type=\"number\" min=\"20\" max=\"90\" value=\"'+s.dryingTemp+'\" id=\"temp-slot-'+i+'\" placeholder=\"Temp\"><input type=\"number\" min=\"1\" max=\"9999\" value=\"'+s.dryingMinutes+'\" id=\"min-slot-'+i+'\" placeholder=\"Min\">';");
+  html += F("html+='</div>';");
+  html += F("html+='<button style=\"width:100%;margin-top:8px\" onclick=\"updateSlotDrying('+i+')\">Aggiorna tempi</button>';}");
+  html += F("card.innerHTML=html;container.appendChild(card);}");
+  html += F("}catch(e){console.log('Error refreshing slots:',e);}");
+  html += F("}");
+  html += F("async function updateSlotDrying(slot){const temp=document.getElementById('temp-slot-'+slot).value;const min=document.getElementById('min-slot-'+slot).value;");
+  html += F("try{const r=await fetch('/api/slot/drying-time?slot='+slot+'&temperature='+temp+'&minutes='+min);if(r.ok){refreshSlots();}}catch(e){}}");
+  html += F("async function clearAllSlots(){if(!confirm('Cancellare tutti gli slot?'))return;try{const r=await fetch('/api/slots/clear-all',{method:'POST'});if(r.ok){refreshSlots();}}catch(e){}}");
+  html += F("setInterval(refreshSlots,2000);window.addEventListener('load',refreshSlots);");
+  html += F("</script>");
+
   // ── Heater panel
   html += F("<section class=\"card wide heater-panel\"><div class=\"label\">"); html += tr(TK_HEATER); html += F("</div><div class=\"small\">");
   html += F("<div class=\"heater-summary\">");
@@ -580,8 +611,21 @@ String dashboardHtml(PageMode pageMode) {
   html += F("<button type=\"button\" class=\"danger\" onclick=\"restartDevice()\">&#x21BA; "); html += tr(TK_RESTART); html += F("</button>");
   html += F("<p class=\"status\" id=\"general-settings-status\">"); html += tr(TK_SETTINGS_NOTE); html += F("</p>");
   // OTA section
-  html += F("<div class=\"label\" style=\"margin-top:24px\">"); html += tr(TK_SETTINGS_OTA); html += F("</div>");
+  html += F("<div class=\"label\" style=\"margin-top:24px\">Firmware</div>");
+  html += F("<div class=\"status\" style=\"margin-bottom:12px\">Versione: <strong id=\"fw-version\">"); html += FIRMWARE_VERSION; html += F("</strong> <span id=\"fw-status\" style=\"margin-left:8px\"></span></div>");
   html += F("<p class=\"status\">"); html += tr(TK_SETTINGS_OTA_BTN); html += F(": <a href=\"/update\" target=\"_blank\" style=\"color:#0f766e;font-weight:700\">/update</a></p>");
+  html += F("<div class=\"label\" style=\"margin-top:24px\">"); html += tr(TK_SETTINGS_OTA); html += F("</div>");
+  html += F("<p class=\"status\">Aggiornamento OTA disponibile su: <a href=\"/update\" target=\"_blank\" style=\"color:#0f766e;font-weight:700\">/update</a></p>");
+  html += F("<script>");
+  html += F("async function checkFirmwareUpdate(){try{const r=await fetch('/api/version');const d=await r.json();");
+  html += F("const gh=await fetch('https://api.github.com/repos/Ricky1966/Odin/releases/latest');const gr=await gh.json();");
+  html += F("const latest=gr.tag_name?.replace('v','');const current=d.version;");
+  html += F("const status=document.getElementById('fw-status');if(latest&&latest!==current){");
+  html += F("status.innerHTML='<span style=\"color:#b91c1c;font-weight:700\">Aggiornamento: '+latest+'</span>';}");
+  html += F("else{status.innerHTML='<span style=\"color:#0f766e\">✓ Aggiornato</span>';}");
+  html += F("}catch(e){console.log('Update check failed',e);}");
+  html += F("document.addEventListener('DOMContentLoaded',checkFirmwareUpdate);");
+  html += F("</script>");
   html += F("</div></section>");
   html += F("</main></body></html>");
   return html;
@@ -592,6 +636,7 @@ String dashboardHtml(PageMode pageMode) {
 static void handleRoot()            { Serial.println("HTTP GET /");           server.sendHeader("Cache-Control","no-store"); server.send(200,"text/html",dashboardHtml(PAGE_HOME)); }
 static void handleTemperaturePage() { Serial.println("HTTP GET /temperature"); server.sendHeader("Cache-Control","no-store"); server.send(200,"text/html",dashboardHtml(PAGE_HOME)); }
 static void handleTagsPage()        { Serial.println("HTTP GET /tags");        server.sendHeader("Cache-Control","no-store"); server.send(200,"text/html",dashboardHtml(PAGE_TAGS)); }
+static void handleSlotsPage()       { Serial.println("HTTP GET /slots");       server.sendHeader("Cache-Control","no-store"); server.send(200,"text/html",dashboardHtml(PAGE_SLOTS)); }
 static void handleSetpointPage()    { Serial.println("HTTP GET /setpoint");    server.sendHeader("Cache-Control","no-store"); server.send(200,"text/html",dashboardHtml(PAGE_SETPOINT)); }
 static void handleSettingsPage()    { Serial.println("HTTP GET /settings");    server.sendHeader("Cache-Control","no-store"); server.send(200,"text/html",dashboardHtml(PAGE_SETTINGS)); }
 
@@ -787,12 +832,69 @@ static void handleNotFound() {
   server.send(404,"text/plain","Not found");
 }
 
+static void handleApiVersion() {
+  String json = "{\"version\":\""; json += FIRMWARE_VERSION;
+  json += "\",\"repo\":\"https://github.com/Ricky1966/Odin\"}";
+  server.sendHeader("Cache-Control","no-store");
+  server.send(200,"application/json",json);
+}
+
+static void handleApiSlots() {
+  Serial.println("HTTP GET /api/slots");
+  server.sendHeader("Cache-Control","no-store");
+  server.send(200,"application/json",slotJson());
+}
+
+static void handleApiSlotDryingTime() {
+  String slotStr = server.arg("slot");
+  if (slotStr.isEmpty()) { server.send(400,"application/json","{\"error\":\"slot mancante\"}"); return; }
+  uint8_t slot = slotStr.toInt();
+  if (slot >= DryerSlots::NUM_SLOTS) { server.send(400,"application/json","{\"error\":\"slot non valido\"}"); return; }
+
+  if (server.method() == HTTP_GET) {
+    Serial.print("HTTP GET /api/slot/drying-time?slot="); Serial.println(slot);
+    String json = "{\"slot\":"; json += String(slot);
+    json += ",\"dryingTemp\":"; json += String(dryerSlots.dryingTemp[slot]);
+    json += ",\"dryingMinutes\":"; json += String(dryerSlots.dryingMinutes[slot]);
+    json += "}";
+    server.sendHeader("Cache-Control","no-store");
+    server.send(200,"application/json",json);
+  } else if (server.method() == HTTP_POST || server.method() == HTTP_GET) {
+    Serial.print("HTTP /api/slot/drying-time?slot="); Serial.println(slot);
+    uint16_t temp = constrain(server.arg("temperature").toInt(), 20, BED_SAFETY_LIMIT_C);
+    uint16_t minutes = constrain(server.arg("minutes").toInt(), 1, 9999);
+    dryerSlots.dryingTemp[slot] = temp;
+    dryerSlots.dryingMinutes[slot] = minutes;
+    String json = "{\"slot\":"; json += String(slot);
+    json += ",\"dryingTemp\":"; json += String(dryerSlots.dryingTemp[slot]);
+    json += ",\"dryingMinutes\":"; json += String(dryerSlots.dryingMinutes[slot]);
+    json += "}";
+    server.sendHeader("Cache-Control","no-store");
+    server.send(200,"application/json",json);
+  }
+}
+
+static void handleApiSlotClearAll() {
+  Serial.println("HTTP POST /api/slots/clear-all");
+  for (uint8_t i = 0; i < DryerSlots::NUM_SLOTS; i++) {
+    dryerSlots.slotOccupied[i] = false;
+    dryerSlots.cycleRunning[i] = false;
+    dryerSlots.cycleEndTime[i] = 0;
+    dryerSlots.dryingTemp[i] = 45;
+    dryerSlots.dryingMinutes[i] = 360;
+  }
+  dryerSlots.activeSlotCount = 0;
+  server.sendHeader("Cache-Control","no-store");
+  server.send(200,"application/json",slotJson());
+}
+
 // ── Server setup ──────────────────────────────────────────────────────────────
 
 void setupWebServer() {
   server.on("/",            handleRoot);
   server.on("/temperature", handleTemperaturePage);
   server.on("/tags",        handleTagsPage);
+  server.on("/slots",       handleSlotsPage);
   server.on("/setpoint",    handleSetpointPage);
   server.on("/settings",    handleSettingsPage);
   server.on("/api/bme280",                  handleApiBme280);
@@ -813,8 +915,13 @@ void setupWebServer() {
   server.on("/api/profiles",        HTTP_GET,    handleApiProfilesGet);
   server.on("/api/profiles",        HTTP_POST,   handleApiProfilesPost);
   server.on("/api/profiles",        HTTP_DELETE, handleApiProfilesDelete);
+  server.on("/api/slots",           HTTP_GET,    handleApiSlots);
+  server.on("/api/slot/drying-time",HTTP_GET,    handleApiSlotDryingTime);
+  server.on("/api/slot/drying-time",HTTP_POST,   handleApiSlotDryingTime);
+  server.on("/api/slots/clear-all", HTTP_POST,   handleApiSlotClearAll);
   server.on("/api/pi5test",         HTTP_GET,    handleApiPi5Test);
   server.on("/api/restart",         HTTP_GET,    handleApiRestart);
+  server.on("/api/version",         HTTP_GET,    handleApiVersion);
   server.onNotFound(handleNotFound);
 
   ElegantOTA.begin(&server);

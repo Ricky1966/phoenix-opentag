@@ -6,6 +6,7 @@
 
 static PN5180ISO14443 nfc14443(PN5180_NSS, PN5180_BUSY, PN5180_RST);
 static PN5180ISO15693 nfc15693(PN5180_NSS, PN5180_BUSY, PN5180_RST);
+DryerSlots dryerSlots;
 NfcData nfcData;
 
 static constexpr uint8_t OPENPRINTTAG_MIME_TYPE[] = {
@@ -339,7 +340,20 @@ void readNfcTag() {
   if (!nfcData.readerPresent) { nfcData.lastStatus = "PN5180 non pronto"; return; }
 
   nfcData.lastStatus = "Lettura in corso";
-  if (readIso15693Tag()) return;
+  if (readIso15693Tag()) {
+    int8_t freeSlot = findFreeSlot();
+    if (freeSlot >= 0) {
+      dryerSlots.bobina[freeSlot] = nfcData;
+      dryerSlots.slotOccupied[freeSlot] = true;
+      dryerSlots.activeSlotCount++;
+      if (nfcData.optParsed) {
+        dryerSlots.dryingTemp[freeSlot] = nfcData.optDryTemp > 0 ? nfcData.optDryTemp : 45;
+        dryerSlots.dryingMinutes[freeSlot] = nfcData.optDryTime > 0 ? nfcData.optDryTime : 360;
+      }
+      Serial.print("Tag assegnato allo slot "); Serial.println(freeSlot);
+    }
+    return;
+  }
 
   resetNfcRf();
   uint8_t uid[10]={0}; uint8_t uidLength = 0;
@@ -453,6 +467,38 @@ String nfcJson() {
     json += ",\"optCountry\":\"";  json += escapeJson(nfcData.optCountry);
     json += "\"";
   }
+  json += "}";
+  return json;
+}
+
+int8_t findFreeSlot() {
+  for (uint8_t i = 0; i < DryerSlots::NUM_SLOTS; i++) {
+    if (!dryerSlots.slotOccupied[i]) return i;
+  }
+  return -1;
+}
+
+String slotJson() {
+  String json = "{\"slots\":[";
+  for (uint8_t i = 0; i < DryerSlots::NUM_SLOTS; i++) {
+    if (i > 0) json += ",";
+    json += "{\"index\":"; json += String(i);
+    json += ",\"occupied\":"; json += dryerSlots.slotOccupied[i] ? "true" : "false";
+    json += ",\"dryingTemp\":"; json += String(dryerSlots.dryingTemp[i]);
+    json += ",\"dryingMinutes\":"; json += String(dryerSlots.dryingMinutes[i]);
+    json += ",\"cycleRunning\":"; json += dryerSlots.cycleRunning[i] ? "true" : "false";
+    json += ",\"material\":\""; json += escapeJson(dryerSlots.bobina[i].optMaterial);
+    json += "\",\"brand\":\""; json += escapeJson(dryerSlots.bobina[i].optBrand);
+    json += "\",\"uid\":\""; json += escapeJson(dryerSlots.bobina[i].lastUid);
+    json += "\"";
+    if (dryerSlots.cycleRunning[i] && dryerSlots.cycleEndTime[i] > 0) {
+      uint32_t now = millis();
+      int32_t remaining = (int32_t)(dryerSlots.cycleEndTime[i] - now) / 1000;
+      json += ",\"cycleRemainingSeconds\":"; json += String(max(0L, (long)remaining));
+    }
+    json += "}";
+  }
+  json += "],\"freeSlot\":"; json += String(findFreeSlot());
   json += "}";
   return json;
 }

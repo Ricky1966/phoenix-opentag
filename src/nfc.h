@@ -1,6 +1,7 @@
 #pragma once
 #include "config.h"
 
+extern DryerSlots dryerSlots;
 extern NfcData nfcData;
 
 void   setupNfcReader();
@@ -15,3 +16,5 @@ bool   writeOpenPrintTag(uint8_t materialType, const String &brandName, const St
                          const String &country, uint16_t spoolWidth, uint16_t spoolOuterDiameter,
                          uint16_t spoolInnerDiameter, uint16_t spoolHoleDiameter);
 String nfcJson();
+int8_t findFreeSlot();
+String slotJson();

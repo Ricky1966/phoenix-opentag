@@ -2,7 +2,7 @@
 #include "config.h"
 #include <WebServer.h>
 
-enum PageMode : uint8_t { PAGE_HOME, PAGE_TAGS, PAGE_SETPOINT, PAGE_SETTINGS };
+enum PageMode : uint8_t { PAGE_HOME, PAGE_TAGS, PAGE_SETPOINT, PAGE_SETTINGS, PAGE_SLOTS };
 
 extern WebServer server;
 

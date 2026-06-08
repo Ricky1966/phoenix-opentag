@@ -126,6 +126,18 @@ struct NfcData {
   bool readArmed         = true;
 };
 
+struct DryerSlots {
+  static constexpr uint8_t NUM_SLOTS = 4;
+  NfcData bobina[NUM_SLOTS];           // 4 bobine
+  bool slotOccupied[NUM_SLOTS] = {};   // slot occupato?
+  uint32_t cycleStart[NUM_SLOTS] = {}; // quando inizia ciclo
+  uint16_t dryingTemp[NUM_SLOTS] = {45, 45, 45, 45};     // temp essiccazione per slot (°C)
+  uint16_t dryingMinutes[NUM_SLOTS] = {360, 360, 360, 360}; // durata essiccazione per slot (minuti)
+  bool cycleRunning[NUM_SLOTS] = {};   // ciclo in corso per questo slot?
+  uint32_t cycleEndTime[NUM_SLOTS] = {}; // timestamp fine ciclo
+  uint8_t activeSlotCount = 0;         // quanti slot hanno bobina
+};
+
 struct HeaterControlData {
   bool   automatic      = false;
   float  setpoint       = DEFAULT_BED_SETPOINT_C;
