@@ -1,4 +1,5 @@
 """ODIN Backend - FastAPI proxy su Raspberry Pi 5"""
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import logging
@@ -12,10 +13,16 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    await api.shutdown()
+
 app = FastAPI(
     title="ODIN Backend",
     description="Proxy FastAPI per ODIN dryer (Pi5 → ESP32)",
-    version="0.1.0"
+    version="0.1.0",
+    lifespan=lifespan
 )
 
 # CORS per APK mobile via Tailscale
@@ -43,11 +50,6 @@ async def root():
         "version": "0.1.0",
         "esp32_url": settings.esp32_url
     }
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup on shutdown"""
-    await api.shutdown()
 
 if __name__ == "__main__":
     import uvicorn
