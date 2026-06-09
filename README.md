@@ -10,8 +10,10 @@ ODIN integra lettura/scrittura tag NFC OpenPrintTag, rilevamento colore OPT4048,
 
 | Repository | Descrizione |
 |---|---|
-| **[Ricky1966/Odin](https://github.com/Ricky1966/Odin)** ← questo | Firmware ESP32, PCB KiCad, backend Pi5, documentazione |
-| **[Ricky1966/odin-mobile](https://github.com/Ricky1966/odin-mobile)** | App mobile Flutter (Android/iOS) |
+| **[Ricky1966/Odin-ESP32](https://github.com/Ricky1966/Odin-ESP32)** ← questo | Firmware ESP32, PCB KiCad, documentazione |
+| **[Ricky1966/Odin-App](https://github.com/Ricky1966/Odin-App)** | App mobile Flutter (Android/iOS) |
+| **[Ricky1966/Odin-Cloud](https://github.com/Ricky1966/Odin-Cloud)** | Backend FastAPI su Raspberry Pi 5 |
+| **[Ricky1966/Odin-Releases](https://github.com/Ricky1966/Odin-Releases)** | Release artifacts (firmware.bin, app.apk) |
 
 ---
 

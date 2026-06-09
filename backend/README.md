@@ -6,6 +6,17 @@ Backend proxy FastAPI che funge da middleware tra APK mobile (via Tailscale) e f
 APK (via Tailscale) → Pi5 Backend (8000) → ESP32 (192.168.4.1)
 ```
 
+## Repository correlati
+
+| Repository | Descrizione |
+|---|---|
+| **[Ricky1966/Odin-Cloud](https://github.com/Ricky1966/Odin-Cloud)** ← questo | Backend FastAPI su Raspberry Pi 5 |
+| **[Ricky1966/Odin-ESP32](https://github.com/Ricky1966/Odin-ESP32)** | Firmware ESP32, PCB KiCad, documentazione |
+| **[Ricky1966/Odin-App](https://github.com/Ricky1966/Odin-App)** | App mobile Flutter (Android/iOS) |
+| **[Ricky1966/Odin-Releases](https://github.com/Ricky1966/Odin-Releases)** | Release artifacts (firmware.bin, app.apk) |
+
+---
+
 ## Setup su Raspberry Pi 5
 
 ### 1. Clone il repository
