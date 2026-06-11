@@ -2,7 +2,7 @@
 #include <Arduino.h>
 
 // Firmware version
-#define FIRMWARE_VERSION "0.9.0"
+#define FIRMWARE_VERSION "0.9.1"
 
 // I2C
 constexpr uint8_t I2C_SDA = 21;
