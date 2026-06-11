@@ -7,6 +7,7 @@
 #include "heater.h"
 #include "nfc.h"
 #include "log.h"
+#include "translations.h"
 #include <WiFi.h>
 #include <ElegantOTA.h>
 #include <HTTPClient.h>
@@ -20,7 +21,7 @@ static String pi5ProxyRequest(const String& method, const String& path) {
   WiFiClient wifiClient;
   HTTPClient http;
   String url = "http://";
-  url += PI5_LOCAL_IP; url += ":"; url += String(PI5_LOCAL_PORT); url += path;
+  url += PI5_LOCAL_IP; url += ":"; url += String(PI5_PORT); url += path;
   Serial.print("pi5Proxy "); Serial.print(method); Serial.print(" "); Serial.println(url);
   if (!http.begin(wifiClient, url)) {
     Serial.println("pi5Proxy: begin() failed");
@@ -109,7 +110,7 @@ static void checkPi5Reachable() {
   lastCheckMs = millis();
   pi5CheckDone = true;
   WiFiClient client;
-  pi5Reachable = client.connect(PI5_LOCAL_IP, PI5_LOCAL_PORT, 500);
+  pi5Reachable = client.connect(PI5_LOCAL_IP, PI5_PORT, 500);
   if (pi5Reachable) client.stop();
 }
 
