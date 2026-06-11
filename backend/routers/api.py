@@ -5,9 +5,14 @@ import httpx
 from typing import Any, Optional
 from config import settings
 import logging
+import json
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["api"])
+
+# Path to translations directory
+TRANSLATIONS_DIR = Path(__file__).parent.parent / "translations"
 
 # Client per comunicare con ESP32
 esp32_client = None
@@ -54,6 +59,37 @@ async def _proxy_post(endpoint: str, data: Optional[dict] = None, params: Option
     except Exception as e:
         logger.error(f"Unexpected error: {e}")
         raise HTTPException(status_code=500, detail="Errore interno")
+
+# ──────────────────────────────────────────────────────────
+# TRANSLATIONS ENDPOINTS
+# ──────────────────────────────────────────────────────────
+
+@router.get("/translations/{language}")
+async def get_translations(language: str):
+    """Ritorna file traduzioni per lingua (fallback: EN)"""
+    lang_file = TRANSLATIONS_DIR / f"{language}.json"
+
+    if not lang_file.exists():
+        logger.warning(f"Language {language} not found, falling back to EN")
+        lang_file = TRANSLATIONS_DIR / "en.json"
+
+    try:
+        with open(lang_file, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        logger.error(f"Error loading translations for {language}: {e}")
+        raise HTTPException(status_code=500, detail="Errore caricamento traduzioni")
+
+@router.get("/translations")
+async def list_translations():
+    """Lista lingue disponibili"""
+    try:
+        files = list(TRANSLATIONS_DIR.glob("*.json"))
+        languages = [f.stem for f in files]
+        return {"available_languages": sorted(languages)}
+    except Exception as e:
+        logger.error(f"Error listing translations: {e}")
+        raise HTTPException(status_code=500, detail="Errore listaggio lingue")
 
 # ──────────────────────────────────────────────────────────
 # SLOT ENDPOINTS

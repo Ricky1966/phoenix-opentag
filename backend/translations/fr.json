@@ -1,0 +1,115 @@
+{
+  "metadata": {
+    "language": "fr",
+    "version": "1.0",
+    "fallback": "en"
+  },
+  "nav": {
+    "home": "Accueil",
+    "setpoint": "SetPoint",
+    "nfc": "NFC",
+    "history": "Historique",
+    "settings": "Paramètres"
+  },
+  "home": {
+    "camera": "Chambre",
+    "heater": "Chauffage",
+    "temperature": "Température",
+    "humidity": "Humidité",
+    "bed_ntc": "Plateau NTC",
+    "countdown": "Compte à rebours",
+    "color": "Couleur",
+    "drying": "Séchage"
+  },
+  "esp32": {
+    "status_heating": "Chauffage en cours...",
+    "status_drying": "Séchage en cours",
+    "status_idle": "Arrêt",
+    "error_overtemp": "Température dépassée!",
+    "error_sensor": "Erreur capteur",
+    "slot_occupied": "Slot occupé",
+    "slot_empty": "Slot vide",
+    "slot_free": "Slot libre",
+    "nozzle": "Buse",
+    "bed": "Plateau",
+    "diameter": "Diamètre",
+    "density": "Densité",
+    "nom_weight": "Poids nominal",
+    "act_weight": "Poids actuel"
+  },
+  "setpoint": {
+    "title": "SetPoint",
+    "apply": "Appliquer setpoint",
+    "heater_section": "Chauffage",
+    "profile_section": "Profil matériau",
+    "material_label": "Matériau",
+    "temp_label": "Setpoint °C",
+    "duration_label": "Durée min",
+    "apply_ok": "Appliqué: {temp}°C pour {min} min",
+    "invalid_input": "Température ou durée invalide",
+    "over_limit": "Dépasse la limite de sécurité ({limit}°C)",
+    "safety_info": "Limite de sécurité: {limit}°C. Le cycle s'arrête automatiquement lorsque la limite est atteinte ou que le compte à rebours se termine.",
+    "cycle_match": "Correspond au cycle en cours",
+    "cycle_differs": "⚠ Différent du cycle en cours — appuyez sur Appliquer pour mettre à jour",
+    "above_recommended": "Température supérieure aux recommandations du profil",
+    "within_recommended": "✓ Dans les valeurs recommandées"
+  },
+  "nfc": {
+    "title": "Étiquette NFC",
+    "scan": "Numériser l'étiquette NFC",
+    "cancel": "Annuler la numérisation",
+    "new_scan": "Nouvelle numérisation",
+    "waiting": "Tenez la bobine près du téléphone...",
+    "unavailable": "NFC non disponible sur cet appareil.",
+    "not_open_print_tag": "Étiquette détectée (UID: {uid}) mais pas une OpenPrintTag.",
+    "apply": "Appliquer: {temp}°C pour {time} min",
+    "applied": "Appliqué: {temp}°C pour {time} min"
+  },
+  "history": {
+    "title": "Historique",
+    "6h": "6 h",
+    "24h": "24 h",
+    "2d": "2 j",
+    "7d": "7 j",
+    "no_data": "Aucune donnée disponible.\nLe journal est enregistré toutes les 2 minutes.",
+    "samples": "{count} échantillons — dernières {hours} h",
+    "chart_temp": "Température (°C)",
+    "chart_hum": "Humidité (%)",
+    "chart_bed": "Plateau NTC (°C)",
+    "chart_heater": "Sortie chauffage (%)"
+  },
+  "tailscale": {
+    "active": "Connexion distante via Tailscale — désactivez le VPN pour revenir au réseau local.",
+    "rpi_unreachable": "Raspberry inaccessible — allumez-le!",
+    "ok_rpi_down": "⚡ Tailscale actif mais Raspberry inaccessible — allumez-le!",
+    "off": "🔒 Tailscale inactif — activez-le pour vous connecter.",
+    "check": "Vérifiez que Tailscale est actif et le Raspberry allumé"
+  },
+  "settings": {
+    "title": "Paramètres",
+    "server_section": "Serveur ODIN",
+    "url_label": "URL de base",
+    "url_hint": "http://IP:port",
+    "tailscale": "Tailscale",
+    "lan": "LAN",
+    "test": "Test",
+    "save": "Enregistrer",
+    "saved": "Enregistré",
+    "saved_msg": "Enregistré — connexion mise à jour.",
+    "testing": "Test en cours...",
+    "test_ok": "✓ Accessible",
+    "test_fail": "✗ Inaccessible",
+    "test_error": "Erreur: {error}",
+    "language": "Langue",
+    "language_label": "Langue actuelle",
+    "language_notice": "Redémarrez l'app pour appliquer le changement de langue",
+    "info_title": "ℹ️  Comment fonctionne la connexion",
+    "info_body": "• Tailscale (100.x.x.x) — accès de n'importe quel réseau, nécessite VPN actif.\n• LAN (192.168.x.x) — réseau domestique seulement, plus rapide, pas de VPN."
+  },
+  "errors": {
+    "connection_failed": "Connexion échouée",
+    "timeout": "Délai d'attente dépassé",
+    "invalid_response": "Réponse invalide du serveur",
+    "error_msg": "Erreur: {error}"
+  }
+}

@@ -1,0 +1,115 @@
+{
+  "metadata": {
+    "language": "it",
+    "version": "1.0",
+    "fallback": "en"
+  },
+  "nav": {
+    "home": "Home",
+    "setpoint": "SetPoint",
+    "nfc": "NFC",
+    "history": "Storico",
+    "settings": "Impostazioni"
+  },
+  "home": {
+    "camera": "Camera",
+    "heater": "Riscaldatore",
+    "temperature": "Temperatura",
+    "humidity": "Umidità",
+    "bed_ntc": "Piatto NTC",
+    "countdown": "Countdown",
+    "color": "Colore",
+    "drying": "Essiccazione"
+  },
+  "esp32": {
+    "status_heating": "Riscaldamento...",
+    "status_drying": "Essiccazione in corso",
+    "status_idle": "Fermo",
+    "error_overtemp": "Temperatura eccessiva!",
+    "error_sensor": "Errore sensore",
+    "slot_occupied": "Slot occupato",
+    "slot_empty": "Slot vuoto",
+    "slot_free": "Slot libero",
+    "nozzle": "Nozzle",
+    "bed": "Piatto",
+    "diameter": "Diametro",
+    "density": "Densità",
+    "nom_weight": "Peso nominale",
+    "act_weight": "Peso attuale"
+  },
+  "setpoint": {
+    "title": "SetPoint",
+    "apply": "Applica setpoint",
+    "heater_section": "Riscaldatore",
+    "profile_section": "Profilo materiale",
+    "material_label": "Materiale",
+    "temp_label": "Setpoint °C",
+    "duration_label": "Durata min",
+    "apply_ok": "Applicato: {temp}°C per {min} min",
+    "invalid_input": "Temperatura o durata non validi",
+    "over_limit": "Oltre il limite sicurezza ({limit}°C)",
+    "safety_info": "Limite sicurezza: {limit}°C. Il ciclo si ferma automaticamente al raggiungimento del limite o al termine del countdown.",
+    "cycle_match": "Corrisponde al ciclo in corso",
+    "cycle_differs": "⚠ Diverso dal ciclo in corso — premi Applica per aggiornare",
+    "above_recommended": "Temperatura superiore al profilo consigliato",
+    "within_recommended": "✓ Nei valori consigliati"
+  },
+  "nfc": {
+    "title": "Tag NFC",
+    "scan": "Scansiona tag NFC",
+    "cancel": "Annulla scansione",
+    "new_scan": "Nuova scansione",
+    "waiting": "Avvicina la bobina al telefono...",
+    "unavailable": "NFC non disponibile su questo dispositivo.",
+    "not_open_print_tag": "Tag rilevato (UID: {uid}) ma non è un OpenPrintTag.",
+    "apply": "Applica: {temp}°C per {time} min",
+    "applied": "Applicato: {temp}°C per {time} min"
+  },
+  "history": {
+    "title": "Storico",
+    "6h": "6 h",
+    "24h": "24 h",
+    "2d": "2 gg",
+    "7d": "7 gg",
+    "no_data": "Nessun dato disponibile.\nIl log si popola ogni 2 minuti.",
+    "samples": "{count} campioni — ultimi {hours} h",
+    "chart_temp": "Temperatura (°C)",
+    "chart_hum": "Umidità (%)",
+    "chart_bed": "Piatto NTC (°C)",
+    "chart_heater": "Output riscaldatore (%)"
+  },
+  "tailscale": {
+    "active": "Connessione remota via Tailscale — disattiva la VPN per tornare alla rete locale.",
+    "rpi_unreachable": "Raspberry non raggiungibile — accendilo!",
+    "ok_rpi_down": "⚡ Tailscale attivo ma Raspberry irraggiungibile — accendilo!",
+    "off": "🔒 Tailscale non attivo — attivalo per connetterti.",
+    "check": "Verifica che Tailscale sia attivo e il Raspberry acceso"
+  },
+  "settings": {
+    "title": "Impostazioni",
+    "server_section": "Server ODIN",
+    "url_label": "URL base",
+    "url_hint": "http://IP:porta",
+    "tailscale": "Tailscale",
+    "lan": "LAN",
+    "test": "Test",
+    "save": "Salva",
+    "saved": "Salvato",
+    "saved_msg": "Salvato — connessione aggiornata.",
+    "testing": "Test in corso...",
+    "test_ok": "✓ Raggiungibile",
+    "test_fail": "✗ Non raggiungibile",
+    "test_error": "Errore: {error}",
+    "language": "Lingua",
+    "language_label": "Lingua corrente",
+    "language_notice": "Riavvia l'app per applicare il cambio lingua",
+    "info_title": "ℹ️  Come funziona la connessione",
+    "info_body": "• Tailscale (100.x.x.x) — accesso da qualsiasi rete, richiede VPN attiva.\n• LAN (192.168.x.x) — solo rete domestica, più veloce, nessuna VPN."
+  },
+  "errors": {
+    "connection_failed": "Connessione fallita",
+    "timeout": "Timeout richiesta",
+    "invalid_response": "Risposta non valida dal server",
+    "error_msg": "Errore: {error}"
+  }
+}
