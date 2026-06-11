@@ -48,9 +48,10 @@ constexpr float         PI_KI                = 0.028F;
 constexpr unsigned long PI_UPDATE_INTERVAL_MS = 3000;
 constexpr unsigned long HEATER_WINDOW_MS      = 10000;
 
-// Raspberry Pi5 (proxy ODIN) — IP locale LAN
-constexpr const char  *PI5_LOCAL_IP          = "192.168.1.198";
-constexpr uint16_t     PI5_LOCAL_PORT        = 8000;
+// Raspberry Pi5 (proxy ODIN) — Tailscale + fallback LAN
+constexpr const char  *PI5_TAILSCALE_IP      = "100.97.249.32";  // Tailscale - primario
+constexpr const char  *PI5_LOCAL_IP          = "192.168.1.198";  // LAN fallback
+constexpr uint16_t     PI5_PORT              = 8000;
 constexpr unsigned long PI5_CHECK_INTERVAL_MS = 30000;
 
 // Locale (set via build flag -D UI_LOCALE_IT or UI_LOCALE_EN etc.)

@@ -843,7 +843,20 @@ static void handleApiLanguage() {
   if (server.method() == HTTP_GET) {
     // GET /api/language — ritorna lingua corrente
     String json = "{\"language\":\""; json += appSettings.language;
-    json += "\",\"available\":[\"en\",\"it\",\"fr\",\"es\",\"de\"]}";
+    json += "\",\"available\":[\"en\",\"it\",\"fr\",\"es\",\"de\"],\"connection\":\"";
+
+    // Indica se Tailscale o LAN è raggiungibile
+    HTTPClient http;
+    String tailscaleUrl = String("http://") + PI5_TAILSCALE_IP + ":" + PI5_PORT + "/health";
+    http.setTimeout(2000);
+    if (http.begin(tailscaleUrl) && http.GET() == 200) {
+      json += "Tailscale";
+    } else {
+      json += "LAN";
+    }
+    http.end();
+
+    json += "\"}";
     server.sendHeader("Cache-Control","no-store");
     server.send(200,"application/json",json);
   }
@@ -858,7 +871,7 @@ static void handleApiLanguage() {
     Serial.print("[Language] Cambio lingua a: ");
     Serial.println(langParam);
 
-    // Scarica traduzioni da Pi5
+    // Scarica traduzioni da Pi5 (con fallback Tailscale → LAN)
     if (!downloadTranslationsFromPi5(langParam.c_str())) {
       Serial.println("[Language] Download fallito, fallback a hardcoded");
     }

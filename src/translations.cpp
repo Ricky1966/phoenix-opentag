@@ -68,64 +68,81 @@ bool downloadTranslationsFromPi5(const char *language) {
   Serial.print("[Translations] Scarico traduzioni per lingua: ");
   Serial.println(language);
 
-  String url = String("http://") + PI5_LOCAL_IP + ":" + PI5_LOCAL_PORT +
-               "/api/translations/" + language;
+  // Prova prima Tailscale, poi fallback LAN
+  const char *hosts[] = {PI5_TAILSCALE_IP, PI5_LOCAL_IP};
+  const char *hostNames[] = {"Tailscale", "LAN"};
 
-  HTTPClient http;
-  http.setTimeout(5000);
+  for (int i = 0; i < 2; i++) {
+    String url = String("http://") + hosts[i] + ":" + PI5_PORT +
+                 "/api/translations/" + language;
 
-  if (!http.begin(url)) {
-    Serial.println("[Translations] Errore begin HTTP");
-    return false;
-  }
+    Serial.print("[Translations] Tentativo ");
+    Serial.print(i + 1);
+    Serial.print(" (");
+    Serial.print(hostNames[i]);
+    Serial.print("): ");
+    Serial.println(url);
 
-  int httpCode = http.GET();
+    HTTPClient http;
+    http.setTimeout(3000);
 
-  if (httpCode != HTTP_CODE_OK) {
-    Serial.print("[Translations] HTTP error: ");
-    Serial.println(httpCode);
-    http.end();
-    return false;
-  }
-
-  String payload = http.getString();
-  http.end();
-
-  // Parse JSON
-  JsonDocument doc;
-  DeserializationError error = deserializeJson(doc, payload);
-
-  if (error) {
-    Serial.print("[Translations] JSON parse error: ");
-    Serial.println(error.c_str());
-    return false;
-  }
-
-  // Carica nel cache
-  translationCache.clear();
-  JsonObject root = doc.as<JsonObject>();
-
-  // Per semplicità, load tutti i valori dal JSON
-  // In produzione, caricherebbe solo le chiavi usate
-  for (int i = 0; i < 100; i++) { // 100 keys dovrebbero bastare
-    TextKey key = (TextKey)i;
-    const char *path = getJsonPath(key);
-    if (!path) continue;
-
-    String value = getJsonValue(root, path);
-    if (!value.isEmpty()) {
-      translationCache[key] = value;
+    if (!http.begin(url)) {
+      Serial.println("[Translations] Errore begin HTTP");
+      continue;
     }
+
+    int httpCode = http.GET();
+
+    if (httpCode != HTTP_CODE_OK) {
+      Serial.print("[Translations] HTTP error: ");
+      Serial.println(httpCode);
+      http.end();
+      continue;
+    }
+
+    String payload = http.getString();
+    http.end();
+
+    // Parse JSON
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, payload);
+
+    if (error) {
+      Serial.print("[Translations] JSON parse error: ");
+      Serial.println(error.c_str());
+      continue;
+    }
+
+    // Carica nel cache
+    translationCache.clear();
+    JsonObject root = doc.as<JsonObject>();
+
+    // Per semplicità, load tutti i valori dal JSON
+    for (int j = 0; j < 100; j++) {
+      TextKey key = (TextKey)j;
+      const char *path = getJsonPath(key);
+      if (!path) continue;
+
+      String value = getJsonValue(root, path);
+      if (!value.isEmpty()) {
+        translationCache[key] = value;
+      }
+    }
+
+    translationsLoaded = true;
+    currentLanguage = language;
+
+    Serial.print("[Translations] ✓ Caricate ");
+    Serial.print(translationCache.size());
+    Serial.print(" traduzioni da ");
+    Serial.println(hostNames[i]);
+
+    return true; // Successo, esci dal loop
   }
 
-  translationsLoaded = true;
-  currentLanguage = language;
-
-  Serial.print("[Translations] Caricate ");
-  Serial.print(translationCache.size());
-  Serial.println(" traduzioni");
-
-  return true;
+  // Nessun host ha funzionato
+  Serial.println("[Translations] ✗ Nessun host raggiungibile, fallback stringhe hardcoded");
+  return false;
 }
 
 const char *getTranslationStr(TextKey key) {
