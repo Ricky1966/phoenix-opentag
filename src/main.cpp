@@ -7,6 +7,7 @@
 #include "heater.h"
 #include "web_ui.h"
 #include "log.h"
+#include "translations.h"
 
 static const IPAddress AP_IP(192, 168, 4, 1);
 static const IPAddress AP_SUBNET(255, 255, 255, 0);
@@ -34,6 +35,11 @@ void setup() {
   Serial.print("AP: http://"); Serial.println(WiFi.softAPIP());
 
   connectWifiClient();
+
+  // Scarica traduzioni da Pi5 dopo WiFi
+  delay(1000); // Attendi che WiFi sia pronto
+  downloadTranslationsFromPi5(appSettings.language.c_str());
+
   setupWebServer();
 }
 

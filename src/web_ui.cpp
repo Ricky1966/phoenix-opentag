@@ -839,6 +839,45 @@ static void handleApiVersion() {
   server.send(200,"application/json",json);
 }
 
+static void handleApiLanguage() {
+  if (server.method() == HTTP_GET) {
+    // GET /api/language — ritorna lingua corrente
+    String json = "{\"language\":\""; json += appSettings.language;
+    json += "\",\"available\":[\"en\",\"it\",\"fr\",\"es\",\"de\"]}";
+    server.sendHeader("Cache-Control","no-store");
+    server.send(200,"application/json",json);
+  }
+  else if (server.method() == HTTP_POST) {
+    // POST /api/language?lang=fr — cambia lingua e riavvia
+    String langParam = server.arg("lang");
+    if (langParam.isEmpty() || langParam.length() != 2) {
+      server.send(400,"application/json","{\"error\":\"lang parameter invalid\"}");
+      return;
+    }
+
+    Serial.print("[Language] Cambio lingua a: ");
+    Serial.println(langParam);
+
+    // Scarica traduzioni da Pi5
+    if (!downloadTranslationsFromPi5(langParam.c_str())) {
+      Serial.println("[Language] Download fallito, fallback a hardcoded");
+    }
+
+    // Salva la nuova lingua
+    appSettings.language = langParam;
+    saveAppSettings();
+
+    String json = "{\"status\":\"ok\",\"language\":\""; json += appSettings.language;
+    json += "\",\"restarting\":true}";
+    server.sendHeader("Cache-Control","no-store");
+    server.send(200,"application/json",json);
+
+    // Riavvia dopo risposta
+    delay(500);
+    ESP.restart();
+  }
+}
+
 static void handleApiSlots() {
   Serial.println("HTTP GET /api/slots");
   server.sendHeader("Cache-Control","no-store");
@@ -922,6 +961,8 @@ void setupWebServer() {
   server.on("/api/pi5test",         HTTP_GET,    handleApiPi5Test);
   server.on("/api/restart",         HTTP_GET,    handleApiRestart);
   server.on("/api/version",         HTTP_GET,    handleApiVersion);
+  server.on("/api/language",        HTTP_GET,    handleApiLanguage);
+  server.on("/api/language",        HTTP_POST,   handleApiLanguage);
   server.onNotFound(handleNotFound);
 
   ElegantOTA.begin(&server);
