@@ -503,7 +503,7 @@
     "pinned_symbol_libs": []
   },
   "meta": {
-    "filename": "ESP32_AZDelivery_Baseboard.kicad_pro",
+    "filename": "Odin-Hardware.kicad_pro",
     "version": 3
   },
   "net_settings": {
@@ -660,18 +660,18 @@
     "subpart_id_separator": 0,
     "top_level_sheets": [
       {
-        "filename": "ESP32_AZDelivery_Baseboard.kicad_sch",
-        "name": "ESP32_AZDelivery_Baseboard",
+        "filename": "Odin-Hardware.kicad_sch",
+        "name": "Odin-Hardware",
         "uuid": "6dfc456e-f0f7-4393-96f4-0b7c9f575168"
       }
     ],
-    "used_designators": "R7-11",
+    "used_designators": "U2-3,F1,D2,C6-8,R7-11",
     "variants": []
   },
   "sheets": [
     [
       "6dfc456e-f0f7-4393-96f4-0b7c9f575168",
-      "ESP32_AZDelivery_Baseboard"
+      "Odin-Hardware"
     ]
   ],
   "text_variables": {},
