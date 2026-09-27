@@ -107,9 +107,12 @@ static bool readTag(SpoolData *s) {
   uint8_t uid[8];
   ISO15693ErrorCode rc = nfc.getInventory(uid);
   if (rc != ISO15693_EC_OK) {
+    // nfc.strerror() e' inutilizzabile su questo toolchain: il parametro si
+    // chiama "errno", macro di sistema che corrompe la firma della funzione
+    // in fase di preprocessore. Ci limitiamo al codice numerico (vedi
+    // ISO15693ErrorCode in PN5180ISO15693.h per il significato).
     Serial.print("getInventory: rfReady="); Serial.print(rfOk ? "si" : "no");
-    Serial.print(" codice="); Serial.print((int)rc);
-    Serial.print(" ("); Serial.print(nfc.strerror(rc)); Serial.println(")");
+    Serial.print(" codice="); Serial.println((int)rc);
     return false;
   }
 
