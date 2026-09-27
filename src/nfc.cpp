@@ -103,9 +103,15 @@ static const uint8_t *ndefPayload(const uint8_t *d, int dlen, int *outLen) {
 // ───────────────────────── lettura tag ─────────────────────────
 static bool readTag(SpoolData *s) {
   nfc.reset();
-  nfc.setupRF();
+  bool rfOk = nfc.setupRF();
   uint8_t uid[8];
-  if (nfc.getInventory(uid) != ISO15693_EC_OK) return false;
+  ISO15693ErrorCode rc = nfc.getInventory(uid);
+  if (rc != ISO15693_EC_OK) {
+    Serial.print("getInventory: rfReady="); Serial.print(rfOk ? "si" : "no");
+    Serial.print(" codice="); Serial.print((int)rc);
+    Serial.print(" ("); Serial.print(nfc.strerror(rc)); Serial.println(")");
+    return false;
+  }
 
   char *p = s->uid;
   for (int k = 7; k >= 0; k--) { p += sprintf(p, "%02X", uid[k]); if (k) *p++ = ':'; }
