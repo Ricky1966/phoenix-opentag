@@ -2,93 +2,23 @@
 #include <Arduino.h>
 
 // Firmware version
-#define FIRMWARE_VERSION "0.9.1"
-
-// I2C
-constexpr uint8_t I2C_SDA = 21;
-constexpr uint8_t I2C_SCL = 22;
-constexpr uint8_t BME280_I2C_ADDRESS = 0x76;
+#define FIRMWARE_VERSION "0.1.0"
 
 // PN5180 SPI
 constexpr uint8_t PN5180_NSS  = 5;
 constexpr uint8_t PN5180_BUSY = 16;
 constexpr uint8_t PN5180_RST  = 17;
-
-// Heater / NTC
-constexpr uint8_t  HEATER_PIN         = 25;
-constexpr bool     HEATER_ACTIVE_LOW  = true;
-constexpr uint8_t  BED_THERMISTOR_PIN = 34;
-
-// WiFi AP
-constexpr const char *AP_SSID     = "ODIN";
-constexpr const char *AP_PASSWORD = "odindryer";
+// SPI SCK/MOSI/MISO restano sui pin VSPI di default (18/23/19) impostati dal framework Arduino.
 
 // Timing
-constexpr unsigned long SENSOR_READ_INTERVAL_MS = 60000;
-constexpr unsigned long BED_READ_INTERVAL_MS    = 3000;
-constexpr uint8_t       BED_ADC_SAMPLES         = 32;
-constexpr uint8_t       NFC_READ_ATTEMPTS        = 5;
-constexpr unsigned long NFC_RETRY_DELAY_MS       = 80;
+constexpr uint8_t       NFC_READ_ATTEMPTS    = 5;
+constexpr unsigned long NFC_RETRY_DELAY_MS   = 80;
+constexpr unsigned long NFC_POLL_INTERVAL_MS = 500;
 
-// NTC / ADC
-constexpr float BED_PULLUP_OHMS      = 100000.0F;
-constexpr float BED_NOMINAL_OHMS     = 100000.0F;
-constexpr float BED_NOMINAL_TEMP_K   = 298.15F;
-constexpr float BED_BETA             = 3950.0F;
-constexpr float ADC_MAX_VALUE        = 4095.0F;
-constexpr float BED_ADC_FILTER_ALPHA = 0.15F;
-constexpr float BED_MAX_ADC_STEP     = 35.0F;
-constexpr float BED_TEMP_OFFSET_C    = -2.5F;
-constexpr float DEFAULT_BED_SETPOINT_C = 45.0F;
-constexpr float BED_SAFETY_LIMIT_C    = 90.0F;
-
-// PI controller
-constexpr float         PI_KP                = 10.0F;
-constexpr float         PI_KI                = 0.028F;
-constexpr unsigned long PI_UPDATE_INTERVAL_MS = 3000;
-constexpr unsigned long HEATER_WINDOW_MS      = 10000;
-
-// Raspberry Pi5 (proxy ODIN) — Tailscale + fallback LAN
-constexpr const char  *PI5_TAILSCALE_IP      = "100.97.249.32";  // Tailscale - primario
-constexpr const char  *PI5_LOCAL_IP          = "192.168.1.198";  // LAN fallback
-constexpr uint16_t     PI5_PORT              = 8000;
-constexpr unsigned long PI5_CHECK_INTERVAL_MS = 30000;
-
-// Locale (set via build flag -D UI_LOCALE_IT or UI_LOCALE_EN etc.)
-#if defined(UI_LOCALE_DE)
-  constexpr const char *UI_LOCALE_CODE = "de";
-  constexpr const char *UI_LOCALE_NAME = "Deutsch";
-#elif defined(UI_LOCALE_ES)
-  constexpr const char *UI_LOCALE_CODE = "es";
-  constexpr const char *UI_LOCALE_NAME = "Espanol";
-#elif defined(UI_LOCALE_FR)
-  constexpr const char *UI_LOCALE_CODE = "fr";
-  constexpr const char *UI_LOCALE_NAME = "Francais";
-#elif defined(UI_LOCALE_PT)
-  constexpr const char *UI_LOCALE_CODE = "pt";
-  constexpr const char *UI_LOCALE_NAME = "Portugues";
-#else
-  constexpr const char *UI_LOCALE_CODE = "it";
-  constexpr const char *UI_LOCALE_NAME = "Italiano";
-#endif
+// WiFi (stazione, nessun Access Point). Credenziali vere in secrets.h (non versionato).
+#include "secrets.h"
 
 // ── Structs ──────────────────────────────────────────────────────────────────
-
-struct SensorData {
-  float temperature = NAN;
-  float humidity    = NAN;
-  unsigned long lastReadMs = 0;
-  bool valid = false;
-};
-
-struct BedData {
-  float temperature = NAN;
-  float resistance  = NAN;
-  float filteredAdc = NAN;
-  uint16_t rawAdc   = 0;
-  unsigned long lastReadMs = 0;
-  bool valid = false;
-};
 
 struct NfcData {
   bool readerPresent = false;
@@ -106,7 +36,6 @@ struct NfcData {
   String memoryInfo      = "--";
   String dataFormat      = "--";
   String memoryDump      = "--";
-  String openPrintTagColor = "#ffffff";
   // OpenPrintTag parsed fields
   bool    optParsed    = false;
   String  optBrand;
@@ -123,52 +52,6 @@ struct NfcData {
   uint16_t optSpoolW = 0, optSpoolOd = 0, optSpoolId = 0, optSpoolHole = 0;
   uint16_t optMdate    = 0;
   String   optCountry;
-  uint8_t lastUidLength  = 0;
-  bool readArmed         = true;
-};
-
-struct DryerSlots {
-  static constexpr uint8_t NUM_SLOTS = 4;
-  NfcData bobina[NUM_SLOTS];           // 4 bobine
-  bool slotOccupied[NUM_SLOTS] = {};   // slot occupato?
-  uint32_t cycleStart[NUM_SLOTS] = {}; // quando inizia ciclo
-  uint16_t dryingTemp[NUM_SLOTS] = {45, 45, 45, 45};     // temp essiccazione per slot (°C)
-  uint16_t dryingMinutes[NUM_SLOTS] = {360, 360, 360, 360}; // durata essiccazione per slot (minuti)
-  bool cycleRunning[NUM_SLOTS] = {};   // ciclo in corso per questo slot?
-  uint32_t cycleEndTime[NUM_SLOTS] = {}; // timestamp fine ciclo
-  uint8_t activeSlotCount = 0;         // quanti slot hanno bobina
-};
-
-struct HeaterControlData {
-  bool   automatic      = false;
-  float  setpoint       = DEFAULT_BED_SETPOINT_C;
-  float  outputPercent  = 0.0F;
-  float  integral       = 0.0F;
-  String status         = "Manuale";
-  unsigned long lastUpdateMs  = 0;
-  unsigned long windowStartMs = 0;
-  uint32_t cycleDurationSeconds  = 360UL * 60UL;
-  uint32_t cycleRemainingSeconds = 360UL * 60UL;
-  unsigned long cycleEndMs       = 0;
-  bool cycleRunning = false;
-};
-
-struct MaterialDryProfile {
-  const char *name;
-  float       recommendedTemp;
-  uint16_t    recommendedMinutes;
-};
-
-struct CustomMaterialProfile {
-  String   name;
-  float    recommendedTemp    = 0.0F;
-  uint16_t recommendedMinutes = 0;
-};
-
-struct AppSettings {
-  String wifiSsid        = "";
-  String wifiPassword    = "";
-  String language        = UI_LOCALE_CODE;
-  bool   wifiClientEnabled = false;
-  bool   debugEnabled      = false;
+  String   openPrintTagColor = "#ffffff";
+  uint8_t  lastUidLength = 0;
 };

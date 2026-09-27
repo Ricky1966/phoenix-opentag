@@ -6,7 +6,6 @@
 
 static PN5180ISO14443 nfc14443(PN5180_NSS, PN5180_BUSY, PN5180_RST);
 static PN5180ISO15693 nfc15693(PN5180_NSS, PN5180_BUSY, PN5180_RST);
-DryerSlots dryerSlots;
 NfcData nfcData;
 
 static constexpr uint8_t OPENPRINTTAG_MIME_TYPE[] = {
@@ -16,111 +15,6 @@ static constexpr uint8_t OPENPRINTTAG_MIME_TYPE[] = {
 
 static void resetNfcRf()      { nfc14443.reset(); nfc14443.setupRF(); }
 static void resetNfc15693Rf() { nfc15693.reset(); nfc15693.setupRF(); }
-
-static uint8_t hexNibble(char c) {
-  if (c >= '0' && c <= '9') return c - '0';
-  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-  return 0;
-}
-
-static uint16_t appendCborUInt(uint8_t *buf, uint16_t pos, uint32_t v) {
-  if      (v < 24)     { buf[pos++] = v; }
-  else if (v <= 0xff)  { buf[pos++] = 0x18; buf[pos++] = v; }
-  else if (v <= 0xffff){ buf[pos++] = 0x19; buf[pos++] = v >> 8; buf[pos++] = v & 0xff; }
-  else { buf[pos++]=0x1A; buf[pos++]=(v>>24)&0xff; buf[pos++]=(v>>16)&0xff; buf[pos++]=(v>>8)&0xff; buf[pos++]=v&0xff; }
-  return pos;
-}
-
-static uint16_t appendCborFloat32(uint8_t *buf, uint16_t pos, float value) {
-  union { float f; uint32_t u; } d; d.f = value;
-  buf[pos++]=0xFA; buf[pos++]=(d.u>>24)&0xff; buf[pos++]=(d.u>>16)&0xff;
-  buf[pos++]=(d.u>>8)&0xff; buf[pos++]=d.u&0xff;
-  return pos;
-}
-
-static uint16_t appendCborText(uint8_t *buf, uint16_t pos, String value) {
-  value.trim();
-  if (value.length() > 31) value = value.substring(0, 31);
-  const uint8_t len = value.length();
-  if (len < 24) buf[pos++] = 0x60 | len; else { buf[pos++]=0x78; buf[pos++]=len; }
-  for (uint8_t i = 0; i < len; i++) buf[pos++] = value[i];
-  return pos;
-}
-
-static uint16_t appendCborColor(uint8_t *buf, uint16_t pos, String color) {
-  color.trim(); color.replace("#","");
-  if (color.length() != 6 && color.length() != 8) color = "FFFFFF";
-  const uint8_t bytes = color.length() == 8 ? 4 : 3;
-  buf[pos++] = 0x40 | bytes;
-  for (uint8_t i = 0; i < bytes; i++)
-    buf[pos++] = (hexNibble(color[i*2]) << 4) | hexNibble(color[i*2+1]);
-  return pos;
-}
-
-static uint16_t buildOpenPrintTagPayload(uint8_t *payload, uint16_t payloadSize,
-    const String &brandName, const String &materialName, uint8_t materialType,
-    uint16_t minPrintTemp, uint16_t maxPrintTemp, uint16_t minBedTemp, uint16_t maxBedTemp,
-    uint16_t dryingTemp, uint16_t dryingTime, const String &primaryColor,
-    uint16_t nominalWeight, uint16_t actualWeight, uint16_t emptyWeight,
-    float density, float filamentDiameter, uint32_t nominalLength, uint32_t actualLength,
-    uint32_t manufacturedDate, const String &country,
-    uint16_t spoolWidth, uint16_t spoolOuterDiameter, uint16_t spoolInnerDiameter, uint16_t spoolHoleDiameter) {
-  uint16_t pos = 0;
-  payload[pos++] = 0xA0; payload[pos++] = 0xB8; payload[pos++] = 0x18;
-  pos = appendCborUInt(payload, pos, 8);  pos = appendCborUInt(payload, pos, 0);
-  pos = appendCborUInt(payload, pos, 9);  pos = appendCborUInt(payload, pos, materialType);
-  pos = appendCborUInt(payload, pos, 10); pos = appendCborText(payload, pos, materialName);
-  pos = appendCborUInt(payload, pos, 11); pos = appendCborText(payload, pos, brandName);
-  pos = appendCborUInt(payload, pos, 14); pos = appendCborUInt(payload, pos, manufacturedDate);
-  pos = appendCborUInt(payload, pos, 16); pos = appendCborUInt(payload, pos, nominalWeight);
-  pos = appendCborUInt(payload, pos, 17); pos = appendCborUInt(payload, pos, actualWeight);
-  pos = appendCborUInt(payload, pos, 18); pos = appendCborUInt(payload, pos, emptyWeight);
-  pos = appendCborUInt(payload, pos, 19); pos = appendCborColor(payload, pos, primaryColor);
-  pos = appendCborUInt(payload, pos, 29); pos = appendCborFloat32(payload, pos, density);
-  pos = appendCborUInt(payload, pos, 30); pos = appendCborFloat32(payload, pos, filamentDiameter);
-  pos = appendCborUInt(payload, pos, 34); pos = appendCborUInt(payload, pos, minPrintTemp);
-  pos = appendCborUInt(payload, pos, 35); pos = appendCborUInt(payload, pos, maxPrintTemp);
-  pos = appendCborUInt(payload, pos, 37); pos = appendCborUInt(payload, pos, minBedTemp);
-  pos = appendCborUInt(payload, pos, 38); pos = appendCborUInt(payload, pos, maxBedTemp);
-  pos = appendCborUInt(payload, pos, 42); pos = appendCborUInt(payload, pos, spoolWidth);
-  pos = appendCborUInt(payload, pos, 43); pos = appendCborUInt(payload, pos, spoolOuterDiameter);
-  pos = appendCborUInt(payload, pos, 44); pos = appendCborUInt(payload, pos, spoolInnerDiameter);
-  pos = appendCborUInt(payload, pos, 45); pos = appendCborUInt(payload, pos, spoolHoleDiameter);
-  pos = appendCborUInt(payload, pos, 53); pos = appendCborUInt(payload, pos, nominalLength);
-  pos = appendCborUInt(payload, pos, 54); pos = appendCborUInt(payload, pos, actualLength);
-  pos = appendCborUInt(payload, pos, 55); pos = appendCborText(payload, pos, country);
-  pos = appendCborUInt(payload, pos, 57); pos = appendCborUInt(payload, pos, dryingTemp);
-  pos = appendCborUInt(payload, pos, 58); pos = appendCborUInt(payload, pos, dryingTime);
-  return min<uint16_t>(pos, payloadSize);
-}
-
-static uint16_t buildOpenPrintTagMemory(uint8_t *memory, uint16_t memorySize,
-    const String &brandName, const String &materialName, uint8_t materialType,
-    uint16_t minPrintTemp, uint16_t maxPrintTemp, uint16_t minBedTemp, uint16_t maxBedTemp,
-    uint16_t dryingTemp, uint16_t dryingTime, const String &primaryColor,
-    uint16_t nominalWeight, uint16_t actualWeight, uint16_t emptyWeight,
-    float density, float filamentDiameter, uint32_t nominalLength, uint32_t actualLength,
-    uint32_t manufacturedDate, const String &country,
-    uint16_t spoolWidth, uint16_t spoolOuterDiameter, uint16_t spoolInnerDiameter, uint16_t spoolHoleDiameter) {
-  memset(memory, 0, memorySize);
-  uint8_t payload[220] = {0};
-  const uint16_t payloadLength = buildOpenPrintTagPayload(payload, sizeof(payload),
-    brandName, materialName, materialType, minPrintTemp, maxPrintTemp, minBedTemp, maxBedTemp,
-    dryingTemp, dryingTime, primaryColor, nominalWeight, actualWeight, emptyWeight,
-    density, filamentDiameter, nominalLength, actualLength, manufacturedDate, country,
-    spoolWidth, spoolOuterDiameter, spoolInnerDiameter, spoolHoleDiameter);
-
-  memory[0]=0xE1; memory[1]=0x40; memory[2]=0x27; memory[3]=0x01;
-  uint16_t pos = 4;
-  const uint8_t ndefLength = 3 + sizeof(OPENPRINTTAG_MIME_TYPE) + payloadLength;
-  memory[pos++]=0x03; memory[pos++]=ndefLength; memory[pos++]=0xD2;
-  memory[pos++]=sizeof(OPENPRINTTAG_MIME_TYPE); memory[pos++]=payloadLength;
-  memcpy(&memory[pos], OPENPRINTTAG_MIME_TYPE, sizeof(OPENPRINTTAG_MIME_TYPE)); pos += sizeof(OPENPRINTTAG_MIME_TYPE);
-  memcpy(&memory[pos], payload, payloadLength); pos += payloadLength;
-  memory[pos++] = 0xFE;
-  return pos;
-}
 
 // ── Minimal CBOR parser for OpenPrintTag ─────────────────────────────────────
 
@@ -245,17 +139,9 @@ static void setNfcTagData(const String &uidText, uint8_t uidLength) {
   nfcData.lastUid     = uidText;
   nfcData.lastUidLength = uidLength;
   nfcData.memoryDump  = "Dump non disponibile per ISO14443A";
-  if (uidText == "04:DE:7C:52:F2:6C:80") {
-    nfcData.tagType    = "ISO 14443-3A / NXP NTAG215";
-    nfcData.technologies = "NfcA, MifareUltralight, Ndef";
-    nfcData.atqa = "0x0044"; nfcData.sak = "0x00";
-    nfcData.memoryInfo = "540 bytes, 135 pagine da 4 bytes";
-    nfcData.dataFormat = "NFC Forum Type 2";
-  } else {
-    nfcData.tagType = "ISO 14443A"; nfcData.technologies = "NfcA";
-    nfcData.atqa = "--"; nfcData.sak = "--";
-    nfcData.memoryInfo = "Da identificare"; nfcData.dataFormat = "Da identificare";
-  }
+  nfcData.tagType = "ISO 14443A"; nfcData.technologies = "NfcA";
+  nfcData.atqa = "--"; nfcData.sak = "--";
+  nfcData.memoryInfo = "Da identificare"; nfcData.dataFormat = "Da identificare";
 }
 
 static bool readIso15693Tag() {
@@ -263,12 +149,11 @@ static bool readIso15693Tag() {
   uint8_t uid[8] = {0};
   ISO15693ErrorCode rc = EC_NO_CARD;
   for (uint8_t attempt = 1; attempt <= NFC_READ_ATTEMPTS; attempt++) {
-    Serial.print("Tentativo ISO15693 "); Serial.print(attempt); Serial.print("/"); Serial.println(NFC_READ_ATTEMPTS);
     rc = nfc15693.getInventory(uid);
     if (rc == ISO15693_EC_OK) break;
     resetNfc15693Rf(); delay(NFC_RETRY_DELAY_MS);
   }
-  if (rc != ISO15693_EC_OK) { Serial.print("Nessun tag ISO15693, errore "); Serial.println(rc); return false; }
+  if (rc != ISO15693_EC_OK) return false;
 
   const String uidText = uidToStringReversed(uid, sizeof(uid));
   nfcData.lastStatus = "Tag ISO15693 letto"; nfcData.lastUid = uidText;
@@ -290,28 +175,18 @@ static bool readIso15693Tag() {
     for (uint8_t blockNo = 0; blockNo < blocksToRead; blockNo++) {
       memset(blockData, 0, sizeof(blockData));
       rc = nfc15693.readSingleBlock(uid, blockNo, blockData, blockSize);
-      if (blockNo > 0) nfcData.memoryDump += "<br>";
-      String blockLabel = String(blockNo, HEX); blockLabel.toUpperCase();
-      if (blockNo < 0x10) nfcData.memoryDump += "0";
-      nfcData.memoryDump += blockLabel + ": ";
-      if (rc != ISO15693_EC_OK) { nfcData.memoryDump += "errore lettura"; continue; }
+      if (rc != ISO15693_EC_OK) continue;
       if (tagMemoryLength + blockSize <= sizeof(tagMemory)) {
         memcpy(&tagMemory[tagMemoryLength], blockData, blockSize); tagMemoryLength += blockSize;
       }
-      for (uint8_t i = 0; i < blockSize; i++) {
-        if (i > 0) nfcData.memoryDump += " ";
-        nfcData.memoryDump += hexByte(blockData[i]);
-      }
-      nfcData.memoryDump += " | ";
-      for (uint8_t i = 0; i < blockSize; i++) nfcData.memoryDump += printableAscii(blockData[i]);
     }
-    if (parseOpenPrintTag(tagMemory, tagMemoryLength)) {
-      Serial.print("OpenPrintTag parsed: "); Serial.print(nfcData.optBrand);
-      Serial.print(" / "); Serial.println(nfcData.optMaterial);
-    } else { nfcData.openPrintTagColor = "#ffffff"; }
-  } else { nfcData.memoryDump = "Memoria non identificata"; nfcData.openPrintTagColor = "#ffffff"; }
+    if (!parseOpenPrintTag(tagMemory, tagMemoryLength)) {
+      nfcData.openPrintTagColor = "#ffffff";
+    }
+  } else {
+    nfcData.memoryDump = "Memoria non identificata"; nfcData.openPrintTagColor = "#ffffff";
+  }
 
-  Serial.print("Tag ISO15693 UID: "); Serial.println(nfcData.lastUid);
   return true;
 }
 
@@ -333,35 +208,20 @@ void setupNfcReader() {
   if (!nfcData.readerPresent) { nfcData.lastStatus = "PN5180 non rilevato"; return; }
   nfcData.rfReady   = nfc14443.setupRF();
   nfcData.lastStatus = nfcData.rfReady ? "PN5180 pronto" : "Errore RF PN5180";
+  Serial.println(nfcData.lastStatus);
 }
 
 void readNfcTag() {
   if (!nfcData.initialized) setupNfcReader();
   if (!nfcData.readerPresent) { nfcData.lastStatus = "PN5180 non pronto"; return; }
 
-  nfcData.lastStatus = "Lettura in corso";
-  if (readIso15693Tag()) {
-    int8_t freeSlot = findFreeSlot();
-    if (freeSlot >= 0) {
-      dryerSlots.bobina[freeSlot] = nfcData;
-      dryerSlots.slotOccupied[freeSlot] = true;
-      dryerSlots.activeSlotCount++;
-      if (nfcData.optParsed) {
-        dryerSlots.dryingTemp[freeSlot] = nfcData.optDryTemp > 0 ? nfcData.optDryTemp : 45;
-        dryerSlots.dryingMinutes[freeSlot] = nfcData.optDryTime > 0 ? nfcData.optDryTime : 360;
-      }
-      Serial.print("Tag assegnato allo slot "); Serial.println(freeSlot);
-    }
-    return;
-  }
+  if (readIso15693Tag()) return;
 
   resetNfcRf();
   uint8_t uid[10]={0}; uint8_t uidLength = 0;
   for (uint8_t attempt = 1; attempt <= NFC_READ_ATTEMPTS && uidLength < 4; attempt++) {
     uint8_t response[10]={0};
-    Serial.print("Tentativo NFC "); Serial.print(attempt); Serial.print("/"); Serial.println(NFC_READ_ATTEMPTS);
     uidLength = nfc14443.activateTypeA(response, 1);
-    printHexBuffer("activateTypeA response: ", response, sizeof(response));
     if (uidLength == 0) {
       resetNfcRf(); memset(response, 0, sizeof(response));
       uidLength = nfc14443.activateTypeA(response, 0);
@@ -371,7 +231,7 @@ void readNfcTag() {
   }
 
   if (uidLength >= 4) { setNfcTagData(uidToString(uid, uidLength), uidLength); }
-  else { clearNfcReadState(); nfcData.lastStatus = "Nessun tag ISO14443A"; }
+  else { clearNfcReadState(); }
   resetNfcRf();
 }
 
@@ -390,115 +250,24 @@ void clearNfcReadState() {
   nfcData.optNomLength = 0; nfcData.optActLength = 0;
   nfcData.optSpoolW = 0; nfcData.optSpoolOd = 0; nfcData.optSpoolId = 0; nfcData.optSpoolHole = 0;
   nfcData.optCountry = "";
-  nfcData.lastStatus = "Pronto: appoggia il tag e premi Leggi tag";
+  nfcData.lastStatus = "Nessun tag";
 }
 
-bool writeOpenPrintTag(uint8_t materialType, const String &brandName, const String &materialName,
-    uint16_t minPrintTemp, uint16_t maxPrintTemp, uint16_t minBedTemp, uint16_t maxBedTemp,
-    uint16_t dryingTemp, uint16_t dryingTime, const String &primaryColor,
-    uint16_t nominalWeight, uint16_t actualWeight, uint16_t emptyWeight,
-    float density, float filamentDiameter, uint32_t nominalLength, uint32_t actualLength,
-    uint32_t manufacturedDate, const String &country,
-    uint16_t spoolWidth, uint16_t spoolOuterDiameter, uint16_t spoolInnerDiameter, uint16_t spoolHoleDiameter) {
-  resetNfc15693Rf();
-  uint8_t uid[8]={0}; ISO15693ErrorCode rc = EC_NO_CARD;
-  for (uint8_t attempt = 1; attempt <= NFC_READ_ATTEMPTS; attempt++) {
-    rc = nfc15693.getInventory(uid);
-    if (rc == ISO15693_EC_OK) break;
-    resetNfc15693Rf(); delay(NFC_RETRY_DELAY_MS);
-  }
-  if (rc != ISO15693_EC_OK) { clearNfcReadState(); nfcData.lastStatus = "Scrittura annullata: nessun tag ISO15693"; return false; }
-
-  uint8_t memory[256]={0};
-  const uint16_t usedBytes = buildOpenPrintTagMemory(memory, sizeof(memory), brandName, materialName, materialType,
-    minPrintTemp, maxPrintTemp, minBedTemp, maxBedTemp, dryingTemp, dryingTime, primaryColor,
-    nominalWeight, actualWeight, emptyWeight, density, filamentDiameter, nominalLength, actualLength,
-    manufacturedDate, country, spoolWidth, spoolOuterDiameter, spoolInnerDiameter, spoolHoleDiameter);
-  const uint8_t blocksToWrite = (usedBytes + 3) / 4;
-  for (uint8_t blockNo = 0; blockNo < blocksToWrite; blockNo++) {
-    rc = nfc15693.writeSingleBlock(uid, blockNo, &memory[blockNo*4], 4);
-    if (rc != ISO15693_EC_OK) { nfcData.lastStatus = "Errore scrittura blocco " + String(blockNo); return false; }
-    delay(20);
-  }
-  nfcData.lastStatus = "OpenPrintTag scritto";
-  readIso15693Tag();
-  return true;
-}
-
-String nfcJson() {
-  String json = "{\"readerPresent\":"; json += nfcData.readerPresent ? "true" : "false";
-  json += ",\"rfReady\":";          json += nfcData.rfReady ? "true" : "false";
-  json += ",\"productVersion\":\""; json += nfcData.productVersion;
-  json += "\",\"firmwareVersion\":\""; json += nfcData.firmwareVersion;
-  json += "\",\"eepromVersion\":\"";   json += nfcData.eepromVersion;
-  json += "\",\"lastStatus\":\"";      json += nfcData.lastStatus;
-  json += "\",\"lastUid\":\"";         json += nfcData.lastUid;
-  json += "\",\"lastUidLength\":";     json += String(nfcData.lastUidLength);
-  json += ",\"tagType\":\"";      json += nfcData.tagType;
-  json += "\",\"technologies\":\""; json += nfcData.technologies;
-  json += "\",\"atqa\":\"";          json += nfcData.atqa;
-  json += "\",\"sak\":\"";           json += nfcData.sak;
-  json += "\",\"memoryInfo\":\"";    json += nfcData.memoryInfo;
-  json += "\",\"dataFormat\":\"";    json += escapeJson(nfcData.dataFormat);
-  json += "\",\"memoryDump\":\"";    json += escapeJson(nfcData.memoryDump);
-  json += "\",\"openPrintTagColor\":\""; json += escapeJson(nfcData.openPrintTagColor);
-  json += "\",\"optParsed\":";  json += nfcData.optParsed ? "true" : "false";
-  if (nfcData.optParsed) {
-    json += ",\"optBrand\":\"";    json += escapeJson(nfcData.optBrand);
-    json += "\",\"optMaterial\":\""; json += escapeJson(nfcData.optMaterial);
-    json += "\",\"optMatType\":";  json += String(nfcData.optMatType);
-    json += ",\"optDryTemp\":";    json += String(nfcData.optDryTemp);
-    json += ",\"optDryTime\":";    json += String(nfcData.optDryTime);
-    json += ",\"optNozzleMin\":";  json += String(nfcData.optNozzleMin);
-    json += ",\"optNozzleMax\":";  json += String(nfcData.optNozzleMax);
-    json += ",\"optBedMin\":";     json += String(nfcData.optBedMin);
-    json += ",\"optBedMax\":";     json += String(nfcData.optBedMax);
-    json += ",\"optDensity\":";    json += String(nfcData.optDensity, 3);
-    json += ",\"optDiameter\":";   json += String(nfcData.optDiameter, 2);
-    json += ",\"optNomWeight\":";  json += String(nfcData.optNomWeight);
-    json += ",\"optActWeight\":";  json += String(nfcData.optActWeight);
-    json += ",\"optEmptyWeight\":";json += String(nfcData.optEmptyWeight);
-    json += ",\"optNomLength\":";  json += String(nfcData.optNomLength);
-    json += ",\"optActLength\":";  json += String(nfcData.optActLength);
-    json += ",\"optSpoolW\":";     json += String(nfcData.optSpoolW);
-    json += ",\"optSpoolOd\":";    json += String(nfcData.optSpoolOd);
-    json += ",\"optSpoolId\":";    json += String(nfcData.optSpoolId);
-    json += ",\"optSpoolHole\":";  json += String(nfcData.optSpoolHole);
-    json += ",\"optCountry\":\"";  json += escapeJson(nfcData.optCountry);
-    json += "\"";
-  }
-  json += "}";
-  return json;
-}
-
-int8_t findFreeSlot() {
-  for (uint8_t i = 0; i < DryerSlots::NUM_SLOTS; i++) {
-    if (!dryerSlots.slotOccupied[i]) return i;
-  }
-  return -1;
-}
-
-String slotJson() {
-  String json = "{\"slots\":[";
-  for (uint8_t i = 0; i < DryerSlots::NUM_SLOTS; i++) {
-    if (i > 0) json += ",";
-    json += "{\"index\":"; json += String(i);
-    json += ",\"occupied\":"; json += dryerSlots.slotOccupied[i] ? "true" : "false";
-    json += ",\"dryingTemp\":"; json += String(dryerSlots.dryingTemp[i]);
-    json += ",\"dryingMinutes\":"; json += String(dryerSlots.dryingMinutes[i]);
-    json += ",\"cycleRunning\":"; json += dryerSlots.cycleRunning[i] ? "true" : "false";
-    json += ",\"material\":\""; json += escapeJson(dryerSlots.bobina[i].optMaterial);
-    json += "\",\"brand\":\""; json += escapeJson(dryerSlots.bobina[i].optBrand);
-    json += "\",\"uid\":\""; json += escapeJson(dryerSlots.bobina[i].lastUid);
-    json += "\"";
-    if (dryerSlots.cycleRunning[i] && dryerSlots.cycleEndTime[i] > 0) {
-      uint32_t now = millis();
-      int32_t remaining = (int32_t)(dryerSlots.cycleEndTime[i] - now) / 1000;
-      json += ",\"cycleRemainingSeconds\":"; json += String(max(0L, (long)remaining));
-    }
-    json += "}";
-  }
-  json += "],\"freeSlot\":"; json += String(findFreeSlot());
-  json += "}";
-  return json;
+void printNfcData() {
+  Serial.print("UID: "); Serial.print(nfcData.lastUid);
+  Serial.print(" | tipo: "); Serial.print(nfcData.tagType);
+  Serial.print(" | stato: "); Serial.println(nfcData.lastStatus);
+  if (!nfcData.optParsed) return;
+  Serial.println("--- OpenPrintTag ---");
+  Serial.print("Brand: ");    Serial.println(nfcData.optBrand);
+  Serial.print("Materiale: ");Serial.println(nfcData.optMaterial);
+  Serial.print("Colore: ");   Serial.println(nfcData.openPrintTagColor);
+  Serial.print("Diametro: "); Serial.print(nfcData.optDiameter, 2); Serial.println(" mm");
+  Serial.print("Densita: ");  Serial.print(nfcData.optDensity, 3); Serial.println(" g/cm3");
+  Serial.print("Temp ugello: "); Serial.print(nfcData.optNozzleMin); Serial.print("-"); Serial.print(nfcData.optNozzleMax); Serial.println(" C");
+  Serial.print("Temp piatto: "); Serial.print(nfcData.optBedMin); Serial.print("-"); Serial.print(nfcData.optBedMax); Serial.println(" C");
+  Serial.print("Peso nominale: "); Serial.print(nfcData.optNomWeight); Serial.println(" g");
+  Serial.print("Peso attuale: ");  Serial.print(nfcData.optActWeight); Serial.println(" g");
+  Serial.print("Paese: "); Serial.println(nfcData.optCountry);
+  Serial.println("--------------------");
 }

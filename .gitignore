@@ -1,10 +1,2 @@
 .pio/
-hardware/.history/
-hardware/*.bak*
-hardware/~*.lck
-hardware/*.dsn
-hardware/*.ses
-hardware/*.gbr
-hardware/*.gbrjob
-essiccatore_log.csv
-logger_console.txt
+src/secrets.h

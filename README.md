@@ -1,92 +1,64 @@
-# ODIN — Open Dryer with Intelligent NFC
+# Phoenix OpenTag
 
-Stazione intelligente per l'essiccazione e la gestione dei filamenti per stampa 3D, basata su **ESP32** con PCB custom, **Raspberry Pi 5** come backend cloud locale e **app mobile Flutter** cross-platform.
+Lettore NFC minimale per tag **OpenPrintTag** (standard Prusa Research), basato su **ESP32 + PN5180**, pensato per essere collegato alla Sovol SV08 "Phoenix".
 
-ODIN integra lettura/scrittura tag NFC OpenPrintTag, rilevamento colore OPT4048, controllo PI multi-zona della temperatura, gestione umidità con valvola solenoide e dashboard web embedded.
-
----
-
-## Repository correlati
-
-| Repository | Descrizione |
-|---|---|
-| **[Ricky1966/Odin-ESP32](https://github.com/Ricky1966/Odin-ESP32)** ← questo | Firmware ESP32, PCB KiCad, documentazione |
-| **[Ricky1966/Odin-App](https://github.com/Ricky1966/Odin-App)** | App mobile Flutter (Android/iOS) |
-| **[Ricky1966/Odin-Cloud](https://github.com/Ricky1966/Odin-Cloud)** | Backend FastAPI su Raspberry Pi 5 |
-| **[Ricky1966/Odin-Releases](https://github.com/Ricky1966/Odin-Releases)** | Release artifacts (firmware.bin, app.apk) |
+Nato come versione ridotta di [Odin-ESP32](https://github.com/Ricky1966/Odin-ESP32) (stazione di essiccazione filamenti): stessa libreria PN5180 e stesso parser CBOR OpenPrintTag, ma senza dashboard web, riscaldatore, sensori ambiente o gestione multi-bobina — solo lettura del tag e stampa su seriale.
 
 ---
 
-## Funzionalità
+## Cosa fa
 
-- Essiccazione filamenti con controllo PI su 4 zone indipendenti a 24V
-- Lettura e scrittura tag NFC/RFID OpenPrintTag (standard Prusa Research) tramite PN5180
-- Rilevamento colore filamento con sensore OPT4048 + 2 LED bianchi
-- Monitoraggio temperatura e umidità della camera con BME280
-- Valvola solenoide 24V per espulsione aria umida (ciclo heat → vent → repeat)
-- Fan 24V per circolazione aria
-- Motore stepper NEMA17 per rotazione bobine durante la lettura
-- Dashboard web embedded su ESP32 (accesso via WiFi AP o rete locale)
-- Aggiornamento firmware OTA via browser (`/update`)
-- Backend FastAPI su Raspberry Pi 5 con accesso remoto via Tailscale
-- App mobile Flutter con controllo completo del ciclo di essiccazione
-
----
+- Si connette al WiFi di casa (stazione, nessun Access Point) e stampa l'IP assegnato — non serve ancora per la lettura tag, è un punto di aggancio per sviluppi futuri (es. integrazione Moonraker/Spoolman).
+- Legge in loop i tag NFC vicini al PN5180 (ISO15693/NFC-V per OpenPrintTag, ISO14443A come fallback generico).
+- Quando riconosce un OpenPrintTag, stampa su seriale: brand, materiale, colore, diametro, densità, range temperature ugello/piatto, pesi, paese.
+- Stampa solo quando il tag cambia (niente spam ripetuto sullo stesso tag).
 
 ## Hardware
 
-- ESP32 AZ-Delivery 38-pin su PCB custom (KiCad)
-- Lettore NFC PN5180 (FPC 10-pin)
-- Sensore colore OPT4048 + runout filamento (FPC 8-pin)
-- Sensore T°/umidità BME280
-- 4× riscaldatori kapton 24V + 4× NTC 100kΩ β=3950
-- Alimentatore 24V 15A + buck converter 24V→5V
-- Motore stepper NEMA17 con driver esterno (A4988/DRV8825/TMC2209)
-- Ventola 24V + valvola solenoide NC 24V
-- Raspberry Pi 5 come backend cloud locale
-- Box plexiglass 440×340×330mm (~49L)
+- ESP32 DevKit 38 pin (AZ-Delivery ESP32-WROOM-32)
+- Modulo PN5180 (breakout NXP/AZ-Delivery)
 
----
+Cablaggio punto-punto:
 
-## Struttura repository
+| Segnale PN5180 | GPIO ESP32 |
+|---|---|
+| RST | 17 |
+| NSS (CS) | 5 |
+| MOSI | 23 |
+| MISO | 19 |
+| SCK / CLK | 18 |
+| BUSY | 16 |
+| 5V | 5V |
+| 3V3 | 3V3 |
+| GND | GND |
 
-```
-src/                  Firmware ESP32 (PlatformIO / Arduino)
-  config.h            Costanti, pin, struct
-  sensor.h/.cpp       BME280 + NTC ADC
-  heater.h/.cpp       Controllo PI riscaldatore
-  nfc.h/.cpp          Driver PN5180 + OpenPrintTag CBOR
-  web_ui.h/.cpp       Dashboard web + API HTTP
-  i18n.h/.cpp         Sistema multilingua (IT/EN)
-  materials.h/.cpp    Profili materiali
-  utils.h/.cpp        Utility generali
-  main.cpp            setup() + loop()
+## Setup
 
-hardware/             PCB KiCad + Gerber per PCBWay
-  gerber/Archivio.zip Gerber + drill + BOM + CPL pronti per produzione
-
-backend/              (in sviluppo) FastAPI su Raspberry Pi 5
-docs/hardware/        Documentazione elettronica e GPIO
+```bash
+cp src/secrets.h.example src/secrets.h
+# modifica src/secrets.h con SSID/password WiFi reali
+pio run --target upload
+pio device monitor
 ```
 
----
+`src/secrets.h` non è versionato (vedi `.gitignore`).
 
-## Accesso alla dashboard
+## Struttura
 
-- **WiFi AP**: SSID `ODIN`, password `odindryer` → `http://192.168.4.1`
-- **Rete locale**: `http://<IP_ESP32>`
-- **OTA**: `http://<IP_ESP32>/update`
-
----
+```
+src/
+  config.h        Pin PN5180, struct NfcData, timing
+  secrets.h       Credenziali WiFi (non versionato, vedi secrets.h.example)
+  nfc.h/.cpp      Driver PN5180 + parser CBOR OpenPrintTag (solo lettura)
+  utils.h/.cpp    Utility generiche (hex, UID, ecc.)
+  main.cpp        setup() + loop()
+lib/PN5180-Library/  Libreria PN5180 vendorizzata (da Odin-ESP32)
+```
 
 ## Riferimenti
 
 - [OpenPrintTag](https://openprinttag.org/) — standard NFC open-source di Prusa Research
-- [App mobile ODIN](https://github.com/Ricky1966/odin-mobile) — Flutter app (Android/iOS)
-- [docs/hardware/design.md](docs/hardware/design.md) — architettura elettronica
-- [docs/hardware/esp32.md](docs/hardware/esp32.md) — GPIO map e pinout
-
----
+- [Odin-ESP32](https://github.com/Ricky1966/Odin-ESP32) — progetto sorgente (essiccatore filamenti)
 
 ## Licenza
 

@@ -1,53 +1,51 @@
 #include <Arduino.h>
-#include <Wire.h>
 #include <WiFi.h>
 #include "config.h"
-#include "materials.h"
-#include "sensor.h"
-#include "heater.h"
-#include "web_ui.h"
-#include "log.h"
-#include "translations.h"
+#include "nfc.h"
 
-static const IPAddress AP_IP(192, 168, 4, 1);
-static const IPAddress AP_SUBNET(255, 255, 255, 0);
+static unsigned long lastPollMs = 0;
+static String lastPrintedUid = "";
+
+static void connectWifi() {
+  WiFi.mode(WIFI_STA);
+  WiFi.setSleep(false);
+  Serial.print("Connessione WiFi a "); Serial.println(WIFI_SSID);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+
+  const unsigned long startMs = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - startMs < 15000) {
+    delay(250); Serial.print(".");
+  }
+  Serial.println();
+
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.print("WiFi connesso, IP: "); Serial.println(WiFi.localIP());
+  } else {
+    Serial.println("WiFi non connesso (continuo comunque, la lettura NFC non dipende dalla rete).");
+  }
+}
 
 void setup() {
   Serial.begin(115200);
   delay(1000);
-  Serial.println("\nODIN - avvio");
+  Serial.println("\nPhoenix OpenTag reader - avvio");
 
-  loadAppSettings();
-  loadCustomProfiles();
-  Serial.print("Profili personalizzati: "); Serial.println(customProfileCount);
-
-  pinMode(HEATER_PIN, OUTPUT);
-  setHeater(false);
-
-  Wire.begin(I2C_SDA, I2C_SCL);
-  sensorSetup();
-
-  WiFi.disconnect(true);
-  WiFi.mode(WIFI_AP_STA);
-  WiFi.setSleep(false);
-  WiFi.softAPConfig(AP_IP, AP_IP, AP_SUBNET);
-  WiFi.softAP(AP_SSID, AP_PASSWORD);
-  Serial.print("AP: http://"); Serial.println(WiFi.softAPIP());
-
-  connectWifiClient();
-
-  // Scarica traduzioni da Pi5 dopo WiFi
-  delay(1000); // Attendi che WiFi sia pronto
-  downloadTranslationsFromPi5(appSettings.language.c_str());
-
-  setupWebServer();
+  connectWifi();
+  setupNfcReader();
 }
 
 void loop() {
-  webLoop();
-  checkWifiReconnect();
-  readSensor();
-  readBedTemperature();
-  updateHeaterControl();
-  logCheck();
+  if (millis() - lastPollMs < NFC_POLL_INTERVAL_MS) return;
+  lastPollMs = millis();
+
+  clearNfcReadState();
+  readNfcTag();
+
+  // Stampa solo quando cambia il tag (evita di spammare la seriale a ogni poll)
+  if (nfcData.lastUid != "--" && nfcData.lastUid != lastPrintedUid) {
+    lastPrintedUid = nfcData.lastUid;
+    printNfcData();
+  } else if (nfcData.lastUid == "--") {
+    lastPrintedUid = "";
+  }
 }
