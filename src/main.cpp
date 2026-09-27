@@ -3,9 +3,6 @@
 #include "config.h"
 #include "nfc.h"
 
-static unsigned long lastPollMs = 0;
-static String lastPrintedUid = "";
-
 static void connectWifi() {
   WiFi.mode(WIFI_STA);
   WiFi.setSleep(false);
@@ -31,21 +28,9 @@ void setup() {
   Serial.println("\nPhoenix OpenTag reader - avvio");
 
   connectWifi();
-  setupNfcReader();
+  nfcSetup();
 }
 
 void loop() {
-  if (millis() - lastPollMs < NFC_POLL_INTERVAL_MS) return;
-  lastPollMs = millis();
-
-  clearNfcReadState();
-  readNfcTag();
-
-  // Stampa solo quando cambia il tag (evita di spammare la seriale a ogni poll)
-  if (nfcData.lastUid != "--" && nfcData.lastUid != lastPrintedUid) {
-    lastPrintedUid = nfcData.lastUid;
-    printNfcData();
-  } else if (nfcData.lastUid == "--") {
-    lastPrintedUid = "";
-  }
+  nfcLoop();
 }
