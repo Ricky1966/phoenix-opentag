@@ -1,6 +1,7 @@
 name: Firmware checks
 on:
   push:
+    branches: [main]
   pull_request:
 permissions:
   contents: read
@@ -19,4 +20,12 @@ jobs:
       - name: Compile ESP32 with placeholder credentials
         run: |
           cp src/secrets.h.example src/secrets.h
+          pio run -e esp32dev
+      - name: Compile ESP32 with HTTP transport enabled
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/secrets.h')
+          p.write_text(p.read_text() + '\n#define PHOENIX_TAG_ENDPOINT "http://127.0.0.1:9999/tag"\n')
+          PY
           pio run -e esp32dev

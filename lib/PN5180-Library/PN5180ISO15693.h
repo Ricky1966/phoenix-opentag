@@ -19,6 +19,7 @@
 #ifndef PN5180ISO15693_H
 #define PN5180ISO15693_H
 
+#include <Arduino.h>
 #include "PN5180.h"
 
 enum ISO15693ErrorCode {
