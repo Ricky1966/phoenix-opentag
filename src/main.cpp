@@ -2,6 +2,7 @@
 #include <WiFi.h>
 #include "config.h"
 #include "nfc.h"
+#include "transport.h"
 
 static void connectWifi() {
   WiFi.mode(WIFI_STA);
@@ -27,10 +28,12 @@ void setup() {
   delay(1000);
   Serial.println("\nPhoenix OpenTag reader - avvio");
 
-  connectWifi();
+  transportSetup();
+  if (transportWantsWifi()) connectWifi();
   nfcSetup();
 }
 
 void loop() {
+  transportLoop();
   nfcLoop();
 }

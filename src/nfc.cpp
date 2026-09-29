@@ -3,6 +3,7 @@
 #include <PN5180.h>
 #include <PN5180ISO15693.h>
 #include "config.h"
+#include "transport.h"
 
 static PN5180ISO15693 nfc(PN5180_NSS, PN5180_BUSY, PN5180_RST);
 SpoolData spool;
@@ -175,7 +176,10 @@ void nfcLoop() {
     tmp.lastReadMs = millis();
     bool changed = !wasPresent || strcmp(tmp.uid, spool.uid) != 0;
     spool = tmp;
-    if (changed) printSpoolData(spool);
+    if (changed) {
+      printSpoolData(spool);
+      transportSendTag(spool);
+    }
   } else {
     if (wasPresent) Serial.println("NFC: bobina rimossa");
     spool.present = false;

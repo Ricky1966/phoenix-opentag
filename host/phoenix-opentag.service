@@ -1,0 +1,27 @@
+# Demone Phoenix OpenTag: letture ESP32 + PN5180 -> Spoolman -> bobina attiva in Moonraker.
+#
+# Installazione su Phoenix (vedi README, sezione "Demone su Phoenix"):
+#   sudo cp host/phoenix-opentag.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now phoenix-opentag
+#
+# Modalita' wifi: basta --listen. Modalita' usb o auto: aggiungi --serial con il
+# percorso by-id dell'ESP32 (ls -l /dev/serial/by-id/), MAI quello di una MCU Klipper.
+
+[Unit]
+Description=Phoenix OpenTag daemon (ESP32 PN5180 -> Spoolman/Moonraker)
+After=network-online.target moonraker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=biqu
+SupplementaryGroups=dialout
+ExecStart=/usr/bin/python3 /home/biqu/phoenix-opentag/host/phoenix_opentag_daemon.py \
+    --listen 0.0.0.0:7913 \
+    --spoolman http://localhost:7912 \
+    --moonraker http://localhost:7125
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
