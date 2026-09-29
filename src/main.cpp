@@ -2,6 +2,7 @@
 #include <WiFi.h>
 #include "config.h"
 #include "nfc.h"
+#include "transport.h"
 
 static void connectWifi() {
   WiFi.mode(WIFI_STA);
@@ -33,4 +34,6 @@ void setup() {
 
 void loop() {
   nfcLoop();
+  transportLoop();
+  delay(1);
 }
