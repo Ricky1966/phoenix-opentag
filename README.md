@@ -89,6 +89,19 @@ sudo systemctl daemon-reload && sudo systemctl enable --now phoenix-opentag
 journalctl -u phoenix-opentag -f
 ```
 
+Per passare il servizio alla modalità USB, aggiungi `--serial` alla riga di `--listen` e riavvialo:
+
+```bash
+sudo sed -i 's|--listen 0.0.0.0:7913 \\|--listen 0.0.0.0:7913 --serial /dev/serial/by-id/usb-1a86_USB_Serial-if00-port0 \\|' /etc/systemd/system/phoenix-opentag.service
+sudo systemctl daemon-reload && sudo systemctl restart phoenix-opentag
+```
+
+Per dare comandi all'ESP32 quando è collegato a Phoenix, ferma il demone (`sudo systemctl stop phoenix-opentag`: la porta non va letta in due) e usa il monitor seriale incluso in Klipper. Si esce con `Ctrl+]`, che con la tastiera italiana è `Ctrl+5`:
+
+```bash
+~/klippy-env/bin/python -m serial.tools.miniterm -e /dev/serial/by-id/usb-1a86_USB_Serial-if00-port0 115200
+```
+
 Con `--serial` usa sempre il percorso `/dev/serial/by-id/...` dell'ESP32. Il demone rifiuta di aprire una porta che compare come `serial:` nei `.cfg` di Klipper (`--klipper-config`, predefinito `~/printer_data/config`).
 
 Il demone e Spoolman non hanno autenticazione: vanno esposti solo sulla rete locale.
@@ -102,7 +115,9 @@ Il demone e Spoolman non hanno autenticazione: vanno esposti solo sulla rete loc
 
 - Demone installato come servizio (`host/phoenix-opentag.service`, `enable --now`): la stessa lettura riattiva la bobina 2; un secondo tag (UID `E0:04:01:08:66:07:19:17`, BravaSoft Test PLA) crea fornitore BravaSoft, un filamento separato e la bobina 3, che diventa quella attiva.
 
-Da validare: modalità `usb` e `auto` con l'ESP32 collegato a Phoenix.
+- **Modalità USB: PASS.** ESP32 collegato a una porta USB di Phoenix (`/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0`, accanto alla MCU Klipper `usb-Klipper_stm32f103xe_...`), servizio avviato con `--serial` su quel percorso. La lettura arriva come `[usb]` e riattiva la bobina 2.
+
+Da validare: modalità `auto`.
 
 ## Struttura
 

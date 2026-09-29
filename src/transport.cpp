@@ -32,6 +32,11 @@ static bool validReaderId(const String &s) {
   return true;
 }
 
+// getString() su una chiave mai salvata stampa un errore NOT_FOUND: meglio controllare prima.
+static String load(Preferences &p, const char *key, const char *fallback) {
+  return p.isKey(key) ? p.getString(key, fallback) : String(fallback);
+}
+
 static void save(const char *key, const String &value) {
   Preferences p;
   p.begin("opentag", false);
@@ -179,6 +184,7 @@ void transportLoop() {
   while (Serial.available()) {
     char c = (char)Serial.read();
     if (c == '\n' || c == '\r') { command(line); line = ""; }
+    else if (c == '\b' || c == 0x7F) { if (line.length()) line.remove(line.length() - 1); }  // Backspace
     else if (line.length() < 128) line += c;
   }
 }
@@ -188,9 +194,9 @@ bool transportWantsWifi() { return mode != T_USB; }
 void transportSetup() {
   Preferences p;
   p.begin("opentag", false);  // lettura/scrittura: crea il namespace al primo avvio, niente errore NOT_FOUND
-  String m = p.getString("mode", TRANSPORT_DEFAULT_MODE);
-  host = p.getString("host", TRANSPORT_DEFAULT_HOST);
-  readerId = p.getString("reader", TRANSPORT_DEFAULT_READER);
+  String m = load(p, "mode", TRANSPORT_DEFAULT_MODE);
+  host = load(p, "host", TRANSPORT_DEFAULT_HOST);
+  readerId = load(p, "reader", TRANSPORT_DEFAULT_READER);
   p.end();
   if (!parseMode(m, &mode)) mode = T_USB;
   show();
