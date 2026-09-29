@@ -14,5 +14,4 @@
 
 void transportSetup();
 void transportLoop();                    // legge i comandi dalla seriale
-bool transportWantsWifi();
 void transportSendTag(const SpoolData &s);

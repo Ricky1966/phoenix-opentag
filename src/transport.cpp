@@ -128,11 +128,9 @@ static void show() {
   Serial.print("Modalita invio: "); Serial.println(modeName(mode));
   Serial.print("Host demone:    "); Serial.println(host);
   Serial.print("Reader id:      "); Serial.println(readerId);
-  if (mode != T_USB) {
-    Serial.print("WiFi:           ");
-    if (WiFi.status() == WL_CONNECTED) { Serial.print("connesso, IP "); Serial.println(WiFi.localIP()); }
-    else Serial.println("non connesso");
-  }
+  Serial.print("WiFi:           ");
+  if (WiFi.status() == WL_CONNECTED) { Serial.print("connesso, IP "); Serial.println(WiFi.localIP()); }
+  else Serial.println("non connesso");
 }
 
 static void help() {
@@ -188,8 +186,6 @@ void transportLoop() {
     else if (line.length() < 128) line += c;
   }
 }
-
-bool transportWantsWifi() { return mode != T_USB; }
 
 void transportSetup() {
   Preferences p;

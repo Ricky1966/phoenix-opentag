@@ -8,7 +8,7 @@ Nato come versione ridotta di [Odin-ESP32](https://github.com/Ricky1966/Odin-ESP
 
 ## Cosa fa
 
-- Si connette al WiFi di casa (stazione, nessun Access Point) quando la modalità di invio lo richiede.
+- Si connette al WiFi di casa (stazione, nessun Access Point), usato per l'invio in modalità `wifi`/`auto` e per l'aggiornamento OTA.
 - Legge in loop i tag ISO15693/NFC-V vicini al PN5180 (il protocollo usato da OpenPrintTag).
 - Quando riconosce un OpenPrintTag, stampa su seriale: brand, materiale, colore, diametro, densità, range temperature ugello/piatto, peso, paese.
 - Stampa solo quando il tag cambia (niente spam ripetuto sullo stesso tag).
@@ -43,6 +43,23 @@ pio device monitor
 ```
 
 `src/secrets.h` non è versionato (vedi `.gitignore`).
+
+## Aggiornamento via WiFi (OTA)
+
+Dalla 0.4.0 il firmware si aggiorna anche via WiFi, senza staccare l'ESP32 da Phoenix. Il WiFi resta sempre acceso, anche in modalità `usb`, perché serve all'OTA.
+
+1. In `src/secrets.h` aggiungi la password OTA (vedi `secrets.h.example`); senza questa riga l'OTA resta disattivato:
+   ```c
+   #define OTA_PASSWORD "scegli-una-password"
+   ```
+2. **Una sola volta, via USB**, flasha il primo firmware con OTA: `pio run -t upload --upload-port <porta>`. All'avvio deve comparire `OTA attivo: phoenix-opentag.local (<IP>)`.
+3. Da quel momento, dal PC:
+   ```bash
+   PHOENIX_OTA_PASSWORD='scegli-una-password' pio run -e esp32dev_ota -t upload
+   ```
+   Se `phoenix-opentag.local` non si risolve, aggiungi `--upload-port <IP dell'ESP32>` (lo stampa `show`).
+
+Durante l'aggiornamento la lettura NFC è sospesa; al termine l'ESP32 si riavvia e il demone su Phoenix riprende a leggere la seriale da solo.
 
 ## Invio a Phoenix: USB o WiFi
 
@@ -127,7 +144,7 @@ src/
   secrets.h       Credenziali WiFi (non versionato, vedi secrets.h.example)
   nfc.h/.cpp      Driver PN5180 (ISO15693) + parser NDEF/CBOR OpenPrintTag (solo lettura)
   transport.h/.cpp  Invio letture a Phoenix (USB/WiFi), comandi seriali, impostazioni in flash
-  main.cpp        setup() + loop()
+  main.cpp        setup() + loop(), WiFi e OTA
 host/
   phoenix_opentag_daemon.py  Demone per Phoenix: seriale/HTTP -> Spoolman -> Moonraker
   phoenix-opentag.service    Unit systemd
