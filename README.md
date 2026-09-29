@@ -100,7 +100,9 @@ Il demone e Spoolman non hanno autenticazione: vanno esposti solo sulla rete loc
 - Prima lettura: il demone ha creato fornitore ODIN, filamento "Test PLA" e la bobina 2 con il tag associato, poi l'ha resa attiva in Moonraker (`GET /server/spoolman/spool_id` → `2`). Tempo dalla lettura all'attivazione: circa 1 s.
 - Seconda lettura, dopo aver tolto il tag per più di 5 s: bobina 2 ritrovata (`created: false`) e riattivata, nessun duplicato.
 
-Da validare: modalità `usb` e `auto` con l'ESP32 collegato a Phoenix, e il demone come servizio systemd.
+- Demone installato come servizio (`host/phoenix-opentag.service`, `enable --now`): la stessa lettura riattiva la bobina 2; un secondo tag (UID `E0:04:01:08:66:07:19:17`, BravaSoft Test PLA) crea fornitore BravaSoft, un filamento separato e la bobina 3, che diventa quella attiva.
+
+Da validare: modalità `usb` e `auto` con l'ESP32 collegato a Phoenix.
 
 ## Struttura
 
