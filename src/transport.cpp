@@ -187,7 +187,7 @@ bool transportWantsWifi() { return mode != T_USB; }
 
 void transportSetup() {
   Preferences p;
-  p.begin("opentag", true);
+  p.begin("opentag", false);  // lettura/scrittura: crea il namespace al primo avvio, niente errore NOT_FOUND
   String m = p.getString("mode", TRANSPORT_DEFAULT_MODE);
   host = p.getString("host", TRANSPORT_DEFAULT_HOST);
   readerId = p.getString("reader", TRANSPORT_DEFAULT_READER);

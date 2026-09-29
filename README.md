@@ -93,6 +93,15 @@ Con `--serial` usa sempre il percorso `/dev/serial/by-id/...` dell'ESP32. Il dem
 
 Il demone e Spoolman non hanno autenticazione: vanno esposti solo sulla rete locale.
 
+## Validazione
+
+**29 settembre 2026, modalità WiFi: PASS su hardware reale.** ESP32 DevKit (CH340) + PN5180 3.5, tag OpenPrintTag di prova (UID `E0:04:01:08:66:07:15:E3`, ODIN Test PLA). Phoenix: Spoolman 0.27.0 in Docker, demone avviato a mano con `--listen 0.0.0.0:7913`.
+
+- Prima lettura: il demone ha creato fornitore ODIN, filamento "Test PLA" e la bobina 2 con il tag associato, poi l'ha resa attiva in Moonraker (`GET /server/spoolman/spool_id` → `2`). Tempo dalla lettura all'attivazione: circa 1 s.
+- Seconda lettura, dopo aver tolto il tag per più di 5 s: bobina 2 ritrovata (`created: false`) e riattivata, nessun duplicato.
+
+Da validare: modalità `usb` e `auto` con l'ESP32 collegato a Phoenix, e il demone come servizio systemd.
+
 ## Struttura
 
 ```
