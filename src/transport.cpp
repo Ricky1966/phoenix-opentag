@@ -69,7 +69,7 @@ static bool postWifi(const String &json) {
   return code >= 200 && code < 300;
 }
 
-static void deliverLatest() {
+static void observeLatest() {
   std::string json = spoolJson(spool, readerId.c_str(), PHOENIX_FW_VERSION);
   bool newEvent = spool.present && spool.valid &&
                   (json != delivery.body || eventToken.length() == 0);
@@ -81,6 +81,10 @@ static void deliverLatest() {
              (unsigned long)++sequence);
     eventToken = token;
   }
+}
+
+static void deliverLatest() {
+  observeLatest();
   if (!delivery.ready(millis())) return;
   String payload(delivery.body.c_str());
   payload.remove(payload.length()-1);
@@ -158,7 +162,7 @@ static void command(String cmd) {
 
 void transportLoop() {
   // Observe removal/new UID before accepting serial ACKs.
-  if(!nfcWriterHolding()) deliverLatest();
+  if(!nfcWriterHolding()) observeLatest();
   else delivery.observe(spool, "");
   static unsigned long lastReconnect = 0;
   if (WiFi.status() != WL_CONNECTED && uint32_t(millis()-lastReconnect) >= 30000) {
@@ -176,6 +180,9 @@ void transportLoop() {
     else if (line.length() < 768) line += c;
     else overflow=true;
   }
+  // Process a queued write-info before publishing a newly observed tag.
+  if(!nfcWriterHolding()) deliverLatest();
+  else { delivery.observe(spool, ""); eventToken=""; }
 }
 
 void transportSetup() {

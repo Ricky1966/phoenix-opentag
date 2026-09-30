@@ -1,5 +1,7 @@
 from pathlib import Path
 import sys
+import socket
+import threading
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'host'))
@@ -39,5 +41,43 @@ class WriterClientTests(unittest.TestCase):
         for image, uid in [(bytes(321), UID), (bytes(320), 'arbitrary\ncommand')]:
             with self.assertRaises(writer.WriterError): writer.write_image(c, image, uid, False)
         self.assertEqual(c.commands, [])
+
+class SerialProtocolTests(unittest.TestCase):
+    def test_stream_noise_and_full_commit(self):
+        local, remote = socket.socketpair()
+        commands = []
+        def emulator():
+            try:
+                for reply in [b'{"status":"ready","uid":"E004010866073472","blank":true,"ticket":"0123456789abcdef"}', b'{"status":"verified","verified":true}']:
+                    command = b''
+                    while not command.endswith(b'\n'):
+                        part = remote.recv(1024)
+                        if not part: return
+                        command += part
+                    commands.append(command)
+                    remote.sendall(b'boot log\nPHOENIX-TAG {}\nPHOENIX-')
+                    remote.sendall(b'WRITE ' + reply + b'\n')
+            finally:
+                remote.close()
+        thread = threading.Thread(target=emulator, daemon=True)
+        thread.start()
+        try:
+            result = writer.write_image(writer.SerialWriter(local.fileno(), 1), bytes(320), UID, False)
+            self.assertTrue(result['verified'])
+            self.assertEqual(len(commands), 2)
+            self.assertTrue(commands[-1].endswith(b'0' * 640 + b'\n'))
+        finally:
+            local.close()
+            thread.join(2)
+        self.assertFalse(thread.is_alive())
+
+    def test_timeout_has_no_retry(self):
+        local, remote = socket.socketpair()
+        try:
+            with self.assertRaises(writer.WriterError):
+                writer.SerialWriter(local.fileno(), 0.01).request('write-info')
+            self.assertEqual(remote.recv(1024), b'write-info\n')
+        finally:
+            local.close(); remote.close()
 
 if __name__ == '__main__': unittest.main()

@@ -27,8 +27,15 @@ class SerialWriter:
         if "\n" in command or "\r" in command or len(command) > 768:
             raise WriterError("Comando non valido")
         payload = (command + "\n").encode("ascii")
+        deadline = time.monotonic() + self.timeout
         while payload:
-            count = os.write(self.fd, payload)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0 or not select.select([], [self.fd], [], remaining)[1]:
+                raise WriterError("Timeout invio: esito sconosciuto, non ritentare automaticamente")
+            try:
+                count = os.write(self.fd, payload)
+            except BlockingIOError:
+                continue
             if count == 0:
                 raise WriterError("Seriale chiusa")
             payload = payload[count:]

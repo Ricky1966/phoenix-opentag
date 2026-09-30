@@ -46,6 +46,8 @@ static void otaLoop() {
 }
 
 void setup() {
+  // A full 320-byte image is 640 hex characters; retain it while NFC polls.
+  Serial.setRxBufferSize(1024);
   Serial.begin(115200);
   delay(1000);
   Serial.println("\nPhoenix OpenTag reader - avvio");
@@ -65,3 +67,4 @@ void loop() {
   transportLoop();
   delay(1);
 }
+
