@@ -61,6 +61,7 @@ void setup() {
 
 void loop() {
   otaLoop();
-  transportLoop();
   nfcLoop();
+  transportLoop();
+  delay(1);
 }
