@@ -1,0 +1,9 @@
+material=PETG Jet Black
+brand=Prusament
+weight=1000
+color=24292A
+density=1.27
+nozzleMin=240
+nozzleMax=260
+bedMin=70
+bedMax=90

@@ -1,0 +1,8 @@
+material=PETG Jet Black
+weight=1000
+color=24292A
+density=1.27
+nozzleMin=240
+nozzleMax=210
+bedMin=70
+bedMax=90

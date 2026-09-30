@@ -2,6 +2,7 @@
 #include <HTTPClient.h>
 #include <Preferences.h>
 #include <WiFi.h>
+#include <mbedtls/base64.h>
 #include "config.h"
 
 enum Transport { T_USB, T_WIFI, T_AUTO };
@@ -66,6 +67,17 @@ static void addFloat(String &j, const char *key, float val, int digits) {
   j += ",\""; j += key; j += "\":"; j += String(val, digits);
 }
 
+static String base64(const uint8_t *data, size_t len) {
+  size_t olen = 0;
+  mbedtls_base64_encode(nullptr, 0, &olen, data, len);       // ricava la dimensione necessaria
+  char *buf = (char *)calloc(olen + 1, 1);
+  if (!buf) return String();
+  mbedtls_base64_encode((unsigned char *)buf, olen, &olen, data, len);
+  String out(buf);
+  free(buf);
+  return out;
+}
+
 static String tagJson(const SpoolData &s) {
   String j = "{\"uid\":\"";
   j += s.uid;
@@ -86,6 +98,13 @@ static String tagJson(const SpoolData &s) {
   addInt(j, "bed_max", s.bedMax);
   addInt(j, "weight", s.weight);
   addStr(j, "country", s.country);
+  // Memoria grezza del tag: la decodifica completa spetta a Spoolman.
+  int rawLen = 0;
+  const uint8_t *raw = nfcRaw(&rawLen);
+  if (rawLen > 0) {
+    if (s.optTag) addStr(j, "format", "openprinttag");
+    addStr(j, "payload_b64", base64(raw, rawLen).c_str());
+  }
   j += "}";
   return j;
 }

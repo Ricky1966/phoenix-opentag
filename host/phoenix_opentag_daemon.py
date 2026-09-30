@@ -40,6 +40,8 @@ LINE_PREFIX = "PHOENIX-TAG "
 READER_ID_RE = re.compile(r"^[A-Za-z0-9._:-]{1,64}$")
 DEDUP_SECONDS = 5.0
 MAX_BODY = 4096
+MAX_PAYLOAD_B64 = 8192   # limite di Spoolman per payload_b64
+BASE64_RE = re.compile(r"^[A-Za-z0-9+/]*={0,2}$")
 # Primo token di material_name riconosciuto come tipo di materiale in Spoolman.
 KNOWN_MATERIALS = {
     "PLA", "PETG", "PET", "ASA", "ABS", "TPU", "PA", "PA6", "PA11", "PA12", "PC", "PP",
@@ -121,13 +123,21 @@ class Daemon:
             self.recent[key] = (now, result)
             return result
 
-    def _scan(self, uid: str, reader: str) -> dict:
-        return self.spoolman.call("POST", "/tag/scan", {
+    def _scan(self, uid: str, reader: str, event: dict) -> dict:
+        body: dict[str, Any] = {
             "uid": uid, "reader_id": reader, "name": "Phoenix OpenTag", "format": "openprinttag",
-        })
+        }
+        fmt = event.get("format")
+        if isinstance(fmt, str) and 0 < len(fmt) <= 32:
+            body["format"] = fmt
+        # Memoria grezza del tag, inoltrata cosi' com'e': la decodifica spetta a Spoolman.
+        payload = event.get("payload_b64")
+        if isinstance(payload, str) and 0 < len(payload) <= MAX_PAYLOAD_B64 and BASE64_RE.match(payload):
+            body["payload_b64"] = payload
+        return self.spoolman.call("POST", "/tag/scan", body)
 
     def _process(self, uid: str, reader: str, event: dict) -> dict:
-        scan = self._scan(uid, reader)
+        scan = self._scan(uid, reader, event)
         result: dict[str, Any] = {
             "uid": scan["uid"],
             "spool_id": scan["matched_spool_id"],
@@ -147,7 +157,7 @@ class Daemon:
                     result["spool_id"] = self._create_spool(scan["uid"], event)
                     result["created"] = True
                     # Rinotifica: ora il tag risolve alla nuova bobina (Spoolman non la deduplica).
-                    self._scan(uid, reader)
+                    self._scan(uid, reader, event)
         elif result["filament_id"] is not None:
             result["note"] = "tag associato a un filamento, non a una bobina"
 

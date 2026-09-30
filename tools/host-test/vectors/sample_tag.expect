@@ -1,0 +1,8 @@
+material=PLA Galaxy Black
+brand=Prusament
+weight=1000
+color=3D3E3D
+nozzleMin=205
+nozzleMax=220
+bedMin=40
+bedMax=60

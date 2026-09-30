@@ -2,7 +2,7 @@
 #include <Arduino.h>
 
 // Firmware version
-#define PHOENIX_FW_VERSION "0.4.0"
+#define PHOENIX_FW_VERSION "0.5.0"
 
 // PN5180 SPI — bus condiviso (SCK18/MISO19/MOSI23), CS/BUSY/RST dedicati
 constexpr uint8_t PN5180_NSS  = 5;   // chip-select

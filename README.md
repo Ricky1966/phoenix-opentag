@@ -76,12 +76,15 @@ La modalità si sceglie da seriale (`pio device monitor`, 115200) e resta salvat
 | `test` | rinvia l'ultimo tag letto |
 | `reboot` | riavvio, necessario dopo `mode` |
 
+Dalla 0.5.0 il firmware legge **tutta la memoria del tag** (320 byte su un ICODE SLIX2) e la manda anche grezza, in base64: campi `payload_b64` e `format` (`openprinttag` se trova il record MIME `application/vnd.openprinttag`). Il demone li inoltra a Spoolman come `payload_b64` di `POST /tag/scan`, che li ritrasmette senza interpretarli: la decodifica completa resta al server (vedi la roadmap del fork di Spoolman).
+
 I valori iniziali sono in `src/config.h` (`TRANSPORT_DEFAULT_*`). JSON inviato (i campi assenti dal tag vengono omessi):
 
 ```json
 {"uid":"E0:04:01:08:12:34:56:78","reader_id":"phoenix-opentag","fw":"0.3.0","brand":"Prusament",
  "material":"PLA Galaxy Black","color":"3D3E3D","diameter":1.75,"density":1.240,
- "nozzle_min":205,"nozzle_max":225,"bed_min":50,"bed_max":60,"weight":1000,"country":"CZ"}
+ "nozzle_min":205,"nozzle_max":225,"bed_min":50,"bed_max":60,"weight":1000,"country":"CZ",
+ "format":"openprinttag","payload_b64":"4UAmAQP/ASfC..."}
 ```
 
 ## Demone su Phoenix
@@ -136,15 +139,23 @@ Il demone e Spoolman non hanno autenticazione: vanno esposti solo sulla rete loc
 
 Da validare: modalità `auto`.
 
+## Prova del parser sul PC
+
+`tools/host-test/run.sh` compila `src/opt_parse.cpp` con `g++` e AddressSanitizer e lo prova su sei tag di esempio ufficiali della specifica OpenPrintTag (`vectors/`, licenza MIT di Prusa Research, valori attesi generati con la loro implementazione di riferimento in Python). Prova anche i tag scritti senza sezione meta o con meta vuota, come i tag di Odin, e troncamenti e alterazioni casuali senza accessi fuori dai limiti. Non serve l'ESP32.
+
+Prima della 0.5.0 il parser non leggeva nessuno dei tag ufficiali: non gestiva la sezione meta, le mappe CBOR a lunghezza indefinita, i record NDEF lunghi né i nomi oltre 23 caratteri. Funzionava solo con i tag scritti da Odin.
+
 ## Struttura
 
 ```
 src/
   config.h        Pin PN5180, timing, include di secrets.h
   secrets.h       Credenziali WiFi (non versionato, vedi secrets.h.example)
-  nfc.h/.cpp      Driver PN5180 (ISO15693) + parser NDEF/CBOR OpenPrintTag (solo lettura)
+  nfc.h/.cpp      Driver PN5180 (ISO15693): lettura della memoria del tag e polling
+  opt_parse.h/.cpp  Parser OpenPrintTag (TLV, NDEF, CBOR, sezione meta), senza dipendenze da Arduino
   transport.h/.cpp  Invio letture a Phoenix (USB/WiFi), comandi seriali, impostazioni in flash
   main.cpp        setup() + loop(), WiFi e OTA
+tools/host-test/  Prova del parser sul PC contro i tag di esempio ufficiali (`./tools/host-test/run.sh`)
 host/
   phoenix_opentag_daemon.py  Demone per Phoenix: seriale/HTTP -> Spoolman -> Moonraker
   phoenix-opentag.service    Unit systemd

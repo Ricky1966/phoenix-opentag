@@ -1,0 +1,9 @@
+material=CarbonX PEKK-A+CF15 Black
+brand=3DXTech
+weight=750
+color=303030
+density=1.39
+nozzleMin=360
+nozzleMax=390
+bedMin=120
+bedMax=140
