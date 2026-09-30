@@ -1,3 +1,4 @@
+#include <Arduino.h>
 #include "transport.h"
 #include <HTTPClient.h>
 #include <Preferences.h>
