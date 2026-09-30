@@ -111,11 +111,14 @@ static void help() {
   Serial.println("  reader <id>              reader_id mostrato in Spoolman");
   Serial.println("  test                     rinvia l'ultimo tag letto");
   Serial.println("  reboot");
+  Serial.println("  write-info               snapshot del tag per scrittura (60 s)");
+  Serial.println("  write-cancel             annulla; togli il tag per riprendere");
 }
 
 static void command(String cmd) {
   cmd.trim();
   if (!cmd.length()) return;
+  if(nfcWriterCommand(cmd.c_str())) return;
   int sp = cmd.indexOf(' ');
   String name = sp < 0 ? cmd : cmd.substring(0, sp);
   String arg = sp < 0 ? String() : cmd.substring(sp + 1);
@@ -155,16 +158,23 @@ static void command(String cmd) {
 
 void transportLoop() {
   // Observe removal/new UID before accepting serial ACKs.
-  deliverLatest();
+  if(!nfcWriterHolding()) deliverLatest();
+  else delivery.observe(spool, "");
   static unsigned long lastReconnect = 0;
   if (WiFi.status() != WL_CONNECTED && uint32_t(millis()-lastReconnect) >= 30000) {
     lastReconnect = millis(); WiFi.reconnect();
   }
   while (Serial.available()) {
+    static bool overflow=false;
     char c = (char)Serial.read();
-    if (c == '\n' || c == '\r') { command(line); line = ""; }
+    if (c == '\n' || c == '\r') {
+      if(!overflow) command(line);
+      else Serial.println("PHOENIX-WRITE {\"status\":\"line_too_long\",\"verified\":false}");
+      line = ""; overflow=false;
+    }
     else if (c == '\b' || c == 0x7F) { if (line.length()) line.remove(line.length() - 1); }  // Backspace
-    else if (line.length() < 128) line += c;
+    else if (line.length() < 768) line += c;
+    else overflow=true;
   }
 }
 
@@ -180,3 +190,4 @@ void transportSetup() {
   show();
   Serial.println("Digita 'help' per i comandi.");
 }
+

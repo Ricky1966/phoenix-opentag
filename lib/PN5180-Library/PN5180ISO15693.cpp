@@ -19,6 +19,7 @@
 //#define DEBUG 1
 
 #include <Arduino.h>
+#include <cstring>
 #include "PN5180ISO15693.h"
 #include "Debug.h"
 
@@ -181,45 +182,26 @@ ISO15693ErrorCode PN5180ISO15693::readSingleBlock(uint8_t *uid, uint8_t blockNo,
  *    SOF, Resp.Flags, CRC16, EOF
  */
 ISO15693ErrorCode PN5180ISO15693::writeSingleBlock(uint8_t *uid, uint8_t blockNo, uint8_t *blockData, uint8_t blockSize) {
-  //                            flags, cmd, uid,             blockNo
-  uint8_t writeSingleBlock[] = { 0x22, 0x21, 1,2,3,4,5,6,7,8, blockNo }; // UID has LSB first!
-  //                               |\- high data rate
-  //                               \-- no options, addressed by UID
+  if(!uid || !blockData || blockSize==0 || blockSize>32) return ISO15693_EC_UNKNOWN_ERROR;
+  uint8_t command[43]={0x22,0x21}; // addressed, UID in wire order
+  memcpy(command+2,uid,8);
+  command[10]=blockNo;
+  memcpy(command+11,blockData,blockSize);
+  uint8_t *reply=nullptr;
+  return issueISO15693Command(command,uint8_t(11+blockSize),&reply);
+}
 
-  uint8_t writeCmdSize = sizeof(writeSingleBlock) + blockSize;
-  uint8_t *writeCmd = (uint8_t*)malloc(writeCmdSize);
-  uint8_t pos = 0;
-  writeCmd[pos++] = writeSingleBlock[0];
-  writeCmd[pos++] = writeSingleBlock[1];
-  for (int i=0; i<8; i++) {
-    writeCmd[pos++] = uid[i];
-  }
-  writeCmd[pos++] = blockNo;
-  for (int i=0; i<blockSize; i++) {
-    writeCmd[pos++] = blockData[i];
-  }
-
-#ifdef DEBUG
-  PN5180DEBUG("Write Single Block #");
-  PN5180DEBUG(blockNo);
-  PN5180DEBUG(", size=");
-  PN5180DEBUG(blockSize);
-  PN5180DEBUG(":");
-  for (int i=0; i<writeCmdSize; i++) {
-    PN5180DEBUG(" ");
-    PN5180DEBUG(formatHex(writeCmd[i]));
-  }
-  PN5180DEBUG("\n");
-#endif
-
-  uint8_t *resultPtr;
-  ISO15693ErrorCode rc = issueISO15693Command(writeCmd, writeCmdSize, &resultPtr);
-  if (ISO15693_EC_OK != rc) {
-    free(writeCmd);
-    return rc;
-  }
-
-  free(writeCmd);
+ISO15693ErrorCode PN5180ISO15693::getBlockSecurityStatus(uint8_t *uid, uint8_t first, uint8_t count, uint8_t *status) {
+  if(!uid || !status || !count || count>80 || uint16_t(first)+count>256)
+    return ISO15693_EC_UNKNOWN_ERROR;
+  uint8_t command[12]={0x22,0x2c};
+  memcpy(command+2,uid,8);
+  command[10]=first; command[11]=count-1;
+  uint8_t *reply=nullptr;
+  const ISO15693ErrorCode rc=issueISO15693Command(command,sizeof(command),&reply);
+  if(rc!=ISO15693_EC_OK) return rc;
+  if(responseLength<size_t(count)+1) return ISO15693_EC_UNKNOWN_ERROR;
+  memcpy(status,reply+1,count);
   return ISO15693_EC_OK;
 }
 
@@ -685,3 +667,4 @@ const __FlashStringHelper *PN5180ISO15693::strerror(ISO15693ErrorCode errorCode)
       else return F("Undefined error code in ISO15693!");
   }
 }
+

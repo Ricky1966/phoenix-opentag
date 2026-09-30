@@ -14,7 +14,7 @@ jobs:
         with:
           python-version: '3.9'
       - name: Bridge regression tests on CB1 Python version
-        run: python -m unittest discover -s tests -p 'test_daemon.py'
+        run: python -m unittest discover -s tests -p 'test_*.py'
   check:
     runs-on: ubuntu-latest
     env:
@@ -37,3 +37,4 @@ jobs:
         run: |
           cp src/secrets.h.example src/secrets.h
           pio run -e esp32dev_ota
+

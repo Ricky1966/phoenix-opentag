@@ -51,6 +51,8 @@ public:
   ISO15693ErrorCode readSingleBlock(uint8_t *uid, uint8_t blockNo, uint8_t *blockData, uint8_t blockSize);
   ISO15693ErrorCode writeSingleBlock(uint8_t *uid, uint8_t blockNo, uint8_t *blockData, uint8_t blockSize);
 
+  ISO15693ErrorCode getBlockSecurityStatus(uint8_t *uid, uint8_t first, uint8_t count, uint8_t *status);
+
   ISO15693ErrorCode getSystemInfo(uint8_t *uid, uint8_t *blockSize, uint8_t *numBlocks);
   ISO15693ErrorCode getSystemInfo(uint8_t *uid, uint8_t *blockSize, uint16_t *numBlocks);
    
@@ -72,3 +74,4 @@ public:
 };
 
 #endif /* PN5180ISO15693_H */
+

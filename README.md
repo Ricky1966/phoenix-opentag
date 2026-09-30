@@ -14,6 +14,14 @@ Nato come versione ridotta di [Odin-ESP32](https://github.com/Ricky1966/Odin-ESP
 - Stampa i dati al cambio del tag o al recupero di una lettura valida. Invia solo dati validati.
 - Invia ogni nuova lettura al demone su Phoenix, via **USB** o **WiFi** a scelta (vedi sotto). Il demone la passa a Spoolman e imposta la bobina attiva in Moonraker.
 
+## Scrittura tag (sperimentale)
+
+Il firmware include la scrittura esplicita di immagini OpenPrintTag su **ICODE SLIX2
+da 320 byte**, con controllo UID, protezioni, consenso alla sostituzione e rilettura
+completa. Protocollo seriale e client di prova: [procedura e limiti](docs/tag-writing.md).
+Il futuro pulsante del fork Spoolman potrà usare questo protocollo; form ed encoder
+completo dei campi non fanno ancora parte di questa versione.
+
 ## Hardware
 
 - ESP32 DevKit 38 pin (AZ-Delivery ESP32-WROOM-32)
@@ -191,3 +199,4 @@ lib/PN5180-Library/  Libreria PN5180 vendorizzata (da Odin-ESP32)
 Distribuito con licenza GNU Affero General Public License v3.0.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
+
