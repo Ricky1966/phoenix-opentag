@@ -3,6 +3,9 @@
 #include <Preferences.h>
 #include <WiFi.h>
 #include "config.h"
+#include "delivery.h"
+#include "nfc.h"
+#include <esp_system.h>
 
 enum Transport { T_USB, T_WIFI, T_AUTO };
 
@@ -44,83 +47,49 @@ static void save(const char *key, const String &value) {
   p.end();
 }
 
-// ───────────────────────── JSON ─────────────────────────
-static void addStr(String &j, const char *key, const char *val) {
-  if (!val[0]) return;
-  j += ",\""; j += key; j += "\":\"";
-  for (const char *c = val; *c; c++) {
-    if (*c == '"' || *c == '\\') { j += '\\'; j += *c; }
-    else if ((unsigned char)*c < 0x20) j += ' ';
-    else j += *c;
-  }
-  j += '"';
-}
+// Latest validated observation only. USB acknowledges the event token, so a
+// delayed ACK for an older spool cannot clear a newer pending observation.
+static DeliveryState delivery;
+static String eventToken;
+static uint32_t bootId, sequence = 0;
 
-static void addInt(String &j, const char *key, int val) {
-  if (!val) return;
-  j += ",\""; j += key; j += "\":"; j += val;
-}
-
-static void addFloat(String &j, const char *key, float val, int digits) {
-  if (isnan(val)) return;
-  j += ",\""; j += key; j += "\":"; j += String(val, digits);
-}
-
-static String tagJson(const SpoolData &s) {
-  String j = "{\"uid\":\"";
-  j += s.uid;
-  j += "\"";
-  addStr(j, "reader_id", readerId.c_str());
-  addStr(j, "fw", PHOENIX_FW_VERSION);
-  addStr(j, "brand", s.brand);
-  addStr(j, "material", s.material);
-  if (s.hasColor) {
-    char hex[7]; sprintf(hex, "%02X%02X%02X", s.color[0], s.color[1], s.color[2]);
-    addStr(j, "color", hex);
-  }
-  addFloat(j, "diameter", s.diameter, 2);
-  addFloat(j, "density", s.density, 3);
-  addInt(j, "nozzle_min", s.nozzleMin);
-  addInt(j, "nozzle_max", s.nozzleMax);
-  addInt(j, "bed_min", s.bedMin);
-  addInt(j, "bed_max", s.bedMax);
-  addInt(j, "weight", s.weight);
-  addStr(j, "country", s.country);
-  j += "}";
-  return j;
-}
-
-// ───────────────────────── invio ─────────────────────────
 static bool postWifi(const String &json) {
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("Invio WiFi: non connesso");
-    return false;
-  }
+  if (WiFi.status() != WL_CONNECTED) return false;
+  WiFiClient client;
   HTTPClient http;
-  http.setConnectTimeout(3000);
+  http.setConnectTimeout(1500);
   http.setTimeout(5000);
-  if (!http.begin(host + "/tag")) {
-    Serial.println("Invio WiFi: host non valido");
-    return false;
-  }
+  http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
+  if (!http.begin(client, host + "/tag")) return false;
   http.addHeader("Content-Type", "application/json");
   int code = http.POST(json);
-  String body = code > 0 ? http.getString() : "";
   http.end();
-  if (code <= 0) {
-    Serial.print("Invio WiFi fallito: "); Serial.println(HTTPClient::errorToString(code));
-    return false;
-  }
-  Serial.print("Demone HTTP "); Serial.print(code); Serial.print(": "); Serial.println(body);
+  Serial.printf("Demone HTTP: %d\n", code);
   return code >= 200 && code < 300;
 }
 
-void transportSendTag(const SpoolData &s) {
-  String json = tagJson(s);
-  if (mode != T_USB && postWifi(json)) return;
-  if (mode == T_WIFI) return;
-  // usb, oppure auto con WiFi non disponibile: la riga la legge il demone.
-  Serial.print("PHOENIX-TAG "); Serial.println(json);
+static void deliverLatest() {
+  std::string json = spoolJson(spool, readerId.c_str(), PHOENIX_FW_VERSION);
+  bool newEvent = spool.present && spool.valid &&
+                  (json != delivery.body || eventToken.length() == 0);
+  delivery.observe(spool, json);
+  if (!spool.present) eventToken = "";
+  if (newEvent) {
+    char token[32];
+    snprintf(token, sizeof(token), "%08lx-%08lx", (unsigned long)bootId,
+             (unsigned long)++sequence);
+    eventToken = token;
+  }
+  if (!delivery.ready(millis())) return;
+  String payload(delivery.body.c_str());
+  payload.remove(payload.length()-1);
+  payload += ",\"event_id\":\"" + eventToken + "\"}";
+  bool sent = mode != T_USB && postWifi(payload);
+  if (!sent && mode != T_WIFI) {
+    Serial.print("PHOENIX-TAG "); Serial.println(payload);
+  }
+  // USB remains pending until 'ack <event_id>' from the daemon.
+  delivery.finish(millis(), sent);
 }
 
 // ───────────────────────── configurazione ─────────────────────────
@@ -151,7 +120,11 @@ static void command(String cmd) {
   String arg = sp < 0 ? String() : cmd.substring(sp + 1);
   arg.trim();
 
-  if (name == "help") help();
+  if (name == "ack") {
+    if (arg == eventToken && delivery.available && delivery.pending)
+      delivery.finish(millis(), true);
+  }
+  else if (name == "help") help();
   else if (name == "show") show();
   else if (name == "reboot") { Serial.println("Riavvio"); delay(100); ESP.restart(); }
   else if (name == "mode") {
@@ -171,14 +144,21 @@ static void command(String cmd) {
     save("reader", readerId);
     Serial.print("Reader id salvato: "); Serial.println(readerId);
   } else if (name == "test") {
-    if (!spool.uid[0]) { Serial.println("test: nessun tag letto finora"); return; }
-    transportSendTag(spool);
+    if (!spool.present || !spool.valid) { Serial.println("test: nessun tag valido presente"); return; }
+    delivery.delivered.clear(); delivery.attempted = false;
+    eventToken = "";
   } else {
     Serial.println("Comando sconosciuto, 'help' per l'elenco.");
   }
 }
 
 void transportLoop() {
+  // Observe removal/new UID before accepting serial ACKs.
+  deliverLatest();
+  static unsigned long lastReconnect = 0;
+  if (WiFi.status() != WL_CONNECTED && uint32_t(millis()-lastReconnect) >= 30000) {
+    lastReconnect = millis(); WiFi.reconnect();
+  }
   while (Serial.available()) {
     char c = (char)Serial.read();
     if (c == '\n' || c == '\r') { command(line); line = ""; }
@@ -188,6 +168,7 @@ void transportLoop() {
 }
 
 void transportSetup() {
+  bootId = esp_random();
   Preferences p;
   p.begin("opentag", false);  // lettura/scrittura: crea il namespace al primo avvio, niente errore NOT_FOUND
   String m = load(p, "mode", TRANSPORT_DEFAULT_MODE);

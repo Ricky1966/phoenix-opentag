@@ -19,6 +19,7 @@
 #ifndef PN5180ISO15693_H
 #define PN5180ISO15693_H
 
+#include <Arduino.h>
 #include "PN5180.h"
 
 enum ISO15693ErrorCode {
@@ -42,6 +43,7 @@ public:
   PN5180ISO15693(uint8_t SSpin, uint8_t BUSYpin, uint8_t RSTpin);
   
 private:
+  uint16_t responseLength = 0;
   ISO15693ErrorCode issueISO15693Command(uint8_t *cmd, uint8_t cmdLen, uint8_t **resultPtr);
 public:
   ISO15693ErrorCode getInventory(uint8_t *uid);
@@ -50,6 +52,7 @@ public:
   ISO15693ErrorCode writeSingleBlock(uint8_t *uid, uint8_t blockNo, uint8_t *blockData, uint8_t blockSize);
 
   ISO15693ErrorCode getSystemInfo(uint8_t *uid, uint8_t *blockSize, uint8_t *numBlocks);
+  ISO15693ErrorCode getSystemInfo(uint8_t *uid, uint8_t *blockSize, uint16_t *numBlocks);
    
   // ICODE SLIX2 specific commands, see https://www.nxp.com/docs/en/data-sheet/SL2S2602.pdf
   ISO15693ErrorCode getRandomNumber(uint8_t *randomData);
@@ -64,7 +67,7 @@ public:
    */
 public:   
   bool setupRF();
-  const __FlashStringHelper *strerror(ISO15693ErrorCode errno);
+  const __FlashStringHelper *strerror(ISO15693ErrorCode errorCode);
     
 };
 

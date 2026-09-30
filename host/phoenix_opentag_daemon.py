@@ -24,6 +24,7 @@ import argparse
 import glob
 import json
 import logging
+import math
 import os
 import re
 import select
@@ -89,6 +90,49 @@ def midpoint(low: Any, high: Any) -> int | None:
     return round(sum(values) / len(values)) if values else None
 
 
+def normalize_event(event: dict) -> dict:
+    """Accept validated v1 payloads and the deployed 0.4 legacy field names."""
+    event = dict(event)
+    if "schema_version" in event and event["schema_version"] != 1:
+        raise ValueError("schema_version non supportata")
+    aliases = {
+        "material_name": "material", "brand_name": "brand",
+        "filament_diameter": "diameter", "country_of_origin": "country",
+        "nominal_netto_full_weight": "weight",
+        "min_print_temperature": "nozzle_min", "max_print_temperature": "nozzle_max",
+        "min_bed_temperature": "bed_min", "max_bed_temperature": "bed_max",
+    }
+    for source, target in aliases.items():
+        if source in event:
+            event[target] = event[source]
+    if "color_rgba" in event:
+        color = event["color_rgba"]
+        if not isinstance(color, str) or not re.fullmatch(r"#[0-9a-fA-F]{8}", color):
+            raise ValueError("color_rgba non valido")
+        event["color"] = color[1:7]
+    uid = event.get("uid")
+    if not isinstance(uid, str) or not re.fullmatch(r"(?:[0-9a-fA-F]{16}|(?:[0-9a-fA-F]{2}:){7}[0-9a-fA-F]{2})", uid):
+        raise ValueError("uid NFC-V non valido")
+    event["uid"] = uid.replace(":", "").upper()
+    token = event.get("event_id")
+    if token is not None and (not isinstance(token, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", token)):
+        raise ValueError("event_id non valido")
+    for field in ("material", "brand", "country"):
+        if field in event and (not isinstance(event[field], str) or len(event[field]) > 128):
+            raise ValueError(field + " non valido")
+    if "color" in event and not re.fullmatch(r"[0-9a-fA-F]{6}", str(event["color"])):
+        raise ValueError("color non valido")
+    for field in ("density", "diameter", "weight", "nozzle_min", "nozzle_max", "bed_min", "bed_max"):
+        if field not in event:
+            continue
+        value = event[field]
+        if isinstance(value, bool) or not isinstance(value, (float, int)) or not math.isfinite(value) or value < 0:
+            raise ValueError(field + " non valido")
+        if field in ("density", "diameter") and value == 0:
+            raise ValueError(field + " deve essere positivo")
+    return event
+
+
 class Daemon:
     def __init__(self, args: argparse.Namespace) -> None:
         self.spoolman = Api(args.spoolman + "/api/v1")
@@ -97,28 +141,29 @@ class Daemon:
         self.activate = not args.no_activate
         self.default_reader = args.reader_id
         self.lock = threading.Lock()
-        self.recent: dict[str, tuple[float, dict]] = {}
+        self.last_event = None
+        self.last_result = None
+        self.last_time = 0.0
 
     # ───────────────────────── gestione tag ─────────────────────────
 
     def handle(self, event: dict) -> dict:
-        uid = event.get("uid")
-        if not isinstance(uid, str) or not uid.strip() or len(uid) > 64:
-            raise ValueError("uid mancante o non valido")
+        event = normalize_event(event)
+        uid = event["uid"]
         reader = event.get("reader_id")
-        if not isinstance(reader, str) or not READER_ID_RE.match(reader):
+        if not isinstance(reader, str) or not READER_ID_RE.fullmatch(reader):
             reader = self.default_reader
 
         with self.lock:
-            key = re.sub(r"[^0-9A-Fa-f]", "", uid).upper()
+            key = json.dumps(event, sort_keys=True)
             now = time.monotonic()
-            last = self.recent.get(key)
-            if last and now - last[0] < DEDUP_SECONDS:
-                return dict(last[1], duplicate=True)
-
+            if key == self.last_event and self.last_result is not None and now - self.last_time < DEDUP_SECONDS:
+                return dict(self.last_result, duplicate=True)
+            # Invalidate even when the intervening event fails: A-B-A is a new activation.
+            self.last_event, self.last_result = key, None
             result = self._process(uid, reader, event)
-            self.recent = {k: v for k, v in self.recent.items() if now - v[0] < DEDUP_SECONDS}
-            self.recent[key] = (now, result)
+            self.last_time = time.monotonic()
+            self.last_result = result
             return result
 
     def _scan(self, uid: str, reader: str) -> dict:
@@ -230,7 +275,7 @@ class Daemon:
             self.moonraker.call("POST", "/server/spoolman/spool_id", {"spool_id": spool_id})
         except (ApiError, OSError, KeyError, ValueError) as e:
             log.error("Moonraker: %s", e)
-            return False, "bobina non attivata: Moonraker non raggiungibile"
+            raise OSError("bobina non attivata: Moonraker non raggiungibile, riprovare") from e
         log.info("Bobina attiva in Moonraker: %s", spool_id)
         return True, None
 
@@ -267,7 +312,11 @@ def make_handler(daemon: Daemon) -> type[BaseHTTPRequestHandler]:
             if self.path != "/tag":
                 self._reply(404, {"error": "not found"})
                 return
-            length = int(self.headers.get("Content-Length") or 0)
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                self._reply(400, {"error": "Content-Length non valido"})
+                return
             if not 0 < length <= MAX_BODY:
                 self._reply(400, {"error": "corpo mancante o troppo grande"})
                 return
@@ -346,7 +395,15 @@ def serial_loop(daemon: Daemon, path: str, baud: int) -> None:
                             log.warning("Riga non valida: %s", line)
                             continue
                         if isinstance(event, dict):
-                            daemon.handle_logged(event, "usb")
+                            result = daemon.handle_logged(event, "usb")
+                            token = event.get("event_id")
+                            if "error" not in result and isinstance(token, str) and re.fullmatch(r"[A-Za-z0-9_-]{1,64}", token):
+                                ack = ("ack " + token + "\n").encode("ascii")
+                                while ack:
+                                    _, writable, _ = select.select([], [fd], [], 1.0)
+                                    if not writable:
+                                        raise OSError("timeout conferma USB")
+                                    ack = ack[os.write(fd, ack):]
                     elif line:
                         log.debug("esp32: %s", line)
                 if len(buf) > 8192:

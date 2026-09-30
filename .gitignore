@@ -1,2 +1,5 @@
 .pio/
 src/secrets.h
+
+__pycache__/
+*.pyc
