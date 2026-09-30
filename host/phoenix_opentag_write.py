@@ -13,6 +13,8 @@ import time
 from phoenix_opentag_daemon import klipper_serial_ports, open_serial
 
 PREFIX = b"PHOENIX-WRITE "
+MEMORY_BYTES = 320
+DEFAULT_BACKUP_DIR = "~/phoenix-tag-backups"
 
 
 class WriterError(RuntimeError):
@@ -62,7 +64,51 @@ class SerialWriter:
                 raise WriterError("Risposta seriale troppo lunga")
 
 
-def write_image(client: SerialWriter, image: bytes, expected_uid: str, replace: bool) -> dict:
+def save_backup(info: dict, backup_dir: Path) -> Path:
+    """Salva la memoria attuale del tag (dal `write-info`) prima di sostituirla.
+
+    Il firmware non ha rollback: se la scrittura si interrompe, il contenuto vecchio
+    e' perso. Il file contiene i 320 byte esatti del tag, ripristinabili con
+    `--image <file> --expect-uid <UID> --replace` se erano un'immagine valida.
+    Non sovrascrive mai un backup esistente e non lascia file parziali.
+    """
+    memory_hex = info.get("memory_hex")
+    if not isinstance(memory_hex, str) or not re.fullmatch(r"(?:[0-9A-Fa-f]{2}){%d}" % MEMORY_BYTES, memory_hex):
+        raise WriterError("Il lettore non ha fornito il contenuto del tag: nessuna copia di sicurezza possibile, "
+                          "scrittura annullata e tag non modificato")
+    memory = bytes.fromhex(memory_hex)
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    path = None
+    try:
+        backup_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+        for attempt in range(1, 100):
+            suffix = "" if attempt == 1 else "-%d" % attempt
+            candidate = backup_dir / ("%s-%s%s.bin" % (info["uid"], stamp, suffix))
+            try:
+                fd = os.open(str(candidate), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            except FileExistsError:
+                continue
+            path = candidate
+            break
+        if path is None:
+            raise OSError("troppi file con lo stesso nome")
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(memory)
+            handle.flush()
+            os.fsync(handle.fileno())
+        if path.read_bytes() != memory:
+            raise OSError("il file salvato non coincide con la memoria del tag")
+    except OSError as exc:
+        if path is not None:
+            try:
+                path.unlink()
+            except OSError:
+                pass
+        raise WriterError("Copia di sicurezza non riuscita (%s): scrittura annullata, tag non modificato" % exc) from exc
+    return path
+
+
+def write_image(client: SerialWriter, image: bytes, expected_uid: str, replace: bool, backup_dir: Path) -> dict:
     if not 10 <= len(image) <= 320:
         raise WriterError("Serve un'immagine NFC-V completa di 10–320 byte, non il solo CBOR")
     expected_uid = expected_uid.replace(":", "").upper()
@@ -80,9 +126,20 @@ def write_image(client: SerialWriter, image: bytes, expected_uid: str, replace: 
     ticket = info.get("ticket", "")
     if not isinstance(ticket, str) or not re.fullmatch(r"[0-9a-fA-F]{16}", ticket):
         raise WriterError("Ticket non valido")
+    backup = None
+    if not info.get("blank"):
+        # Prima del commit, cosi' un errore qui lascia il tag intatto.
+        try:
+            backup = save_backup(info, backup_dir)
+        except WriterError:
+            client.request("write-cancel")
+            raise
     result = client.request("write-commit " + ticket + (" replace " if replace else " new ") + image.hex())
     if result.get("verified") is not True or result["status"] not in ("verified", "unchanged"):
-        raise WriterError("Scrittura non confermata: " + json.dumps(result))
+        hint = " Copia di sicurezza del contenuto precedente: %s" % backup if backup else ""
+        raise WriterError("Scrittura non confermata: " + json.dumps(result) + hint)
+    if backup:
+        result = dict(result, backup=str(backup))
     return result
 
 
@@ -93,6 +150,8 @@ def main() -> int:
     parser.add_argument("--expect-uid", help="UID esatto del tag autorizzato alla scrittura")
     parser.add_argument("--replace", action="store_true", help="autorizza la sostituzione completa dei dati esistenti")
     parser.add_argument("--klipper-config", default=os.path.expanduser("~/printer_data/config"))
+    parser.add_argument("--backup-dir", type=Path, default=Path(os.path.expanduser(DEFAULT_BACKUP_DIR)),
+                        help="dove salvare la memoria del tag prima di sostituirla (predefinita: %s)" % DEFAULT_BACKUP_DIR)
     args = parser.parse_args()
     if args.image and not args.expect_uid:
         parser.error("--image richiede --expect-uid")
@@ -108,7 +167,7 @@ def main() -> int:
         fd = open_serial(args.serial, 115200)
         client = SerialWriter(fd)
         if image is not None:
-            result = write_image(client, image, args.expect_uid, args.replace)
+            result = write_image(client, image, args.expect_uid, args.replace, args.backup_dir)
         else:
             result = client.request("write-info")
             client.request("write-cancel")

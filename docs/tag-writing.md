@@ -55,7 +55,8 @@ riduce il rischio di esporre dati incompleti, ma **non rende atomica la EEPROM**
 un'interruzione può lasciare un tag vuoto, parziale o già scritto senza conferma.
 Solo `verified`/`unchanged` con `verified: true` confermano l'esito. In caso di
 risposta persa o `may_have_changed: true`, ispezionare e confrontare prima di decidere
-un nuovo tentativo esplicito. Il comando `write-info` restituisce il dump per farlo.
+un nuovo tentativo esplicito. Il comando `write-info` restituisce il dump per farlo;
+il client lo salva da solo prima di ogni sostituzione (vedi "Copia di sicurezza prima di sostituire").
 
 ## Protocollo seriale, 115200 baud
 
@@ -125,6 +126,37 @@ python3 phoenix_opentag_write.py \
 
 Aggiungere `--replace` solo se si vuole cancellare/sostituire il contenuto esistente.
 Il client verifica UID e conferma firmware, non ritenta un commit fallito.
+
+### Copia di sicurezza prima di sostituire
+
+Il firmware non ha rollback: se una scrittura si interrompe, il contenuto precedente
+del tag è perso. Per questo, quando il tag **non è vuoto**, il client salva la sua
+memoria (320 byte esatti, dal `memory_hex` di `write-info`) in un file **prima**
+di inviare il commit:
+
+- cartella predefinita `~/phoenix-tag-backups` (`--backup-dir` per cambiarla, creata con permessi `0700`);
+- nome `<UID>-<AAAAMMGG>-<HHMMSS>.bin`, permessi `0600`, scritto con `fsync` e riletto per verifica;
+- non sovrascrive mai un backup esistente (aggiunge un suffisso `-2`, `-3`…);
+- **se la copia non riesce** (disco pieno, cartella non scrivibile, dump non fornito dal
+  firmware) il client annulla la sessione con `write-cancel` **senza inviare il commit**:
+  il tag resta intatto;
+- il percorso compare nel risultato (`backup`) e nel messaggio d'errore se la scrittura
+  non è confermata. Un tag vuoto non ne ha bisogno e non produce alcun file.
+
+Per ripristinare il contenuto precedente, con l'UID del tag e dopo aver tolto e rimesso il tag:
+
+```bash
+python3 phoenix_opentag_write.py \
+  --serial /dev/serial/by-id/usb-1a86_USB_Serial-if00-port0 \
+  --image ~/phoenix-tag-backups/E004010866073472-20260930-201500.bin \
+  --expect-uid E004010866073472 --replace
+```
+
+Il ripristino passa dalle stesse regole di qualsiasi scrittura: il backup deve essere
+un'immagine OpenPrintTag valida per il firmware (CC, TLV NDEF, terminatore, resto a zero).
+Se il tag conteneva altro, o dati già corrotti, il file resta comunque la copia fedele dei
+byte da cui partire. Dopo un ripristino non riuscito o un tag lasciato con NDEF vuoto
+(`03 00 FE 00` nel blocco 1) serve `--replace`, perché il tag non è più vuoto.
 Non usare i fixture ufficiali su bobine reali: contengono identità/dati di esempio.
 Non copiare lo stesso `instance_uuid` su più bobine: l'encoder deve gestire l'identità
 secondo la specifica. Usare esclusivamente la porta dell'ESP32, mai una MCU Klipper.
