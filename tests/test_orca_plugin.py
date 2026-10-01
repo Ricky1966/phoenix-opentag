@@ -231,6 +231,19 @@ class SpoolCheckTests(unittest.TestCase):
         self.assertEqual(result.status, "skipped")
         self.assertIn("; spool check skipped: Cannot reach", text)
 
+    def test_unexpected_error_never_blocks_the_export(self):
+        def refused(*args, **kwargs):
+            raise RuntimeError("blocked by the audit hook")
+
+        self.plugin.urllib.request.urlopen = refused
+        result, text = self.run_check()
+        self.assertEqual(result.status, "skipped")
+        self.assertIn("; spool check skipped:", text)
+        self.assertIn("RuntimeError", text)
+
+    def test_idna_codec_is_preloaded(self):
+        self.assertIn("encodings.idna", sys.modules)
+
     def test_no_active_spool(self):
         self.servers.active = None
         result, text = self.run_check()

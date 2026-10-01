@@ -6,7 +6,7 @@
 # name = "Phoenix Spoolman"
 # description = "Shows the spool that the Phoenix reader activated and checks it against the exported G-code (Moonraker + Spoolman). Standard library only."
 # author = "Ricky1966"
-# version = "0.2.0"
+# version = "0.2.1"
 # ///
 """Phoenix Spoolman plugin for OrcaSlicer (Python plugin API, nightly builds / releases after 2.4.2).
 
@@ -29,6 +29,11 @@ import os
 import re
 import urllib.error
 import urllib.request
+
+# Imported now, while the plugin loads: Python imports this codec lazily when it resolves a host name,
+# and OrcaSlicer's audit hook blocks reading the interpreter's own files while a G-code file is being
+# exported, which made the first network request of the post-processing step fail.
+import encodings.idna  # noqa: F401
 
 import orca
 
@@ -57,6 +62,8 @@ def get_json(url, timeout):
         raise PhoenixError("%s answered HTTP %d" % (url, exc.code)) from None
     except (urllib.error.URLError, OSError, ValueError) as exc:
         raise PhoenixError("Cannot reach %s (%s)" % (url, getattr(exc, "reason", exc))) from None
+    except Exception as exc:  # e.g. an operation refused by OrcaSlicer's audit hook
+        raise PhoenixError("Request to %s failed (%s: %s)" % (url, type(exc).__name__, exc)) from None
 
 
 def active_spool_id(moonraker_url, timeout):

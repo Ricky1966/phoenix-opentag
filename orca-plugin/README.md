@@ -43,6 +43,8 @@ which spool is active, so a spool changed after slicing is not noticed. How Orca
 recoverable or fatal error from a post-processing plugin (a warning dialog, or an aborted export or
 upload) depends on the OrcaSlicer build and has to be observed.
 
+**Note (0.2.1).** OrcaSlicer's audit hook refuses reads of the Python interpreter's own files while a G-code file is being exported. The plugin therefore loads `encodings.idna` when it starts (Python imports it lazily to resolve a host name), and any unexpected error during the check skips it instead of stopping the export. In 0.2.0 that blocked read made the export fail silently: no error, no file.
+
 Not done yet: writing a filament preset from the active spool.
 
 ## Install
