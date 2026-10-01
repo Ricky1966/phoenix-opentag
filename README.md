@@ -1,5 +1,10 @@
 # Phoenix OpenTag
 
+> [!CAUTION]
+> **Experimental hobby project: use it entirely at your own risk.** It comes with no warranty, and the author is **not responsible** for any damage to printers, PCs, hardware, software or data. Read the Disclaimer section of this README before you build, flash or run anything.
+>
+> *Progetto sperimentale: uso a proprio rischio e pericolo. L'autore non risponde di alcun danno a stampanti, computer, hardware, software o dati.*
+
 A minimal NFC reader and writer for **OpenPrintTag** tags (the Prusa Research standard), based on an **ESP32 + PN5180** and designed to be connected to the Sovol SV08 "Phoenix".
 
 Born as a reduced version of [Odin-ESP32](https://github.com/Ricky1966/Odin-ESP32) (a filament drying station): the hardware initialization comes from Odin's `develop` branch, with a separate parser and checks on NFC reads, but without the web dashboard, heater, environment sensors or multi-spool handling. It validates the reads and integrates with Spoolman and Moonraker.
