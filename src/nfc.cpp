@@ -6,6 +6,7 @@
 
 static PN5180ISO15693 nfc(PN5180_NSS, PN5180_BUSY, PN5180_RST);
 SpoolData spool;
+#include "nfc_writer.inc"
 
 enum class ReadResult { Missing, Error, Invalid, Valid };
 
@@ -73,6 +74,7 @@ void nfcLoop() {
   static unsigned misses = 0;
   if (millis() - last < NFC_POLL_MS) return;
   last = millis();
+  if(writerPoll()) return;
   SpoolData tmp;
   const ReadResult result = readTag(&tmp);
   if (result == ReadResult::Valid) {
@@ -96,3 +98,4 @@ void nfcLoop() {
     }
   }
 }
+

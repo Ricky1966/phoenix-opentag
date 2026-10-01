@@ -7,8 +7,9 @@
 // Simulated RF responses, real ISO15693 protocol implementation under test.
 static std::vector<uint8_t> reply;
 static bool ioOk=true;
+static std::vector<uint8_t> sent;
 PN5180::PN5180(uint8_t,uint8_t,uint8_t) {}
-bool PN5180::sendData(uint8_t*,int,uint8_t) { return ioOk; }
+bool PN5180::sendData(uint8_t *p,int n,uint8_t) { sent.assign(p,p+n); return ioOk; }
 bool PN5180::readRegister(uint8_t reg,uint32_t *v) {
   if(!ioOk) return false;
   *v=reg==RX_STATUS ? uint32_t(reply.size()) : RX_SOF_DET_IRQ_STAT|RX_IRQ_STAT;
@@ -45,8 +46,22 @@ int main() {
   assert(nfc.readSingleBlock(uid,0,data,33)!=ISO15693_EC_OK);
   reply={1}; // error response missing its error-code byte
   assert(nfc.getInventory(uid)!=ISO15693_EC_OK);
+  uint8_t security[80]={};
+  reply.assign(81,0);reply[80]=1;
+  assert(nfc.getBlockSecurityStatus(uid,0,80,security)==ISO15693_EC_OK);
+  assert(security[79]==1 && sent[0]==0x22 && sent[1]==0x2c && sent[11]==79);
+  reply.resize(80);
+  assert(nfc.getBlockSecurityStatus(uid,0,80,security)!=ISO15693_EC_OK);
+  assert(nfc.getBlockSecurityStatus(uid,250,80,security)!=ISO15693_EC_OK);
+  reply={0};
+  assert(nfc.writeSingleBlock(uid,79,data,4)==ISO15693_EC_OK);
+  assert(sent.size()==15 && sent[1]==0x21 && sent[10]==79);
+  assert(nfc.writeSingleBlock(uid,0,data,33)!=ISO15693_EC_OK);
+  reply={1,0x12};
+  assert(nfc.writeSingleBlock(uid,0,data,4)==ISO15693_EC_BLOCK_IS_LOCKED);
   ioOk=false;
   assert(nfc.getInventory(uid)==ISO15693_EC_UNKNOWN_ERROR);
   assert(!nfc.setupRF());
   std::cout<<"ISO15693: 256 blocks, 32-byte blocks, short replies, I/O failure: PASS\n";
 }
+
