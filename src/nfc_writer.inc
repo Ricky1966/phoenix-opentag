@@ -64,6 +64,15 @@ bool nfcWriterCommand(const char *input) {
     Serial.println("\"}");
     return true;
   }
+  // After a verified write the daemon asks the reader to read the tag again, so the
+  // normal pipeline (spool lookup, Moonraker activation) runs without lifting it.
+  if(cmd=="write-resume") {
+    if(writeTicket.length()) { writerError("ticket_open"); return true; }
+    writerInhibit=false; writerMisses=0;
+    spool.valid=false; spool.present=false;
+    Serial.println("PHOENIX-WRITE {\"status\":\"resumed\"}");
+    return true;
+  }
   if(cmd=="write-cancel") {
     writeTicket="";
     Serial.println("PHOENIX-WRITE {\"status\":\"cancelled\",\"remove_tag_to_resume\":true}");

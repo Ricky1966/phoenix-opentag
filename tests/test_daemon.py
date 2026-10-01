@@ -26,10 +26,10 @@ class Spoolman:
         raise AssertionError((method, path))
 
 class Moonraker:
-    def __init__(self): self.active=None; self.state='standby'; self.offline=False; self.writes=[]
+    def __init__(self): self.active=None; self.state='standby'; self.idle='Ready'; self.offline=False; self.writes=[]
     def call(self, method, path, body=None, **kwargs):
         if self.offline: raise OSError('offline')
-        if method=='GET': return {'result':{'status':{'print_stats':{'state':self.state}}}}
+        if method=='GET': return {'result':{'status':{'print_stats':{'state':self.state},'idle_timeout':{'state':self.idle}}}}
         self.active=body['spool_id']; self.writes.append(self.active)
 
 class Tests(unittest.TestCase):
@@ -51,6 +51,29 @@ class Tests(unittest.TestCase):
             self.d.moonraker.state=state
             self.assertFalse(self.d.handle({'uid':A,'event_id':state})['active'])
         self.assertEqual(self.d.moonraker.writes,[])
+    def test_blank_tag_is_offered_to_spoolman(self):
+        r=self.d.handle_blank({'uid':'E004010866073075','blank':True})
+        self.assertTrue(r['offered'])
+        scan=[c for c in self.d.spoolman.calls if c[1]=='/tag/scan'][-1][2]
+        self.assertEqual((scan['uid'],scan['format']),('E004010866073075','openprinttag-blank'))
+        # nothing is created or activated by a blank tag
+        self.assertEqual(self.d.moonraker.writes,[])
+        self.assertEqual([c for c in self.d.spoolman.calls if c[0]!='POST' or c[1]!='/tag/scan'],[])
+    def test_blank_tag_ignored_while_printer_busy(self):
+        for state,idle in (('printing','Printing'),('paused','Ready'),('standby','Printing')):
+            self.d.moonraker.state,self.d.moonraker.idle=state,idle
+            self.assertIn('ignored',self.d.handle_blank({'uid':'E004010866073075'}))
+        self.assertEqual(self.d.spoolman.calls,[])
+    def test_blank_tag_ignored_when_moonraker_offline(self):
+        self.d.moonraker.offline=True
+        self.assertIn('ignored',self.d.handle_blank({'uid':'E004010866073075'}))
+        self.assertEqual(self.d.spoolman.calls,[])
+    def test_blank_tag_ignored_during_write_session(self):
+        self.d.writer=type('W',(),{'busy':True})()
+        self.assertIn('ignored',self.d.handle_blank({'uid':'E004010866073075'}))
+        self.assertEqual(self.d.spoolman.calls,[])
+    def test_blank_tag_invalid_uid(self):
+        with self.assertRaises(ValueError): self.d.handle_blank({'uid':'xyz'})
     def test_transient_not_cached(self):
         self.d.moonraker.offline=True
         self.assertIn('error',self.d.handle_logged({'uid':A},'test'))

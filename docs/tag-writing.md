@@ -223,3 +223,27 @@ SQLite Spoolman, browser e seriale emulata. Il flusso web completo deve ancora
 essere provato su Phoenix. La primitiva firmware è stata provata dall'utente
 il 1 ottobre 2026: SLIX2 `E004010866073075`, recupero dopo interruzione con
 `--replace`, verifica positiva e rilettura corretta del campione Prusament.
+
+## Tag vuoto sul lettore (proposta di scrittura)
+
+Quando un tag ICODE SLIX2 (UID `E00401…`) con i blocchi 0–78 tutti a zero viene
+appoggiato sul lettore, il firmware lo segnala **una volta per presenza**:
+
+- USB: riga `PHOENIX-BLANK {"schema_version":1,"uid":"E004…","reader_id":"…","blank":true}`;
+- WiFi: `POST /blank` con lo stesso JSON (in modalità `auto` ricade sulla riga USB).
+
+Il demone **non crea né attiva nulla**: se la stampante è ferma inoltra a Spoolman una
+scansione `POST /api/v1/tag/scan` con `format: "openprinttag-blank"`, e Spoolman chiede
+conferma all'utente (vedi `docs/phoenix-writer.md` nel fork). Il lettore resta
+«disarmato», cioè il segnale viene ignorato, se:
+
+- Moonraker non è raggiungibile;
+- `print_stats.state` è `printing` o `paused`;
+- `idle_timeout.state` è `Printing` (Klipper sta eseguendo G-code: macro, riscaldamento,
+  caricamento/scaricamento del filamento);
+- c'è una sessione di scrittura aperta.
+
+Dopo una scrittura verificata e associata, la chiusura della sessione invia `write-resume`
+(non `write-cancel` da solo): il firmware rilegge il tag senza doverlo togliere, e la
+normale pipeline lo riconosce e imposta la bobina attiva. `write-resume` è rifiutato con
+`ticket_open` se c'è ancora un ticket di scrittura.
