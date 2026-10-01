@@ -2,8 +2,12 @@
 #include <cstddef>
 #include <cstdint>
 
-// First writer target: NXP ICODE SLIX2, 80 user blocks of 4 bytes.
-constexpr size_t TAG_WRITE_BYTES = 320;
+// First writer target: NXP ICODE SLIX2. The chip has 80 addressable blocks, but
+// only blocks 0-78 (316 bytes) are user memory: block 79 is the NXP counter and
+// is never written, read for comparison or counted as content.
+constexpr unsigned TAG_WRITE_BLOCKS = 79;
+constexpr size_t TAG_WRITE_BYTES = 4 * TAG_WRITE_BLOCKS;
+constexpr uint8_t TAG_MAX_CC_CAPACITY = 0x27; // 8-byte units after the 4-byte CC
 struct TagSnapshot {
   uint8_t uid[8] = {}; // ISO15693 wire order (LSB first)
   uint8_t memory[TAG_WRITE_BYTES] = {};

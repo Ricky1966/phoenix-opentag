@@ -13,7 +13,7 @@ struct MemoryTag : TagWriteIO {
   uint8_t uid[8]={0x72,0x34,0x07,0x66,0x08,0x01,0x04,0xe0};
   uint8_t locks[80]={}; uint8_t blockSize=4; uint16_t blocks=80;
   bool present=true, securityOk=true;
-  int failWrite=-1, badRead=-1, corruptWrite=-1, calls=0;
+  int counterWrites=0, failWrite=-1, badRead=-1, corruptWrite=-1, calls=0;
   std::vector<unsigned> written;
   bool identify(uint8_t out[8],uint8_t &size,uint16_t &count) override {
     memcpy(out,uid,8);size=blockSize;count=blocks;return present;
@@ -28,6 +28,7 @@ struct MemoryTag : TagWriteIO {
   }
   bool write(const uint8_t address[8],uint8_t block,const uint8_t data[4]) override {
     assert(!memcmp(address,uid,8)); ++calls;
+    if(block>=79) { ++counterWrites; return false; } // SLIX2 block 79 = NXP counter
     if(failWrite==calls || !present || locks[block]) return false;
     written.push_back(block);memcpy(memory.data()+4*block,data,4);
     if(corruptWrite==calls) memory[4*block]^=0x80;
@@ -50,11 +51,20 @@ int main() {
     assert(r.code==WriteCode::Verified && r.mayHaveChanged);
     assert(!memcmp(tag.memory.data(),data.data(),data.size()));
     assert(tag.written.front()==1 && tag.written.back()==1);
-    SpoolData parsed;assert(parseType5Tag(tag.memory.data(),320,parsed)==TagParseResult::Valid);
+    SpoolData parsed;assert(parseType5Tag(tag.memory.data(),TAG_WRITE_BYTES,parsed)==TagParseResult::Valid);
     int calls=tag.calls;auto now=snapshot(tag);
     assert(writeTag(tag,now,data.data(),data.size(),false).code==WriteCode::Unchanged);
     assert(tag.calls==calls);
   }
+  { // block 79 is a hardware counter: nonzero counter must not make a blank tag
+    // look occupied, and the writer must never touch it
+    MemoryTag t;t.memory[316]=0x12;t.memory[319]=0x01;auto s=snapshot(t);assert(s.blank);
+    assert(writeTag(t,s,image.data(),image.size(),false).code==WriteCode::Verified);
+    assert(t.counterWrites==0);
+    for(unsigned b:t.written) assert(b<79); }
+  { // CC capacity above SLIX2 user memory is refused
+    auto big=image;big[2]=0x28;MemoryTag t;auto s=snapshot(t);
+    assert(writeTag(t,s,big.data(),big.size(),false).code==WriteCode::InvalidImage && t.calls==0); }
   { MemoryTag t;auto s=snapshot(t);t.uid[0]^=1;
     assert(writeTag(t,s,image.data(),image.size(),false).code==WriteCode::TagChanged);assert(t.calls==0); }
   { MemoryTag t;auto s=snapshot(t);t.memory[70]=1;
@@ -77,7 +87,7 @@ int main() {
     MemoryTag t;auto before=snapshot(t);t.failWrite=int(fault);
     auto r=writeTag(t,before,image.data(),image.size(),false);
     assert(!r.ok() && r.mayHaveChanged && t.calls==int(fault));
-    if(fault>1) { SpoolData parsed;assert(parseType5Tag(t.memory.data(),320,parsed)!=TagParseResult::Valid); }
+    if(fault>1) { SpoolData parsed;assert(parseType5Tag(t.memory.data(),TAG_WRITE_BYTES,parsed)!=TagParseResult::Valid); }
     MemoryTag c;auto snap=snapshot(c);c.corruptWrite=int(fault);
     assert(writeTag(c,snap,image.data(),image.size(),false).code==WriteCode::VerifyFailed);
   }

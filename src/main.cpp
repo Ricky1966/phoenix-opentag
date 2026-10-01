@@ -46,7 +46,7 @@ static void otaLoop() {
 }
 
 void setup() {
-  // A full 320-byte image is 640 hex characters; retain it while NFC polls.
+  // A full 316-byte image is 632 hex characters; retain it while NFC polls.
   Serial.setRxBufferSize(1024);
   Serial.begin(115200);
   delay(1000);

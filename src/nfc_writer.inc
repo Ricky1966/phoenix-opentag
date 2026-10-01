@@ -59,7 +59,7 @@ bool nfcWriterCommand(const char *input) {
     writeTicket=ticket; writeOpened=millis();
     Serial.printf("PHOENIX-WRITE {\"status\":\"ready\",\"ticket\":\"%s\",\"expires_ms\":60000,\"uid\":\"",ticket);
     for(int i=7;i>=0;--i) Serial.printf("%02X",writeSnapshot.uid[i]);
-    Serial.printf("\",\"capacity\":320,\"block_size\":4,\"blank\":%s,\"memory_hex\":\"",writeSnapshot.blank?"true":"false");
+    Serial.printf("\",\"capacity\":316,\"block_size\":4,\"blank\":%s,\"memory_hex\":\"",writeSnapshot.blank?"true":"false");
     for(uint8_t b:writeSnapshot.memory) Serial.printf("%02X",b);
     Serial.println("\"}");
     return true;
@@ -80,7 +80,7 @@ bool nfcWriterCommand(const char *input) {
   writeTicket=""; // single-use even on error; no replay of destructive commands
   if(mode!="new" && mode!="replace") { writerError("invalid_mode"); return true; }
   const String hex=cmd.substring(second+1);
-  if(hex.length()<20 || hex.length()>640 || hex.length()%2) { writerError("invalid_image"); return true; }
+  if(hex.length()<20 || hex.length()>2*TAG_WRITE_BYTES || hex.length()%2) { writerError("invalid_image"); return true; }
   uint8_t image[TAG_WRITE_BYTES]={};
   for(size_t i=0;i<hex.length()/2;++i) {
     int hi=hexDigit(hex[2*i]),lo=hexDigit(hex[2*i+1]);

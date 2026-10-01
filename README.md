@@ -17,7 +17,7 @@ Nato come versione ridotta di [Odin-ESP32](https://github.com/Ricky1966/Odin-ESP
 ## Scrittura tag (sperimentale)
 
 Il firmware include la scrittura esplicita di immagini OpenPrintTag su **ICODE SLIX2
-da 320 byte**, con controllo UID, protezioni, consenso alla sostituzione e rilettura
+da 316 byte utente**, con controllo UID, protezioni, consenso alla sostituzione e rilettura
 completa. Protocollo seriale e client di prova: [procedura e limiti](docs/tag-writing.md).
 Il futuro pulsante del fork Spoolman potrà usare questo protocollo; form ed encoder
 completo dei campi non fanno ancora parte di questa versione.

@@ -42,7 +42,7 @@ struct Reader {
   int getSystemInfo(uint8_t *,uint8_t *s,uint16_t *n) { *s=4;*n=80;return 0; }
   int readSingleBlock(uint8_t *,uint8_t b,uint8_t *out,int) { memcpy(out,memory+4*b,4);return 0; }
   int getBlockSecurityStatus(uint8_t *,int,int,uint8_t *out) { memset(out,0,80);return 0; }
-  int writeSingleBlock(uint8_t *,uint8_t b,uint8_t *in,int) { ++writes;memcpy(memory+4*b,in,4);return 0; }
+  int writeSingleBlock(uint8_t *,uint8_t b,uint8_t *in,int) { if(b>=79) return -1; ++writes;memcpy(memory+4*b,in,4);return 0; }
 } nfc;
 SpoolData spool;
 #include "nfc_writer.inc"
