@@ -13,7 +13,7 @@ import time
 from phoenix_opentag_daemon import klipper_serial_ports, open_serial
 
 PREFIX = b"PHOENIX-WRITE "
-MEMORY_BYTES = 320
+MEMORY_BYTES = 316  # blocchi 0-78 dello SLIX2; il blocco 79 e' un contatore NXP non scrivibile
 DEFAULT_BACKUP_DIR = "~/phoenix-tag-backups"
 
 
@@ -68,7 +68,7 @@ def save_backup(info: dict, backup_dir: Path) -> Path:
     """Salva la memoria attuale del tag (dal `write-info`) prima di sostituirla.
 
     Il firmware non ha rollback: se la scrittura si interrompe, il contenuto vecchio
-    e' perso. Il file contiene i 320 byte esatti del tag, ripristinabili con
+    e' perso. Il file contiene i 316 byte esatti (blocchi 0-78) del tag, ripristinabili con
     `--image <file> --expect-uid <UID> --replace` se erano un'immagine valida.
     Non sovrascrive mai un backup esistente e non lascia file parziali.
     """
@@ -109,8 +109,8 @@ def save_backup(info: dict, backup_dir: Path) -> Path:
 
 
 def write_image(client: SerialWriter, image: bytes, expected_uid: str, replace: bool, backup_dir: Path) -> dict:
-    if not 10 <= len(image) <= 320:
-        raise WriterError("Serve un'immagine NFC-V completa di 10–320 byte, non il solo CBOR")
+    if not 10 <= len(image) <= MEMORY_BYTES:
+        raise WriterError("Serve un'immagine NFC-V completa di 10–316 byte, non il solo CBOR")
     expected_uid = expected_uid.replace(":", "").upper()
     if not re.fullmatch(r"E00401[0-9A-F]{10}", expected_uid):
         raise WriterError("UID atteso non valido (ordine E00401..., 16 cifre hex)")
@@ -162,7 +162,9 @@ def main() -> int:
     fd = None
     try:
         image = args.image.read_bytes() if args.image else None
-        if image is not None and not 10 <= len(image) <= 320:
+        if image is not None and len(image) == 320:
+            image = image[:MEMORY_BYTES]  # vecchi backup da 320 byte: scarta il contatore (blocco 79)
+        if image is not None and not 10 <= len(image) <= MEMORY_BYTES:
             raise WriterError("Dimensione immagine non valida")
         fd = open_serial(args.serial, 115200)
         client = SerialWriter(fd)

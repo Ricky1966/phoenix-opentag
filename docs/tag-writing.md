@@ -1,7 +1,7 @@
 # Scrittura OpenPrintTag — prima implementazione
 
 Firmware `0.6.0-dev`, sperimentale fino alla prova su ESP32 + PN5180.
-Supporto iniziale: **NXP ICODE SLIX2, UID E00401…, 80 blocchi da 4 byte (320 byte)**.
+Supporto iniziale: **NXP ICODE SLIX2, UID E00401…, 80 blocchi indirizzabili, ma solo i blocchi 0–78 (316 byte) sono memoria utente: il blocco 79 è il contatore NXP e non viene mai scritto**.
 Pin, istanza PN5180 e inizializzazione hardware restano quelli del lettore collaudato.
 
 ## Contratto e limiti
@@ -21,7 +21,7 @@ preservare offset, metadati, campi ignoti e regioni non coinvolte.
 
 Layout accettato: CC di 4 byte `E1 40 <capacità/8> 01`, primo TLV NDEF in byte 4,
 lunghezza corta o estesa, terminatore `FE`, eventuale padding zero. L'immagine
-deve essere accettata dal parser FFF del progetto e stare nei 320 byte fisici;
+deve essere accettata dal parser FFF del progetto e stare nei 316 byte utente (CC `E1 40 27 01` al massimo);
 i byte fisici non forniti sono azzerati. Il parser verifica struttura e campi
 che conosce, **non sostituisce la validazione completa dello schema ufficiale**
 su tutti i campi extra. Immagini non supportate vengono rifiutate prima di scrivere.
@@ -30,7 +30,7 @@ Il file ufficiale `tag_03.bin` è un caso malformato, intenzionalmente rifiutato
 Non si impostano password, blocchi permanenti, AFI o DSFID. I blocchi da modificare
 devono risultare scrivibili; se non è possibile leggere lo stato di protezione
 si interrompe l'operazione. Tag protetti da password non sono supportati.
-Un tag è considerato vergine solo se tutti i 320 byte sono zero: un tag già
+Un tag è considerato vergine solo se tutti i 316 byte utente sono zero: un tag già
 formattato richiede `replace` anche se non contiene una bobina.
 
 Riferimenti: [specifica ufficiale](https://github.com/OpenPrintTag/openprinttag-specification),
@@ -47,7 +47,7 @@ Riferimenti: [specifica ufficiale](https://github.com/OpenPrintTag/openprinttag-
 4. Legge le protezioni; scrive un TLV NDEF vuoto nel blocco 1, poi solo i blocchi
    differenti e il CC. Ogni blocco scritto viene immediatamente riletto.
 5. Confronta tutta l'immagine preparata, pubblica la lunghezza NDEF nel blocco 1
-   per ultimo e confronta nuovamente tutti i 320 byte.
+   per ultimo e confronta nuovamente tutti i 316 byte.
 
 Tutti i comandi NFC di lettura/scrittura sono indirizzati all'UID previsto.
 Non ci sono retry automatici delle scritture né rollback. L'ordine di pubblicazione
@@ -67,10 +67,10 @@ seguito da JSON; log e righe `PHOENIX-TAG` non sono risposte del writer.
 
 - `write-info`: entra in modalità scrittura, sospende gli invii e legge lo snapshot.
   Risponde `status: ready`, `ticket` (16 cifre hex), `expires_ms: 60000`, UID canonico
-  MSB-first senza separatori, `capacity: 320`, `block_size: 4`, `blank`, `memory_hex`.
+  MSB-first senza separatori, `capacity: 316`, `block_size: 4`, `blank`, `memory_hex`.
   In assenza di tag risponde con errore e non autorizza alcuna scrittura.
 - `write-commit <ticket> <new|replace> <image_hex>`: ticket valido monouso, immagine
-  da 10 a 320 byte. `new` rifiuta tag occupati; `replace` è il consenso esplicito a
+  da 10 a 316 byte. `new` rifiuta tag occupati; `replace` è il consenso esplicito a
   sostituirne tutto il contenuto. Il ticket viene consumato anche se il commit fallisce.
 - `write-cancel`: elimina il ticket. Non interrompe una scrittura già in corso:
   il firmware esegue il commit in modo sincrono prima di elaborare altri comandi.
@@ -131,7 +131,7 @@ Il client verifica UID e conferma firmware, non ritenta un commit fallito.
 
 Il firmware non ha rollback: se una scrittura si interrompe, il contenuto precedente
 del tag è perso. Per questo, quando il tag **non è vuoto**, il client salva la sua
-memoria (320 byte esatti, dal `memory_hex` di `write-info`) in un file **prima**
+memoria (316 byte esatti, blocchi 0–78, dal `memory_hex` di `write-info`) in un file **prima**
 di inviare il commit:
 
 - cartella predefinita `~/phoenix-tag-backups` (`--backup-dir` per cambiarla, creata con permessi `0700`);

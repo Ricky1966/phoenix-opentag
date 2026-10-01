@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'host'))
 import phoenix_opentag_write as writer
 
 UID = 'E004010866073472'
-OLD_MEMORY = bytes((7 * i + 3) % 251 for i in range(320))   # contenuto vecchio del tag, non nullo
+OLD_MEMORY = bytes((7 * i + 3) % 251 for i in range(316))   # contenuto vecchio del tag, non nullo
 
 class Fake:
     def __init__(self, uid=UID, blank=True, result=None, memory_hex='default', on_commit=None):
@@ -37,7 +37,7 @@ class WriterClientTests(unittest.TestCase):
         self.addCleanup(self._tmp.cleanup)
         self.backups = Path(self._tmp.name) / 'backups'
 
-    def write(self, client, image=bytes(320), uid=UID, replace=False):
+    def write(self, client, image=bytes(316), uid=UID, replace=False):
         return writer.write_image(client, image, uid, replace, self.backups)
 
     def test_wrong_uid_never_commits(self):
@@ -57,7 +57,7 @@ class WriterClientTests(unittest.TestCase):
         self.assertEqual(len(c.commands), 2)
     def test_bad_input_before_io(self):
         c = Fake()
-        for image, uid in [(bytes(321), UID), (bytes(320), 'arbitrary\ncommand')]:
+        for image, uid in [(bytes(317), UID), (bytes(316), 'arbitrary\ncommand')]:
             with self.assertRaises(writer.WriterError): self.write(c, image, uid)
         self.assertEqual(c.commands, [])
 
@@ -76,7 +76,7 @@ class WriterClientTests(unittest.TestCase):
         self.assertEqual(path.read_bytes(), OLD_MEMORY)
         self.assertTrue(path.name.startswith(UID + '-') and path.suffix == '.bin')
         self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
-        self.assertEqual(len(path.read_bytes()), 320)
+        self.assertEqual(len(path.read_bytes()), 316)
 
     def test_blank_tag_needs_no_backup(self):
         result = self.write(Fake(blank=True))
@@ -94,7 +94,7 @@ class WriterClientTests(unittest.TestCase):
         self.assertEqual(c.commands, ['write-info', 'write-cancel'])
 
     def test_missing_or_bad_memory_aborts_before_commit(self):
-        for bad in (None, '', 'zz' * 320, '00' * 319, '00' * 321):
+        for bad in (None, '', 'zz' * 320, '00' * 315, '00' * 317):
             c = Fake(blank=False, memory_hex=bad)
             with self.assertRaises(writer.WriterError, msg=repr(bad)[:20]):
                 self.write(c, replace=True)
@@ -112,11 +112,11 @@ class WriterClientTests(unittest.TestCase):
 
     def test_existing_backups_are_never_overwritten(self):
         with mock.patch.object(writer.time, 'strftime', return_value='20260930-120000'):
-            first = self.write(Fake(blank=False, memory_hex=(b'\x01' * 320).hex()), replace=True)['backup']
-            second = self.write(Fake(blank=False, memory_hex=(b'\x02' * 320).hex()), replace=True)['backup']
+            first = self.write(Fake(blank=False, memory_hex=(b'\x01' * 316).hex()), replace=True)['backup']
+            second = self.write(Fake(blank=False, memory_hex=(b'\x02' * 316).hex()), replace=True)['backup']
         self.assertNotEqual(first, second)
-        self.assertEqual(Path(first).read_bytes(), b'\x01' * 320)
-        self.assertEqual(Path(second).read_bytes(), b'\x02' * 320)
+        self.assertEqual(Path(first).read_bytes(), b'\x01' * 316)
+        self.assertEqual(Path(second).read_bytes(), b'\x02' * 316)
 
     def test_wrong_uid_makes_no_backup(self):
         with self.assertRaises(writer.WriterError):
@@ -146,10 +146,10 @@ class SerialProtocolTests(unittest.TestCase):
         thread = threading.Thread(target=emulator, daemon=True)
         thread.start()
         try:
-            result = writer.write_image(writer.SerialWriter(local.fileno(), 1), bytes(320), UID, False, self.backups)
+            result = writer.write_image(writer.SerialWriter(local.fileno(), 1), bytes(316), UID, False, self.backups)
             self.assertTrue(result['verified'])
             self.assertEqual(len(commands), 2)
-            self.assertTrue(commands[-1].endswith(b'0' * 640 + b'\n'))
+            self.assertTrue(commands[-1].endswith(b"0" * 632 + b'\n'))
         finally:
             local.close()
             thread.join(2)
