@@ -194,15 +194,18 @@ class SpoolCheckTests(unittest.TestCase):
             self.assertIn(expected, text)
         self.assertTrue(text.startswith(GCODE % ("PLA", "205")))  # only appended, never rewritten
 
-    def test_material_mismatch_warns(self):
+    def test_material_mismatch_blocks_the_export(self):
         result, text = self.run_check(filament="PETG")
         self.assertEqual(result.status, "recoverable")
         self.assertIn("the spool is PLA but the profile sliced is PETG", result.message)
+        self.assertIn("on_mismatch", result.message)
         self.assertIn("; MISMATCH: the spool is PLA but the profile sliced is PETG", text)
 
     def test_mismatch_modes(self):
-        self.set_config(on_mismatch="block")
-        self.assertEqual(self.run_check(filament="ABS")[0].status, "fatal")
+        for mode in ("block", "warn"):  # "warn" is the old name of "block"
+            self.set_config(on_mismatch=mode)
+            self.assertEqual(self.run_check(filament="ABS")[0].status, "recoverable")
+        self.assertEqual(self.plugin.DEFAULT_CONFIG["on_mismatch"], "block")
         self.set_config(on_mismatch="ignore")
         result, text = self.run_check(filament="ABS")
         self.assertEqual(result.status, "success")

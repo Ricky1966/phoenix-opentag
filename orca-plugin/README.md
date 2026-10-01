@@ -33,15 +33,21 @@ rewritten; Klipper ignores comments), for example:
 ; --- end Phoenix Spoolman ---
 ```
 
-A mismatch adds `; MISMATCH: …` lines and is reported according to `on_mismatch`: `warn` (default,
-a recoverable error), `block` (a fatal error) or `ignore` (only the comments). If Moonraker or
+A mismatch is handled according to `on_mismatch`:
+
+- `block` (default): the export stops with an OrcaSlicer error dialog, for example *"Post-processing
+  plugin Spool check failed. Error: Spool #4 does not match the sliced profile: the spool is PLA but the
+  profile sliced is ASA; nozzle 260 C sliced, the spool's usual temperature is 210 C"*. No G-code file
+  is saved. (OrcaSlicer aborts an export whenever a post-processing plugin fails; a softer warning is not
+  possible from a plugin.) The old value `warn` is treated as `block`.
+- `ignore`: the file is exported and the comment block records `; MISMATCH: …` lines.
+
+If Moonraker or
 Spoolman cannot be reached, for example when slicing away from home, the check is skipped and the
 G-code is exported unchanged apart from a comment: it never blocks an export.
 
 **Limits.** The check happens at export time, not when the print starts: Klipper cannot ask Moonraker
-which spool is active, so a spool changed after slicing is not noticed. How OrcaSlicer reacts to a
-recoverable or fatal error from a post-processing plugin (a warning dialog, or an aborted export or
-upload) depends on the OrcaSlicer build and has to be observed.
+which spool is active, so a spool changed after slicing is not noticed.
 
 **Note (0.2.1).** OrcaSlicer's audit hook refuses reads of the Python interpreter's own files while a G-code file is being exported. The plugin therefore loads `encodings.idna` when it starts (Python imports it lazily to resolve a host name), and any unexpected error during the check skips it instead of stopping the export. In 0.2.0 that blocked read made the export fail silently: no error, no file.
 
@@ -56,9 +62,8 @@ Not done yet: writing a filament preset from the active spool.
 2. Expand the plugin, find the **Active spool** script and press **Run**.
 3. OrcaSlicer asks whether the plugin may contact the network. The plugin talks only to the
    Moonraker and Spoolman addresses in its configuration.
-4. **Spool check** appears among the plugin's features: to use it, select it as the post-processing
-   plugin in the print/printer settings (look for the post-processing option that lists plugins), then
-   export a G-code file and open its last lines.
+4. **Spool check** is a slicing-pipeline plugin: in the **Process** settings, tab **Others**, section **Slicing Pipeline Plugin**, press **Add plugin** and pick "Spool check". Slice, export a G-code file and open its last lines.
+   and pick "Spool check". Slice, export a G-code file and open its last lines.
 
 ## Configuration
 
@@ -66,7 +71,7 @@ Plugins window → select the plugin → **Config** tab → choose **Active spoo
 
 ```json
 {"moonraker_url": "http://192.168.1.36:7125", "spoolman_url": "http://192.168.1.36:7912", "timeout_seconds": 5,
- "on_mismatch": "warn", "nozzle_temp_tolerance": 25}
+ "on_mismatch": "block", "nozzle_temp_tolerance": 25}
 ```
 
 Away from home with Tailscale, use the Phoenix's Tailscale address in both URLs.

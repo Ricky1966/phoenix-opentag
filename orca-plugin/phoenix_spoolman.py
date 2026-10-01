@@ -6,7 +6,7 @@
 # name = "Phoenix Spoolman"
 # description = "Shows the spool that the Phoenix reader activated and checks it against the exported G-code (Moonraker + Spoolman). Standard library only."
 # author = "Ricky1966"
-# version = "0.2.1"
+# version = "0.3.0"
 # ///
 """Phoenix Spoolman plugin for OrcaSlicer (Python plugin API, nightly builds / releases after 2.4.2).
 
@@ -41,9 +41,10 @@ DEFAULT_CONFIG = {
     "moonraker_url": "http://192.168.1.36:7125",
     "spoolman_url": "http://192.168.1.36:7912",
     "timeout_seconds": 5,
-    # Spool check only: "warn" reports a mismatch as a recoverable error, "block" as a fatal one,
-    # "ignore" only writes the comment block.
-    "on_mismatch": "warn",
+    # Spool check only. "block" stops the export with an error dialog (OrcaSlicer aborts the export when
+    # a post-processing plugin fails, so there is no softer "warning"); "ignore" exports anyway and only
+    # writes the comment block. The old value "warn" is treated as "block".
+    "on_mismatch": "block",
     "nozzle_temp_tolerance": 25,
 }
 CONFIG_TAIL_BYTES = 512 * 1024  # Orca writes the settings block at the end of the G-code
@@ -255,8 +256,10 @@ class SpoolCheck(orca.slicing.SlicingPipelineCapabilityBase):
         if status == "skipped":
             return orca.ExecutionResult.skipped(message)
         if status == "mismatch" and config.get("on_mismatch") != "ignore":
-            kind = orca.PluginResult.FatalError if config.get("on_mismatch") == "block" else orca.PluginResult.RecoverableError
-            return orca.ExecutionResult.failure(kind, message)
+            return orca.ExecutionResult.failure(
+                orca.PluginResult.RecoverableError,
+                message + ". To export anyway, set on_mismatch to \"ignore\" in the Spool check configuration.",
+            )
         return orca.ExecutionResult.success(message)
 
 
