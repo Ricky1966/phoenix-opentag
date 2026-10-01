@@ -6,6 +6,7 @@ import tempfile
 import threading
 import types
 import unittest
+from unittest import mock
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -235,8 +236,8 @@ class SpoolCheckTests(unittest.TestCase):
         def refused(*args, **kwargs):
             raise RuntimeError("blocked by the audit hook")
 
-        self.plugin.urllib.request.urlopen = refused
-        result, text = self.run_check()
+        with mock.patch.object(self.plugin.urllib.request, "urlopen", refused):
+            result, text = self.run_check()
         self.assertEqual(result.status, "skipped")
         self.assertIn("; spool check skipped:", text)
         self.assertIn("RuntimeError", text)
