@@ -182,3 +182,44 @@ Test automatici: `bash tests/run_host.sh` e
 `python3 -m unittest discover -s tests -p 'test_*.py'`. Le simulazioni includono
 interruzioni ad ogni scrittura, verifiche fallite, protezioni, cambio tag, ticket
 scaduti/riutilizzati e sospensione degli invii. La prova fisica resta necessaria.
+
+## Bridge per il pulsante Spoolman «Scrivi tag»
+
+Il branch `codex/spoolman-write-bridge` aggiunge al demone l'API autenticata
+`/writer/{arm,prepare,commit,finish,cancel,reset}`. È disattivata finché non è
+configurata la variabile `PHOENIX_WRITER_TOKEN` (almeno 32 caratteri casuali).
+Richiede `--serial`: il thread seriale esistente è l'unico proprietario della
+porta, anche quando le letture normali arrivano via WiFi. Non avviare in parallelo
+il monitor seriale o il writer manuale.
+
+Distribuire insieme `host/phoenix_opentag_daemon.py`,
+`host/phoenix_opentag_write.py` e `host/phoenix_writer_bridge.py`. Il firmware
+0.6.0-dev già provato sul banco non richiede modifiche per questo bridge.
+Il servizio systemd mantiene i suoi argomenti; impostare il token tramite
+ambiente del servizio. Non salvarlo nel repository. `PHOENIX_TAG_BACKUP_DIR`
+consente di cambiare la directory dei backup (default `~/phoenix-tag-backups`).
+
+Il fork `Ricky1966/Spoolman`, branch `codex/openprinttag-write-ui`, richiede
+`SPOOLMAN_WRITER_TOKEN` con lo stesso valore e
+`SPOOLMAN_WRITER_URL=http://192.168.1.36:7913` (indirizzo raggiungibile dal
+container). Configurare un solo processo Spoolman e un solo lettore USB.
+La documentazione completa è `docs/phoenix-writer.md` nel fork.
+
+L'apertura del form riserva il lettore **prima** che l'utente appoggi il tag:
+il demone sospende l'elaborazione automatica delle letture USB e HTTP, evitando
+creazioni o cambi bobina durante la scrittura. La preparazione acquisisce UID,
+ticket firmware e memoria originale. Il commit consuma la sessione, salva il
+backup prima di una sostituzione e non ritenta dopo errori o risposte perse.
+Spoolman associa l'UID solo dopo verifica positiva del firmware. Rimuovere il
+tag e chiudere il dialogo per rilasciare il lettore.
+
+Dopo una pagina chiusa o un riavvio, rimuovere il tag e utilizzare il recupero
+esplicito della sessione nel form. Un recupero non ripete una scrittura né
+ripristina la memoria. L'API rifiuta richieste browser dirette e richiede Bearer
+auth; mantenere i servizi su una rete fidata o usare TLS tra macchine.
+
+Validazione del bridge: test unitari e prova locale con HTTP reale, database
+SQLite Spoolman, browser e seriale emulata. Il flusso web completo deve ancora
+essere provato su Phoenix. La primitiva firmware è stata provata dall'utente
+il 1 ottobre 2026: SLIX2 `E004010866073075`, recupero dopo interruzione con
+`--replace`, verifica positiva e rilettura corretta del campione Prusament.

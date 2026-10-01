@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import glob
+import hmac
 import json
 import logging
 import math
@@ -155,6 +156,8 @@ class Daemon:
             reader = self.default_reader
 
         with self.lock:
+            if getattr(self, "writer", None) and self.writer.busy:
+                return {"error": "writer session active; automatic tag handling suspended"}
             key = json.dumps(event, sort_keys=True)
             now = time.monotonic()
             if key == self.last_event and self.last_result is not None and now - self.last_time < DEDUP_SECONDS:
@@ -309,7 +312,18 @@ def make_handler(daemon: Daemon) -> type[BaseHTTPRequestHandler]:
                 self._reply(404, {"error": "not found"})
 
         def do_POST(self) -> None:  # noqa: N802
-            if self.path != "/tag":
+            is_writer = self.path.startswith("/writer/")
+            if is_writer:
+                writer = getattr(daemon, "writer", None)
+                if writer is None:
+                    self._reply(404, {"error": "writer disabled"})
+                    return
+                # Browser requests go through Spoolman, never directly to this API.
+                auth = self.headers.get("Authorization", "")
+                if self.headers.get("Origin") or not hmac.compare_digest(auth, "Bearer " + writer.token):
+                    self._reply(403, {"error": "writer authorization failed"})
+                    return
+            if self.path != "/tag" and not is_writer:
                 self._reply(404, {"error": "not found"})
                 return
             try:
@@ -326,6 +340,13 @@ def make_handler(daemon: Daemon) -> type[BaseHTTPRequestHandler]:
                     raise ValueError
             except ValueError:
                 self._reply(400, {"error": "JSON non valido"})
+                return
+            if is_writer:
+                try:
+                    result = writer.command(self.path.removeprefix("/writer/"), event)
+                    self._reply(200, result)
+                except (ValueError, OSError, RuntimeError) as exc:
+                    self._reply(409, {"error": str(exc)})
                 return
             result = daemon.handle_logged(event, f"http {self.client_address[0]}")
             self._reply(502 if "error" in result else 200, result)
@@ -376,8 +397,13 @@ def serial_loop(daemon: Daemon, path: str, baud: int) -> None:
             continue
         log.info("Seriale %s aperta a %d baud", path, baud)
         buf = b""
+        writer = getattr(daemon, "writer", None)
+        if writer:
+            writer.online = True
         try:
             while True:
+                if writer and writer.tick(fd):
+                    buf = b""  # writer consumed its own response, discard pre-session partial logs
                 ready, _, _ = select.select([fd], [], [], 1.0)
                 if not ready:
                     continue
@@ -411,6 +437,8 @@ def serial_loop(daemon: Daemon, path: str, baud: int) -> None:
         except OSError as e:
             log.warning("Seriale %s: %s, riapro tra 5 s", path, e)
         finally:
+            if writer:
+                writer.online = False
             os.close(fd)
         time.sleep(5)
 
@@ -441,6 +469,13 @@ def main() -> int:
         p.error("serve almeno uno tra --listen e --serial")
 
     daemon = Daemon(args)
+    writer_token = os.environ.get("PHOENIX_WRITER_TOKEN", "")
+    if writer_token:
+        if len(writer_token) < 32 or not args.serial:
+            p.error("PHOENIX_WRITER_TOKEN requires at least 32 characters and --serial")
+        from phoenix_writer_bridge import WriterBridge
+        daemon.writer = WriterBridge(daemon.lock, writer_token, os.path.expanduser(
+            os.environ.get("PHOENIX_TAG_BACKUP_DIR", "~/phoenix-tag-backups")))
 
     if args.serial:
         taken = klipper_serial_ports(args.klipper_config)
@@ -460,3 +495,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
