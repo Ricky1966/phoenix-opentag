@@ -63,7 +63,6 @@ Not done yet: writing a filament preset from the active spool.
 3. OrcaSlicer asks whether the plugin may contact the network. The plugin talks only to the
    Moonraker and Spoolman addresses in its configuration.
 4. **Spool check** is a slicing-pipeline plugin: in the **Process** settings, tab **Others**, section **Slicing Pipeline Plugin**, press **Add plugin** and pick "Spool check". Slice, export a G-code file and open its last lines.
-   and pick "Spool check". Slice, export a G-code file and open its last lines.
 
 ## Configuration
 
