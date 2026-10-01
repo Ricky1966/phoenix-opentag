@@ -1,5 +1,10 @@
 # Phoenix Spoolman: OrcaSlicer plugin
 
+> [!CAUTION]
+> **Experimental hobby project: use it entirely at your own risk.** It comes with no warranty, and the author is **not responsible** for any damage to printers, PCs, hardware, software or data. Read the Disclaimer section of this README before you build, flash or run anything.
+>
+> *Progetto sperimentale: uso a proprio rischio e pericolo. L'autore non risponde di alcun danno a stampanti, computer, hardware, software o dati.*
+
 ## ⚠️ Disclaimer: use at your own risk
 
 This OrcaSlicer plugin is an experimental hobby project, provided **"as is"**, without warranty of any kind. It means flashing firmware, wiring electronics, writing to NFC tags, sending commands to a printer's firmware (Klipper/Moonraker) and installing software on your computers. Mistakes, bugs or incompatibilities can cause failed prints, damage to your printer(s), your computer(s), the ESP32/PN5180 module, the tags or any other hardware or software, loss of data, or other harm.
