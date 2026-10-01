@@ -39,7 +39,7 @@ class BridgeTests(unittest.TestCase):
                         uid=UID,
                         ticket="a" * 16,
                         blank=outer.blank,
-                        memory_hex="01" * 320,
+                        memory_hex="01" * 316,
                     )
                 if cmd.startswith("write-commit"):
                     if outer.io_fail:
@@ -74,13 +74,13 @@ class BridgeTests(unittest.TestCase):
         info = self.prepare()
         self.assertTrue(self.bridge.busy)
         result = self.bridge.command(
-            "commit", dict(session=info["session"], image_hex="00" * 320)
+            "commit", dict(session=info["session"], image_hex="00" * 316)
         )
         self.assertTrue(result["verified"])
         self.assertEqual(result["uid"], UID)
         with self.assertRaises(BridgeError):
             self.bridge.command(
-                "commit", dict(session=info["session"], image_hex="00" * 320)
+                "commit", dict(session=info["session"], image_hex="00" * 316)
             )
         self.assertTrue(self.bridge.busy)
         self.bridge.command("finish", dict(session=info["session"]))
@@ -92,23 +92,23 @@ class BridgeTests(unittest.TestCase):
         info = self.prepare()
         with self.assertRaises(BridgeError):
             self.bridge.command(
-                "commit", dict(session=info["session"], image_hex="00" * 320)
+                "commit", dict(session=info["session"], image_hex="00" * 316)
             )
         result = self.bridge.command(
-            "commit", dict(session=info["session"], image_hex="00" * 320, replace=True)
+            "commit", dict(session=info["session"], image_hex="00" * 316, replace=True)
         )
-        self.assertEqual(Path(result["backup"]).read_bytes(), b"\x01" * 320)
+        self.assertEqual(Path(result["backup"]).read_bytes(), b"\x01" * 316)
 
     def test_disconnection_consumes_session_without_retry(self):
         info = self.prepare()
         self.io_fail = True
         with self.assertRaises(BridgeError):
             self.bridge.command(
-                "commit", dict(session=info["session"], image_hex="00" * 320)
+                "commit", dict(session=info["session"], image_hex="00" * 316)
             )
         with self.assertRaises(BridgeError):
             self.bridge.command(
-                "commit", dict(session=info["session"], image_hex="00" * 320)
+                "commit", dict(session=info["session"], image_hex="00" * 316)
             )
         self.assertTrue(self.bridge.busy)
         self.bridge.command("reset", {})

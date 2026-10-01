@@ -114,7 +114,7 @@ class WriterBridge:
             image = body.get("image_hex", "")
             if (
                 not isinstance(image, str)
-                or not re.fullmatch(r"[0-9a-fA-F]{20,640}", image)
+                or not re.fullmatch(r"[0-9a-fA-F]{20,632}", image)
                 or len(image) % 2
             ):
                 raise BridgeError("Invalid image")
