@@ -54,14 +54,14 @@ static DeliveryState delivery;
 static String eventToken;
 static uint32_t bootId, sequence = 0;
 
-static bool postWifi(const String &json) {
+static bool postWifi(const String &json, const char *path = "/tag") {
   if (WiFi.status() != WL_CONNECTED) return false;
   WiFiClient client;
   HTTPClient http;
   http.setConnectTimeout(1500);
   http.setTimeout(5000);
   http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
-  if (!http.begin(client, host + "/tag")) return false;
+  if (!http.begin(client, host + path)) return false;
   http.addHeader("Content-Type", "application/json");
   int code = http.POST(json);
   http.end();
@@ -157,6 +157,19 @@ static void command(String cmd) {
     eventToken = "";
   } else {
     Serial.println("Comando sconosciuto, 'help' per l'elenco.");
+  }
+}
+
+// A blank SLIX2 tag was found: tell the daemon once per presence, so Spoolman
+// can offer to write it. Not retried: re-seat the tag to try again.
+void transportBlank(const char *uid) {
+  String plain;
+  for (const char *c = uid; *c; ++c) if (*c != ':') plain += *c;
+  String payload = "{\"schema_version\":1,\"uid\":\"" + plain + "\",\"reader_id\":\"" +
+                   readerId + "\",\"blank\":true}";
+  bool sent = mode != T_USB && postWifi(payload, "/blank");
+  if (!sent && mode != T_WIFI) {
+    Serial.print("PHOENIX-BLANK "); Serial.println(payload);
   }
 }
 

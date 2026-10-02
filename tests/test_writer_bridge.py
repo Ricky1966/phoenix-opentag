@@ -86,6 +86,14 @@ class BridgeTests(unittest.TestCase):
         self.bridge.command("finish", dict(session=info["session"]))
         self.assertFalse(self.bridge.busy)
         self.assertEqual(sum(x.startswith("write-commit") for x in self.commands), 1)
+        # verified and linked: the reader is told to read the tag again
+        self.assertEqual(self.commands[-2:], ["write-cancel", "write-resume"])
+
+    def test_cancel_does_not_resume_reading(self):
+        info = self.prepare()
+        self.bridge.command("cancel", dict(session=info["session"]))
+        self.assertEqual(self.commands[-1], "write-cancel")
+        self.assertNotIn("write-resume", self.commands)
 
     def test_backup_before_replace(self):
         self.blank = False

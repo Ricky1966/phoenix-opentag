@@ -100,7 +100,13 @@ class WriterBridge:
                     "expires_seconds": 55,
                 }
             if action in ("cancel", "finish"):
-                self._io(lambda wire: wire.request("write-cancel"))
+                def close(wire):
+                    wire.request("write-cancel")
+                    if action == "finish":
+                        # Verified and linked: read the tag again so it is looked up and activated.
+                        wire.request("write-resume")
+
+                self._io(close)
                 self.session = None
                 with self.daemon_lock:
                     self.busy = False

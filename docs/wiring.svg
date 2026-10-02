@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 640" width="900" height="640" font-family="Helvetica,Arial,sans-serif">
+<title>Phoenix OpenTag wiring: ESP32 DevKit to PN5180</title>
+<rect width="900" height="640" fill="#ffffff"/>
+<text x="450" y="34" text-anchor="middle" font-size="20" font-weight="bold" fill="#111">Phoenix OpenTag wiring: ESP32 DevKit ↔ PN5180</text>
+<text x="450" y="56" text-anchor="middle" font-size="12" fill="#555">Point-to-point, 9 wires. Pin numbers are ESP32 GPIO numbers (src/config.h).</text>
+<rect x="60" y="80" width="210" height="400" rx="10" fill="#eef3fb" stroke="#1f3b73" stroke-width="2"/>
+<text x="165" y="104" text-anchor="middle" font-size="15" font-weight="bold" fill="#1f3b73">ESP32 DevKit</text>
+<text x="165" y="122" text-anchor="middle" font-size="11" fill="#1f3b73">38 pin, ESP32-WROOM-32</text>
+<rect x="630" y="80" width="210" height="400" rx="10" fill="#fbf1ee" stroke="#7a2b1a" stroke-width="2"/>
+<text x="735" y="104" text-anchor="middle" font-size="15" font-weight="bold" fill="#7a2b1a">PN5180 module</text>
+<text x="735" y="122" text-anchor="middle" font-size="11" fill="#7a2b1a">NFC frontend, ISO 15693</text>
+<line x1="270" y1="165" x2="630" y2="165" stroke="#e67e00" stroke-width="4" stroke-linecap="round"/>
+<circle cx="270" cy="165" r="5" fill="#e67e00" stroke="#222"/>
+<circle cx="630" cy="165" r="5" fill="#e67e00" stroke="#222"/>
+<text x="256" y="169" text-anchor="end" font-size="13" font-weight="bold" fill="#1f3b73">GPIO17</text>
+<text x="644" y="169" font-size="13" font-weight="bold" fill="#7a2b1a">RST</text>
+<rect x="420" y="155" width="60" height="20" rx="4" fill="#ffffff" stroke="#e67e00"/>
+<text x="450" y="170" text-anchor="middle" font-size="12" fill="#111">RST</text>
+<line x1="270" y1="203" x2="630" y2="203" stroke="#c9a100" stroke-width="4" stroke-linecap="round"/>
+<circle cx="270" cy="203" r="5" fill="#c9a100" stroke="#222"/>
+<circle cx="630" cy="203" r="5" fill="#c9a100" stroke="#222"/>
+<text x="256" y="207" text-anchor="end" font-size="13" font-weight="bold" fill="#1f3b73">GPIO5</text>
+<text x="644" y="207" font-size="13" font-weight="bold" fill="#7a2b1a">NSS (CS)</text>
+<rect x="420" y="193" width="60" height="20" rx="4" fill="#ffffff" stroke="#c9a100"/>
+<text x="450" y="208" text-anchor="middle" font-size="12" fill="#111">NSS</text>
+<line x1="270" y1="241" x2="630" y2="241" stroke="#1f6fd1" stroke-width="4" stroke-linecap="round"/>
+<circle cx="270" cy="241" r="5" fill="#1f6fd1" stroke="#222"/>
+<circle cx="630" cy="241" r="5" fill="#1f6fd1" stroke="#222"/>
+<text x="256" y="245" text-anchor="end" font-size="13" font-weight="bold" fill="#1f3b73">GPIO23</text>
+<text x="644" y="245" font-size="13" font-weight="bold" fill="#7a2b1a">MOSI</text>
+<rect x="420" y="231" width="60" height="20" rx="4" fill="#ffffff" stroke="#1f6fd1"/>
+<text x="450" y="246" text-anchor="middle" font-size="12" fill="#111">MOSI</text>
+<line x1="270" y1="279" x2="630" y2="279" stroke="#1a9a4a" stroke-width="4" stroke-linecap="round"/>
+<circle cx="270" cy="279" r="5" fill="#1a9a4a" stroke="#222"/>
+<circle cx="630" cy="279" r="5" fill="#1a9a4a" stroke="#222"/>
+<text x="256" y="283" text-anchor="end" font-size="13" font-weight="bold" fill="#1f3b73">GPIO19</text>
+<text x="644" y="283" font-size="13" font-weight="bold" fill="#7a2b1a">MISO</text>
+<rect x="420" y="269" width="60" height="20" rx="4" fill="#ffffff" stroke="#1a9a4a"/>
+<text x="450" y="284" text-anchor="middle" font-size="12" fill="#111">MISO</text>
+<line x1="270" y1="317" x2="630" y2="317" stroke="#8a3fc4" stroke-width="4" stroke-linecap="round"/>
+<circle cx="270" cy="317" r="5" fill="#8a3fc4" stroke="#222"/>
+<circle cx="630" cy="317" r="5" fill="#8a3fc4" stroke="#222"/>
+<text x="256" y="321" text-anchor="end" font-size="13" font-weight="bold" fill="#1f3b73">GPIO18</text>
+<text x="644" y="321" font-size="13" font-weight="bold" fill="#7a2b1a">SCK / CLK</text>
+<rect x="420" y="307" width="60" height="20" rx="4" fill="#ffffff" stroke="#8a3fc4"/>
+<text x="450" y="322" text-anchor="middle" font-size="12" fill="#111">SCK</text>
+<line x1="270" y1="355" x2="630" y2="355" stroke="#8b5a2b" stroke-width="4" stroke-linecap="round"/>
+<circle cx="270" cy="355" r="5" fill="#8b5a2b" stroke="#222"/>
+<circle cx="630" cy="355" r="5" fill="#8b5a2b" stroke="#222"/>
+<text x="256" y="359" text-anchor="end" font-size="13" font-weight="bold" fill="#1f3b73">GPIO16</text>
+<text x="644" y="359" font-size="13" font-weight="bold" fill="#7a2b1a">BUSY</text>
+<rect x="420" y="345" width="60" height="20" rx="4" fill="#ffffff" stroke="#8b5a2b"/>
+<text x="450" y="360" text-anchor="middle" font-size="12" fill="#111">BUSY</text>
+<line x1="270" y1="393" x2="630" y2="393" stroke="#d11f1f" stroke-width="4" stroke-linecap="round"/>
+<circle cx="270" cy="393" r="5" fill="#d11f1f" stroke="#222"/>
+<circle cx="630" cy="393" r="5" fill="#d11f1f" stroke="#222"/>
+<text x="256" y="397" text-anchor="end" font-size="13" font-weight="bold" fill="#1f3b73">5V (VIN)</text>
+<text x="644" y="397" font-size="13" font-weight="bold" fill="#7a2b1a">5V</text>
+<rect x="420" y="383" width="60" height="20" rx="4" fill="#ffffff" stroke="#d11f1f"/>
+<text x="450" y="398" text-anchor="middle" font-size="12" fill="#111">5V</text>
+<line x1="270" y1="431" x2="630" y2="431" stroke="#e0559a" stroke-width="4" stroke-linecap="round"/>
+<circle cx="270" cy="431" r="5" fill="#e0559a" stroke="#222"/>
+<circle cx="630" cy="431" r="5" fill="#e0559a" stroke="#222"/>
+<text x="256" y="435" text-anchor="end" font-size="13" font-weight="bold" fill="#1f3b73">3V3</text>
+<text x="644" y="435" font-size="13" font-weight="bold" fill="#7a2b1a">3V3</text>
+<rect x="420" y="421" width="60" height="20" rx="4" fill="#ffffff" stroke="#e0559a"/>
+<text x="450" y="436" text-anchor="middle" font-size="12" fill="#111">3V3</text>
+<line x1="270" y1="469" x2="630" y2="469" stroke="#222222" stroke-width="4" stroke-linecap="round"/>
+<circle cx="270" cy="469" r="5" fill="#222222" stroke="#222"/>
+<circle cx="630" cy="469" r="5" fill="#222222" stroke="#222"/>
+<text x="256" y="473" text-anchor="end" font-size="13" font-weight="bold" fill="#1f3b73">GND</text>
+<text x="644" y="473" font-size="13" font-weight="bold" fill="#7a2b1a">GND</text>
+<rect x="420" y="459" width="60" height="20" rx="4" fill="#ffffff" stroke="#222222"/>
+<text x="450" y="474" text-anchor="middle" font-size="12" fill="#111">GND</text>
+<text x="735" y="500" text-anchor="middle" font-size="11" fill="#7a2b1a">PN5180 pins GPIO, IRQ, AUX, REQ: not connected</text>
+<rect x="60" y="540" width="210" height="60" rx="10" fill="#eef7ee" stroke="#2b6b2b" stroke-width="2"/>
+<text x="165" y="566" text-anchor="middle" font-size="14" font-weight="bold" fill="#2b6b2b">Phoenix (BTT CB1)</text>
+<text x="165" y="585" text-anchor="middle" font-size="11" fill="#2b6b2b">USB port, not the Klipper MCU one</text>
+<line x1="165" y1="480" x2="165" y2="540" stroke="#2b6b2b" stroke-width="5"/>
+<text x="175" y="515" font-size="12" fill="#2b6b2b">USB data cable (power + serial + flashing)</text>
+<text x="310" y="540" font-size="13" font-weight="bold" fill="#222">Notes</text>
+<text x="310" y="557" font-size="11.5" fill="#222">• The PN5180 needs BOTH 5V and 3V3: 5V powers the RF stage, 3V3 the logic.</text>
+<text x="310" y="574" font-size="11.5" fill="#222">• Keep the SPI wires short (about 15 cm or less) and away from stepper or heater cables.</text>
+<text x="310" y="591" font-size="11.5" fill="#222">• The antenna is the PCB coil on the PN5180: keep metal away from it and hold the tag flat in front of it.</text>
+<text x="310" y="608" font-size="11.5" fill="#222">• Colours are only a suggestion, to avoid mistakes while wiring.</text>
+</svg>
