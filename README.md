@@ -5,9 +5,9 @@
 >
 > *Progetto sperimentale: uso a proprio rischio e pericolo. L'autore non risponde di alcun danno a stampanti, computer, hardware, software o dati.*
 
-Lettore NFC minimale per tag **OpenPrintTag** (standard Prusa Research), basato su **ESP32 + PN5180**, pensato per essere collegato alla Sovol SV08 "Phoenix".
+A minimal NFC reader and writer for **OpenPrintTag** tags (the Prusa Research standard), based on an **ESP32 + PN5180** and designed to be connected to the Sovol SV08 "Phoenix".
 
-Nato come versione ridotta di [Odin-ESP32](https://github.com/Ricky1966/Odin-ESP32) (stazione di essiccazione filamenti): inizializzazione hardware proveniente dal branch `develop` di Odin, con parser separato e controlli sulle letture NFC, ma senza dashboard web, riscaldatore, sensori ambiente o gestione multi-bobina — lettura validata e integrazione con Spoolman/Moonraker.
+Born as a reduced version of [Odin-ESP32](https://github.com/Ricky1966/Odin-ESP32) (a filament drying station): the hardware initialization comes from Odin's `develop` branch, with a separate parser and checks on NFC reads, but without the web dashboard, heater, environment sensors or multi-spool handling. It validates the reads and integrates with Spoolman and Moonraker.
 
 ## ⚠️ Disclaimer: use at your own risk
 
@@ -19,30 +19,36 @@ By building, installing, running or modifying anything here you accept that you 
 
 ---
 
-## Cosa fa
+## What it does
 
-- Si connette al WiFi di casa (stazione, nessun Access Point), usato per l'invio in modalità `wifi`/`auto` e per l'aggiornamento OTA.
-- Legge in loop i tag ISO15693/NFC-V vicini al PN5180 (il protocollo usato da OpenPrintTag).
-- Quando riconosce un OpenPrintTag, stampa su seriale: brand, materiale, colore, diametro, densità, range temperature ugello/piatto, peso, paese.
-- Stampa i dati al cambio del tag o al recupero di una lettura valida. Invia solo dati validati.
-- Invia ogni nuova lettura al demone su Phoenix, via **USB** o **WiFi** a scelta (vedi sotto). Il demone la passa a Spoolman e imposta la bobina attiva in Moonraker.
+- Connects to the home WiFi (station mode, no Access Point), used for sending in `wifi`/`auto` mode and for OTA updates.
+- Continuously reads the ISO15693/NFC-V tags near the PN5180 (the protocol used by OpenPrintTag).
+- When it recognizes an OpenPrintTag, it prints on the serial port: brand, material, colour, diameter, density, nozzle/bed temperature range, weight, country.
+- Prints the data when the tag changes or a valid read is recovered. It only sends validated data.
+- Sends every new read to the daemon on Phoenix, over **USB** or **WiFi** as you choose (see below). The daemon passes it to Spoolman and sets the active spool in Moonraker.
+- **Writes** OpenPrintTag images to blank or existing ICODE SLIX2 tags, driven by the Spoolman fork's «Scrivi tag» button, and offers to write a blank tag when one is placed on the reader (see below).
 
-## Scrittura tag (sperimentale)
+## Writing tags
 
-Il firmware include la scrittura esplicita di immagini OpenPrintTag su **ICODE SLIX2
-da 316 byte utente**, con controllo UID, protezioni, consenso alla sostituzione e rilettura
-completa. Protocollo seriale e client di prova: [procedura e limiti](docs/tag-writing.md).
-Il futuro pulsante del fork Spoolman potrà usare questo protocollo; form ed encoder
-completo dei campi non fanno ancora parte di questa versione.
+The firmware writes complete OpenPrintTag images to **ICODE SLIX2 tags with 316 user bytes**, with UID check, protection checks, explicit consent to replace existing data and a full read-back. Serial protocol, command-line client and limits: [procedure and limits](docs/tag-writing.md).
+
+With the [Spoolman fork](https://github.com/Ricky1966/Spoolman) the whole flow runs from the web UI: open a saved spool, press **Scrivi tag**, check the pre-filled data, place the tag and confirm. The tag is linked to the spool only after the firmware has verified it. Validated on real hardware on 1 October 2026. Setup of the authenticated bridge between Spoolman and the daemon is described in [docs/tag-writing.md](docs/tag-writing.md).
+
+A **blank** SLIX2 tag placed on the reader while the printer is idle is reported to Spoolman, which proposes the spool without a tag and asks for confirmation before writing; after a verified write the tag is read again and the spool becomes active. The reader stays disarmed while a print is running or paused, or while Klipper is running G-code (macros, filament loading).
 
 ## Hardware
 
-- ESP32 DevKit 38 pin (AZ-Delivery ESP32-WROOM-32)
-- Modulo PN5180 (breakout NXP/AZ-Delivery)
+- ESP32 DevKit, 38 pin (AZ-Delivery ESP32-WROOM-32)
+- PN5180 module (NXP/AZ-Delivery breakout)
+- ICODE SLIX2 tags, jumper wires and a USB data cable
 
-Cablaggio punto-punto:
+The full **bill of materials**, tag requirements and the **wiring schematic** are in [docs/hardware.md](docs/hardware.md).
 
-| Segnale PN5180 | GPIO ESP32 |
+![Wiring schematic](docs/wiring.svg)
+
+Point-to-point wiring:
+
+| PN5180 signal | ESP32 GPIO |
 |---|---|
 | RST | 17 |
 | NSS (CS) | 5 |
@@ -58,158 +64,167 @@ Cablaggio punto-punto:
 
 ```bash
 cp src/secrets.h.example src/secrets.h
-# modifica src/secrets.h con SSID/password WiFi reali
+# edit src/secrets.h with the real WiFi SSID/password
 pio run --target upload
 pio device monitor
 ```
 
-`src/secrets.h` non è versionato (vedi `.gitignore`).
+`src/secrets.h` is not versioned (see `.gitignore`).
 
-## Aggiornamento via WiFi (OTA)
+## Updating over WiFi (OTA)
 
-Dalla 0.4.0 il firmware si aggiorna anche via WiFi, senza staccare l'ESP32 da Phoenix. Il WiFi resta sempre acceso, anche in modalità `usb`, perché serve all'OTA.
+Since 0.4.0 the firmware can also be updated over WiFi, without unplugging the ESP32 from Phoenix. WiFi always stays on, even in `usb` mode, because OTA needs it.
 
-1. In `src/secrets.h` aggiungi la password OTA (vedi `secrets.h.example`); senza questa riga l'OTA resta disattivato:
+1. In `src/secrets.h` add the OTA password (see `secrets.h.example`); without this line OTA stays disabled:
    ```c
-   #define OTA_PASSWORD "scegli-una-password"
+   #define OTA_PASSWORD "choose-a-password"
    ```
-2. **Una sola volta, via USB**, flasha il primo firmware con OTA: `pio run -t upload --upload-port <porta>`. All'avvio deve comparire `OTA attivo: phoenix-opentag.local (<IP>)`.
-3. Da quel momento, dal PC:
+2. **Once, over USB**, flash the first firmware that has OTA: `pio run -t upload --upload-port <port>`. At start-up you must see `OTA attivo: phoenix-opentag.local (<IP>)`.
+3. From then on, from the PC:
    ```bash
-   PHOENIX_OTA_PASSWORD='scegli-una-password' pio run -e esp32dev_ota -t upload
+   PHOENIX_OTA_PASSWORD='choose-a-password' pio run -e esp32dev_ota -t upload
    ```
-   Se `phoenix-opentag.local` non si risolve, aggiungi `--upload-port <IP dell'ESP32>` (lo stampa `show`).
+   If `phoenix-opentag.local` does not resolve, add `--upload-port <ESP32 IP>` (printed by `show`).
 
-Usa per `OTA_PASSWORD` solo lettere e numeri: PlatformIO la inserisce nel comando senza virgolette, quindi `&`, `;`, `$` o spazi lo rompono. `espota.py --debug` stampa la password in chiaro: non usarlo. La password è compilata nel firmware, quindi cambiarla richiede un nuovo flash via USB.
+Use only letters and digits for `OTA_PASSWORD`: PlatformIO inserts it into the command without quotes, so `&`, `;`, `$` or spaces break it. `espota.py --debug` prints the password in clear text: do not use it. The password is compiled into the firmware, so changing it requires a new flash over USB.
 
-Durante l'aggiornamento la lettura NFC è sospesa; al termine l'ESP32 si riavvia e il demone su Phoenix riprende a leggere la seriale da solo.
+During the update NFC reading is paused; when it finishes the ESP32 restarts and the daemon on Phoenix resumes reading the serial port by itself.
 
-## Invio a Phoenix: USB o WiFi
+## Sending to Phoenix: USB or WiFi
 
-La modalità si sceglie da seriale (`pio device monitor`, 115200) e resta salvata in flash, senza ricompilare:
+The mode is chosen from the serial port (`pio device monitor`, 115200) and is kept in flash, with no recompilation:
 
-| Comando | Effetto |
+| Command | Effect |
 |---|---|
-| `show` | impostazioni correnti |
-| `mode usb` | ogni lettura esce sulla seriale come riga `PHOENIX-TAG {json}`, letta dal demone (predefinita) |
-| `mode wifi` | HTTP `POST <host>/tag` con lo stesso JSON |
-| `mode auto` | WiFi se connesso e il POST riesce, altrimenti USB |
-| `host http://192.168.1.36:7913` | indirizzo del demone su Phoenix |
-| `reader <id>` | `reader_id` mostrato in Spoolman (predefinito `phoenix-opentag`) |
-| `test` | rinvia l'ultimo tag letto |
-| `reboot` | riavvio, necessario dopo `mode` |
+| `show` | current settings |
+| `mode usb` | every read goes out on the serial port as a `PHOENIX-TAG {json}` line, read by the daemon (default) |
+| `mode wifi` | HTTP `POST <host>/tag` with the same JSON |
+| `mode auto` | WiFi if connected and the POST succeeds, otherwise USB |
+| `host http://192.168.1.36:7913` | address of the daemon on Phoenix |
+| `reader <id>` | `reader_id` shown in Spoolman (default `phoenix-opentag`) |
+| `test` | resend the last tag read |
+| `reboot` | restart, required after `mode` |
 
-I valori iniziali sono in `src/config.h` (`TRANSPORT_DEFAULT_*`). JSON v1 inviato dalla versione 0.5 (i campi assenti dal tag vengono omessi; il demone accetta anche i nomi della 0.4):
+The initial values are in `src/config.h` (`TRANSPORT_DEFAULT_*`). JSON v1 sent since version 0.5 (fields missing from the tag are omitted; the daemon also accepts the 0.4 names):
 
 ```json
 {"schema_version":1,"event_id":"12ab34cd-00000001","uid":"E004010812345678","reader_id":"phoenix-opentag","firmware":"0.5.0-dev","brand_name":"Prusament","material_name":"PLA Galaxy Black","color_rgba":"#3D3E3DFF","filament_diameter":1.75,"density":1.24,"nominal_netto_full_weight":1000}
 ```
 
-Il firmware conserva solo l'ultima lettura valida: ritenta dopo 5, 10, 20, 40 e 60 secondi (massimo), sospende gli invii su errore NFC e annulla l'evento alla rimozione confermata. In USB il demone risponde `ack <event_id>` solo dopo la gestione riuscita; in WiFi un errore di Moonraker produce HTTP 502. I due trasporti condividono lo stesso evento in modalità auto. I POST sono sincroni e possono ritardare temporaneamente polling NFC e OTA.
+The firmware keeps only the latest valid read: it retries after 5, 10, 20, 40 and 60 seconds (maximum), pauses sending on an NFC error and cancels the event when the removal is confirmed. Over USB the daemon replies `ack <event_id>` only after successful handling; over WiFi a Moonraker error produces HTTP 502. The two transports share the same event in `auto` mode. POSTs are synchronous and can temporarily delay NFC polling and OTA. The full contract is in [docs/http-contract.md](docs/http-contract.md).
 
-L'attivazione rifiutata durante `printing`/`paused` è un esito definitivo: non viene accodata per la fine stampa. Dopo la stampa occorre una nuova lettura o `test`. I pesi delle bobine già registrate non vengono aggiornati dal tag.
+An activation refused during `printing`/`paused` is a final outcome: it is not queued for the end of the print. After the print you need a new read, or `test`. The weights of spools that are already registered are not updated from the tag.
 
-**Aggiornamento dalla 0.4:** installare prima il nuovo demone (compatibile con entrambi i formati), poi il firmware. Riavviare soltanto `phoenix-opentag` dopo aver aggiornato i file. Verificare con una bobina nota, a stampante ferma. Conservare `src/secrets.h`, impostazioni NVS e parametri `--serial` del servizio esistente.
+**Upgrading from 0.4:** install the new daemon first (it is compatible with both formats), then the firmware. Restart only `phoenix-opentag` after updating the files. Verify with a known spool, with the printer idle. Keep `src/secrets.h`, the NVS settings and the `--serial` parameters of the existing service.
 
+## Daemon on Phoenix
 
-## Demone su Phoenix
+`host/phoenix_opentag_daemon.py` runs on the CB1 with the system `python3` (no dependencies). For every read:
 
-`host/phoenix_opentag_daemon.py` gira sulla CB1 con il `python3` di sistema (nessuna dipendenza). Per ogni lettura:
+1. it calls `POST /api/v1/tag/scan` on Spoolman (≥ 0.27.0), which resolves the UID to the linked spool;
+2. if the UID is unknown and the tag carries at least `material` and `density`, it creates the spool, reusing the vendor (`brand`) and filament (name, vendor, colour, diameter) if they already exist, and links the tag to it;
+3. it sets the active spool with `POST /server/spoolman/spool_id` on Moonraker, **but not if the printer is `printing` or `paused`**.
 
-1. chiama `POST /api/v1/tag/scan` su Spoolman (≥ 0.27.0), che risolve l'UID nella bobina associata;
-2. se l'UID è sconosciuto e il tag riporta almeno `material` e `density`, crea la bobina, riusando fornitore (`brand`) e filamento (nome, fornitore, colore, diametro) se esistono già, e le associa il tag;
-3. imposta la bobina attiva con `POST /server/spoolman/spool_id` su Moonraker, **ma non se la stampante è in `printing` o `paused`**.
-
-Solo eventi consecutivi identici gestiti con successo entro 5 s vengono deduplicati; A → B → A riattiva A. Errori temporanei non vengono memorizzati come successi. Opzioni utili: `--no-create`, `--no-activate`, `-v`.
+Only consecutive identical events handled successfully within 5 s are deduplicated; A → B → A reactivates A. Temporary errors are not remembered as successes. Useful options: `--no-create`, `--no-activate`, `-v`.
 
 ```bash
-# prova manuale su Phoenix
+# manual test on Phoenix
 python3 ~/phoenix-opentag/host/phoenix_opentag_daemon.py --listen 0.0.0.0:7913 \
-    --serial /dev/serial/by-id/usb-1a86_USB_Serial-if00-port0   # solo per usb/auto
+    --serial /dev/serial/by-id/usb-1a86_USB_Serial-if00-port0   # only for usb/auto
 curl -s http://localhost:7913/health
 
-# servizio permanente
+# permanent service
 sudo cp ~/phoenix-opentag/host/phoenix-opentag.service /etc/systemd/system/
 sudo systemctl daemon-reload && sudo systemctl enable --now phoenix-opentag
 journalctl -u phoenix-opentag -f
 ```
 
-Per passare il servizio alla modalità USB, aggiungi `--serial` alla riga di `--listen` e riavvialo:
+To switch the service to USB mode, add `--serial` to the `--listen` line and restart it:
 
 ```bash
 sudo sed -i 's|--listen 0.0.0.0:7913 \\|--listen 0.0.0.0:7913 --serial /dev/serial/by-id/usb-1a86_USB_Serial-if00-port0 \\|' /etc/systemd/system/phoenix-opentag.service
 sudo systemctl daemon-reload && sudo systemctl restart phoenix-opentag
 ```
 
-Per dare comandi all'ESP32 quando è collegato a Phoenix, ferma il demone (`sudo systemctl stop phoenix-opentag`: la porta non va letta in due) e usa il monitor seriale incluso in Klipper. Si esce con `Ctrl+]`, che con la tastiera italiana è `Ctrl+5`:
+To send commands to the ESP32 while it is connected to Phoenix, stop the daemon (`sudo systemctl stop phoenix-opentag`: the port must not be read by two programs) and use the serial monitor included with Klipper. Exit with `Ctrl+]`, which on an Italian keyboard is `Ctrl+5`:
 
 ```bash
 ~/klippy-env/bin/python -m serial.tools.miniterm -e /dev/serial/by-id/usb-1a86_USB_Serial-if00-port0 115200
 ```
 
-Con `--serial` usa sempre il percorso `/dev/serial/by-id/...` dell'ESP32. Il demone rifiuta di aprire una porta che compare come `serial:` nei `.cfg` di Klipper (`--klipper-config`, predefinito `~/printer_data/config`).
+With `--serial` always use the `/dev/serial/by-id/...` path of the ESP32. The daemon refuses to open a port that appears as `serial:` in Klipper's `.cfg` files (`--klipper-config`, default `~/printer_data/config`).
 
-Il demone e Spoolman non hanno autenticazione: vanno esposti solo sulla rete locale.
+The daemon and Spoolman have no authentication: expose them only on the local network. The writer API of the daemon is disabled unless `PHOENIX_WRITER_TOKEN` is set.
 
-## Validazione
+## Validation
 
-Test sul PC: parser, consegna, driver ISO15693, 40.000 input alterati, sei tag ufficiali OpenPrintTag e regressioni del demone (vedi "Test sul PC").
+PC tests: parser, delivery, ISO15693 driver, 40,000 altered inputs, the six official OpenPrintTag tags, the writer (interruptions at every block, locks, an unwritable block 79) and daemon/bridge regressions (see "PC tests").
 
-**30 settembre 2026, versione consolidata `0.5.0-dev`: PASS su hardware reale.** Flash via USB, poi **aggiornamento OTA via WiFi** riuscito con la password definitiva. All'avvio: WiFi connesso, PN5180 3.5 OK, `OTA attivo`. Il tag ODIN di prova viene letto e inviato come riga `PHOENIX-TAG` (JSON v1). Il demone di questo ramo, installato su Phoenix al posto della versione precedente, in modalità USB ritrova la bobina 2 (`created: false`) e la attiva in Moonraker. In locale, con Spoolman 0.27.0, il demone crea fornitore, filamento, bobina e associazione dalla riga del firmware, risponde `ack <event_id>`, ignora l'`event_id` ripetuto e non attiva la bobina con la stampante in `printing`.
+**1 October 2026, tag writing: PASS on real hardware.** Writing failed at first because ICODE SLIX2 block 79 is a read-only counter, not user memory; after limiting the writer to the 316 user bytes (blocks 0–78) a tag was restored from a backup (`verified: true`, block 79 untouched), then written from the Spoolman web UI: verified by the firmware, linked to the spool, re-read without creating a duplicate, and the spool made active in Moonraker.
 
-Da verificare: che l'ESP32 riceva davvero l'ACK dal demone, le modalità `wifi` e `auto` con il firmware consolidato, e la lettura di tag non scritti da Odin.
+**30 September 2026, consolidated version `0.5.0-dev`: PASS on real hardware.** Flash over USB, then a successful **OTA update over WiFi** with the final password. At start-up: WiFi connected, PN5180 3.5 OK, `OTA attivo`. The ODIN test tag is read and sent as a `PHOENIX-TAG` line (JSON v1). The daemon of this branch, installed on Phoenix in place of the previous version, finds spool 2 again in USB mode (`created: false`) and activates it in Moonraker. Locally, with Spoolman 0.27.0, the daemon creates vendor, filament, spool and link from the firmware line, replies `ack <event_id>`, ignores a repeated `event_id` and does not activate the spool while the printer is `printing`.
 
-Prove precedenti, sulla versione 0.4 (demone della 0.4):
+Still to verify: that the ESP32 really receives the ACK from the daemon, the `wifi` and `auto` modes with the consolidated firmware, the blank-tag proposal on a real blank tag, and the reading of tags not written by Odin.
 
-**29 settembre 2026, modalità WiFi: PASS su hardware reale.** ESP32 DevKit (CH340) + PN5180 3.5, tag OpenPrintTag di prova (UID `E0:04:01:08:66:07:15:E3`, ODIN Test PLA). Phoenix: Spoolman 0.27.0 in Docker, demone avviato a mano con `--listen 0.0.0.0:7913`.
+Earlier tests, on version 0.4 (0.4 daemon):
 
-- Prima lettura: il demone ha creato fornitore ODIN, filamento "Test PLA" e la bobina 2 con il tag associato, poi l'ha resa attiva in Moonraker (`GET /server/spoolman/spool_id` → `2`). Tempo dalla lettura all'attivazione: circa 1 s.
-- Seconda lettura, dopo aver tolto il tag per più di 5 s: bobina 2 ritrovata (`created: false`) e riattivata, nessun duplicato.
+**29 September 2026, WiFi mode: PASS on real hardware.** ESP32 DevKit (CH340) + PN5180 3.5, OpenPrintTag test tag (UID `E0:04:01:08:66:07:15:E3`, ODIN Test PLA). Phoenix: Spoolman 0.27.0 in Docker, daemon started by hand with `--listen 0.0.0.0:7913`.
 
-- Demone installato come servizio (`host/phoenix-opentag.service`, `enable --now`): la stessa lettura riattiva la bobina 2; un secondo tag (UID `E0:04:01:08:66:07:19:17`, BravaSoft Test PLA) crea fornitore BravaSoft, un filamento separato e la bobina 3, che diventa quella attiva.
+- First read: the daemon created vendor ODIN, filament "Test PLA" and spool 2 with the tag linked, then made it active in Moonraker (`GET /server/spoolman/spool_id` → `2`). Time from read to activation: about 1 s.
+- Second read, after removing the tag for more than 5 s: spool 2 found again (`created: false`) and reactivated, no duplicate.
 
-- **Modalità USB: PASS.** ESP32 collegato a una porta USB di Phoenix (`/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0`, accanto alla MCU Klipper `usb-Klipper_stm32f103xe_...`), servizio avviato con `--serial` su quel percorso. La lettura arriva come `[usb]` e riattiva la bobina 2.
+- Daemon installed as a service (`host/phoenix-opentag.service`, `enable --now`): the same read reactivates spool 2; a second tag (UID `E0:04:01:08:66:07:19:17`, BravaSoft Test PLA) creates vendor BravaSoft, a separate filament and spool 3, which becomes the active one.
 
+- **USB mode: PASS.** ESP32 connected to a USB port of Phoenix (`/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0`, next to the Klipper MCU `usb-Klipper_stm32f103xe_...`), service started with `--serial` on that path. The read arrives as `[usb]` and reactivates spool 2.
 
-## Test sul PC
+## PC tests
 
-`bash tests/run_host.sh` (serve solo `g++`) compila con AddressSanitizer e prova: il parser e la consegna, il driver ISO15693 e i **sei tag di esempio ufficiali** della specifica OpenPrintTag (`tests/fixtures/official/`, licenza MIT di Prusa Research in `tests/fixtures/LICENSE.openprinttag`; valori attesi generati con la loro implementazione di riferimento in Python), più troncamenti e byte alterati a caso senza accessi fuori dai limiti. Il sesto tag ha la temperatura massima dell'ugello sotto la minima ed è un caso volutamente non valido: il parser lo rifiuta. Se un tag non indica il diametro, il parser assume 1,75 mm come prevede la specifica. Il demone si prova con `python3 -m unittest discover -s tests -p 'test_daemon.py'`. La CI di GitHub fa gli stessi controlli e compila il firmware.
+`bash tests/run_host.sh` (only needs `g++`) builds with AddressSanitizer and tests: the parser and the delivery, the ISO15693 driver and the **six official example tags** of the OpenPrintTag specification (`tests/fixtures/official/`, Prusa Research MIT licence in `tests/fixtures/LICENSE.openprinttag`; expected values generated with their reference Python implementation), the writer and its serial protocol, plus truncations and randomly altered bytes with no out-of-bounds access. The sixth tag has a maximum nozzle temperature below the minimum and is a deliberately invalid case: the parser rejects it. If a tag does not state the diameter, the parser assumes 1.75 mm as the specification says. The Python parts (daemon, writer client, bridge) are tested with `python3 -m unittest discover -s tests -p 'test_*.py'`. GitHub CI runs the same checks and builds the firmware.
 
-Il parser della versione 0.4 non leggeva i tag ufficiali (non gestiva la sezione meta, le mappe CBOR a lunghezza indefinita e i record NDEF lunghi): funzionava solo con i tag scritti da Odin.
+The 0.4 parser did not read the official tags (it did not handle the meta section, indefinite-length CBOR maps and long NDEF records): it only worked with tags written by Odin.
 
-## Prossimi passi
+## Next steps
 
-- Mandare a Spoolman la memoria grezza del tag (`payload_b64` di `POST /tag/scan`, che Spoolman oggi ritrasmette senza decodificare) e spostare lì la decodifica e la scrittura dei tag, con un fork di Spoolman. La specifica e l'implementazione di riferimento sono nel repository `prusa3d/OpenPrintTag` (licenza MIT).
-- Provare tag OpenPrintTag di produttori diversi.
+- Orca Slicer integration: have the slicer take the active spool from Spoolman/Moonraker (for example with spoolman2slicer or a tap-driven active spool). To be decided.
+- Test OpenPrintTag tags from different manufacturers.
+- Send the tag's raw memory to Spoolman (`payload_b64` of `POST /tag/scan`, which Spoolman currently retransmits without decoding) and decode it there. The specification and the reference implementation are in the `prusa3d/OpenPrintTag` repository (MIT licence).
 
-## Struttura
+## Structure
 
 ```
 src/
-  config.h        Pin PN5180, timing, include di secrets.h
-  secrets.h       Credenziali WiFi (non versionato, vedi secrets.h.example)
-  nfc.h/.cpp      Lettura PN5180 con gestione errori
-  tag_parser.*    Parser NDEF/CBOR validato, testabile senza hardware
-  delivery.*      JSON v1 e stato dei tentativi di consegna
-  transport.h/.cpp  Invio letture a Phoenix (USB/WiFi), comandi seriali, impostazioni in flash
-  main.cpp        setup() + loop(), WiFi e OTA
-tests/            Test sul PC (`bash tests/run_host.sh`): parser, consegna, ISO15693, tag ufficiali in fixtures/official; test del demone
-docs/http-contract.md  Contratto lettore -> demone (JSON v1, ACK, ritentativi)
-.github/workflows/check.yml  CI: test, demone su Python 3.9, compilazione con e senza OTA
+  config.h        PN5180 pins, timing, include of secrets.h
+  secrets.h       WiFi credentials (not versioned, see secrets.h.example)
+  nfc.h/.cpp      PN5180 reading with error handling, blank-tag detection
+  nfc_writer.inc  Serial write protocol (write-info/commit/cancel/resume), included by nfc.cpp
+  tag_parser.*    Validated NDEF/CBOR parser, testable without hardware
+  tag_writer.*    Verified SLIX2 writer (user blocks 0-78), testable without hardware
+  delivery.*      JSON v1 and delivery-attempt state
+  transport.h/.cpp  Sending reads to Phoenix (USB/WiFi), serial commands, settings in flash
+  main.cpp        setup() + loop(), WiFi and OTA
+tests/            PC tests (`bash tests/run_host.sh`, `python3 -m unittest`): parser, delivery, ISO15693, official tags in fixtures/official, writer, daemon, bridge
+docs/
+  hardware.md       Bill of materials, tag requirements, wiring and assembly checks
+  wiring.svg        Wiring schematic
+  http-contract.md  Reader -> daemon contract (JSON v1, ACK, retries, blank tag)
+  tag-writing.md    Writing tags: protocol, backups, bridge to Spoolman
+.github/workflows/check.yml  CI: tests, daemon on Python 3.9, build with and without OTA
 host/
-  phoenix_opentag_daemon.py  Demone per Phoenix: seriale/HTTP -> Spoolman -> Moonraker
-  phoenix-opentag.service    Unit systemd
-lib/PN5180-Library/  Libreria PN5180 vendorizzata (da Odin-ESP32)
+  phoenix_opentag_daemon.py  Daemon for Phoenix: serial/HTTP -> Spoolman -> Moonraker
+  phoenix_opentag_write.py   Command-line writer client with backups
+  phoenix_writer_bridge.py   Authenticated bridge used by the Spoolman fork
+  phoenix-opentag.service    systemd unit
+lib/PN5180-Library/  Vendored PN5180 library (from Odin-ESP32)
 ```
 
-## Riferimenti
+## References
 
-- [OpenPrintTag](https://openprinttag.org/) — standard NFC open-source di Prusa Research
-- [Odin-ESP32](https://github.com/Ricky1966/Odin-ESP32) — progetto sorgente (essiccatore filamenti)
+- [OpenPrintTag](https://openprinttag.org/) — open-source NFC standard by Prusa Research
+- [Odin-ESP32](https://github.com/Ricky1966/Odin-ESP32) — source project (filament dryer)
+- [Spoolman fork with the «Scrivi tag» button](https://github.com/Ricky1966/Spoolman)
 
-## Licenza
+## Licence
 
-Distribuito con licenza GNU Affero General Public License v3.0.
+Distributed under the GNU Affero General Public License v3.0.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
-

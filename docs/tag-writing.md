@@ -1,113 +1,116 @@
-# Scrittura OpenPrintTag — prima implementazione
+# Writing OpenPrintTag tags
 
-Firmware `0.6.0-dev`, sperimentale fino alla prova su ESP32 + PN5180.
-Supporto iniziale: **NXP ICODE SLIX2, UID E00401…, 80 blocchi indirizzabili, ma solo i blocchi 0–78 (316 byte) sono memoria utente: il blocco 79 è il contatore NXP e non viene mai scritto**.
-Pin, istanza PN5180 e inizializzazione hardware restano quelli del lettore collaudato.
+Firmware `0.6.0-dev`. Validated on hardware (ESP32 + PN5180) on 1 October 2026, both
+from the command line and from the Spoolman web UI.
+Supported target: **NXP ICODE SLIX2, UID `E00401…`, 80 addressable blocks, but only
+blocks 0–78 (316 bytes) are user memory: block 79 is the NXP counter and is never
+written.**
+The pins, the PN5180 instance and the hardware initialization are those of the
+tested reader.
 
-## Contratto e limiti
+## Contract and limits
 
-Il firmware riceve **l'immagine NFC-V completa**: Capability Container, TLV,
-NDEF e payload OpenPrintTag. Non ricostruisce il tag dai pochi campi che espone
-il lettore: campi aggiuntivi, regioni e altri record presenti nell'immagine
-accettata vengono conservati byte per byte. Il futuro fork di Spoolman dovrà
-produrre questa immagine con l'encoder/schema ufficiale dopo la compilazione
-dei campi. Questa PR non aggiunge ancora il form, l'encoder o il pulsante web.
+The firmware receives the **complete NFC-V image**: Capability Container, TLV, NDEF
+and OpenPrintTag payload. It does not rebuild the tag from the few fields the reader
+exposes: extra fields, regions and other records present in the accepted image are
+kept byte for byte. The Spoolman fork produces this image with its encoder and the
+official field catalog (see `docs/phoenix-writer.md` in the fork).
 
-Si tratta di **inizializzazione/reinizializzazione completa**, non di aggiornamento
-del peso residuo o di una singola regione. Con `replace` si autorizza a sostituire
-anche i dati precedenti sconosciuti al lettore. Non usare questo comando per
-aggiornamenti automatici della regione ausiliaria: la specifica richiede di
-preservare offset, metadati, campi ignoti e regioni non coinvolte.
+This is a **complete initialization/reinitialization**, not an update of the remaining
+weight or of a single region. `replace` authorizes replacing previous data too, even
+data unknown to the reader. Do not use this command for automatic updates of the
+auxiliary region: the specification requires preserving offsets, metadata, unknown
+fields and uninvolved regions.
 
-Layout accettato: CC di 4 byte `E1 40 <capacità/8> 01`, primo TLV NDEF in byte 4,
-lunghezza corta o estesa, terminatore `FE`, eventuale padding zero. L'immagine
-deve essere accettata dal parser FFF del progetto e stare nei 316 byte utente (CC `E1 40 27 01` al massimo);
-i byte fisici non forniti sono azzerati. Il parser verifica struttura e campi
-che conosce, **non sostituisce la validazione completa dello schema ufficiale**
-su tutti i campi extra. Immagini non supportate vengono rifiutate prima di scrivere.
-Il file ufficiale `tag_03.bin` è un caso malformato, intenzionalmente rifiutato.
+Accepted layout: 4-byte CC `E1 40 <capacity/8> 01`, first NDEF TLV at byte 4, short or
+extended length, `FE` terminator, optional zero padding. The image must be accepted by
+the project's FFF parser and fit the 316 user bytes (CC `E1 40 27 01` at most); physical
+bytes not supplied are zeroed. The parser checks the structure and the fields it knows;
+it **does not replace the full validation against the official schema** for all extra
+fields. Unsupported images are refused before any write. The official file `tag_03.bin`
+is a malformed case and is refused on purpose.
 
-Non si impostano password, blocchi permanenti, AFI o DSFID. I blocchi da modificare
-devono risultare scrivibili; se non è possibile leggere lo stato di protezione
-si interrompe l'operazione. Tag protetti da password non sono supportati.
-Un tag è considerato vergine solo se tutti i 316 byte utente sono zero: un tag già
-formattato richiede `replace` anche se non contiene una bobina.
+No passwords, permanent locks, AFI or DSFID are set. The blocks to change must be
+writable; if the protection status cannot be read, the operation stops. Tags protected
+by a password are not supported. A tag is considered blank only if all 316 user bytes
+are zero: an already formatted tag requires `replace` even if it holds no spool.
 
-Riferimenti: [specifica ufficiale](https://github.com/OpenPrintTag/openprinttag-specification),
-[regole NFC e aggiornamento delle regioni](https://github.com/OpenPrintTag/openprinttag-specification/blob/main/docs_src/nfc_technical_details.md),
-[encoder di riferimento](https://github.com/OpenPrintTag/openprinttag-specification/blob/main/utils/nfc_initialize.py).
+References: [official specification](https://github.com/OpenPrintTag/openprinttag-specification),
+[NFC rules and region updates](https://github.com/OpenPrintTag/openprinttag-specification/blob/main/docs_src/nfc_technical_details.md),
+[reference encoder](https://github.com/OpenPrintTag/openprinttag-specification/blob/main/utils/nfc_initialize.py).
 
-## Algoritmo
+## Algorithm
 
-1. Legge UID, geometria e tutti i blocchi, conservando uno snapshot.
-2. Prima del commit verifica l'immagine, rilegge il tag e confronta UID e contenuto
-   con lo snapshot. Un tag cambiato nel frattempo viene rifiutato.
-3. Richiede autorizzazione esplicita alla sostituzione se esistono dati. Se i byte
-   sono già identici risponde `unchanged`, senza alcuna scrittura.
-4. Legge le protezioni; scrive un TLV NDEF vuoto nel blocco 1, poi solo i blocchi
-   differenti e il CC. Ogni blocco scritto viene immediatamente riletto.
-5. Confronta tutta l'immagine preparata, pubblica la lunghezza NDEF nel blocco 1
-   per ultimo e confronta nuovamente tutti i 316 byte.
+1. Read the UID, the geometry and all blocks, keeping a snapshot.
+2. Before the commit, validate the image, read the tag again and compare the UID and
+   the content with the snapshot. A tag that changed in the meantime is refused.
+3. Require explicit authorization to replace if data exists. If the bytes are already
+   identical, answer `unchanged` without writing anything.
+4. Read the protections; write an empty NDEF TLV in block 1, then only the differing
+   blocks and the CC. Every written block is read back immediately.
+5. Compare the whole prepared image, publish the NDEF length in block 1 last, and
+   compare all 316 bytes again.
 
-Tutti i comandi NFC di lettura/scrittura sono indirizzati all'UID previsto.
-Non ci sono retry automatici delle scritture né rollback. L'ordine di pubblicazione
-riduce il rischio di esporre dati incompleti, ma **non rende atomica la EEPROM**:
-un'interruzione può lasciare un tag vuoto, parziale o già scritto senza conferma.
-Solo `verified`/`unchanged` con `verified: true` confermano l'esito. In caso di
-risposta persa o `may_have_changed: true`, ispezionare e confrontare prima di decidere
-un nuovo tentativo esplicito. Il comando `write-info` restituisce il dump per farlo;
-il client lo salva da solo prima di ogni sostituzione (vedi "Copia di sicurezza prima di sostituire").
+All NFC read/write commands are addressed to the expected UID. There are no automatic
+write retries and no rollback. The publication order reduces the risk of exposing
+incomplete data, but **it does not make the EEPROM atomic**: an interruption can leave
+a blank, partial or already written tag without confirmation. Only `verified` /
+`unchanged` with `verified: true` confirm the outcome. After a lost response or
+`may_have_changed: true`, inspect and compare before deciding on a new, explicit
+attempt. The `write-info` command returns the dump needed for that; the client saves it
+by itself before every replacement (see "Backup before replacing").
 
-## Protocollo seriale, 115200 baud
+## Serial protocol, 115200 baud
 
-Un solo proprietario della porta; non aprire contemporaneamente monitor, CLI e
-demone. Nessun endpoint HTTP di scrittura viene esposto in questa versione.
-I comandi terminano con newline. Le risposte iniziano con `PHOENIX-WRITE `,
-seguito da JSON; log e righe `PHOENIX-TAG` non sono risposte del writer.
+Only one owner of the port: do not open a monitor, the CLI and the daemon at the same
+time. The commands end with a newline. Replies start with `PHOENIX-WRITE ` followed by
+JSON; logs and `PHOENIX-TAG` lines are not writer replies.
 
-- `write-info`: entra in modalità scrittura, sospende gli invii e legge lo snapshot.
-  Risponde `status: ready`, `ticket` (16 cifre hex), `expires_ms: 60000`, UID canonico
-  MSB-first senza separatori, `capacity: 316`, `block_size: 4`, `blank`, `memory_hex`.
-  In assenza di tag risponde con errore e non autorizza alcuna scrittura.
-- `write-commit <ticket> <new|replace> <image_hex>`: ticket valido monouso, immagine
-  da 10 a 316 byte. `new` rifiuta tag occupati; `replace` è il consenso esplicito a
-  sostituirne tutto il contenuto. Il ticket viene consumato anche se il commit fallisce.
-- `write-cancel`: elimina il ticket. Non interrompe una scrittura già in corso:
-  il firmware esegue il commit in modo sincrono prima di elaborare altri comandi.
+- `write-info`: enters write mode, pauses sending and reads the snapshot. Replies
+  `status: ready`, `ticket` (16 hex digits), `expires_ms: 60000`, the canonical
+  MSB-first UID without separators, `capacity: 316`, `block_size: 4`, `blank` and
+  `memory_hex`. With no tag it replies with an error and authorizes no write.
+- `write-commit <ticket> <new|replace> <image_hex>`: valid single-use ticket, image of
+  10 to 316 bytes. `new` refuses occupied tags; `replace` is the explicit consent to
+  replace all of the content. The ticket is consumed even if the commit fails.
+- `write-cancel`: deletes the ticket. It does not interrupt a write already in
+  progress: the firmware runs the commit synchronously before handling other commands.
+- `write-resume`: lifts the reading pause so the tag on the reader is read again without
+  being removed. Refused with `ticket_open` while a write ticket is still pending. The
+  bridge sends it only after a verified write that has been linked to a spool.
 
-Il ticket scade dopo 60 secondi, non sopravvive al riavvio e non è una credenziale
-di autenticazione. L'accesso alla seriale deve essere riservato al bridge locale.
-Le righe oltre 768 caratteri vengono scartate integralmente.
+The ticket expires after 60 seconds, does not survive a reboot and is not an
+authentication credential. Access to the serial port must be reserved to the local
+bridge. Lines longer than 768 characters are discarded entirely.
 
-Risposta di commit: `status`, `verified`, `may_have_changed`, `block` (-1 se non
-applicabile), `writes` (tentativi di scrittura). Gli errori di protocollo possono
-contenere soltanto `status` e `verified: false`.
-Stati: `verified`, `unchanged`, `no_tag_or_io_error`, `unsupported_tag`, `read_failed`,
-`tag_changed`, `invalid_image`, `overwrite_required`, `security_status_unavailable`,
-`locked`, `write_failed`, `verify_failed`; inoltre errori di ticket/comando/formato.
+Commit reply: `status`, `verified`, `may_have_changed`, `block` (-1 if not applicable),
+`writes` (write attempts). Protocol errors may contain only `status` and
+`verified: false`.
+Statuses: `verified`, `unchanged`, `no_tag_or_io_error`, `unsupported_tag`,
+`read_failed`, `tag_changed`, `invalid_image`, `overwrite_required`,
+`security_status_unavailable`, `locked`, `write_failed`, `verify_failed`; plus
+ticket/command/format errors.
 
-Dopo successo, errore o annullamento, le letture normali restano sospese finché
-il campo non risulta vuoto per tre rilevamenti consecutivi (circa 4,5 s).
-Con ticket ancora valido la sessione rimane aperta fino a commit, annullamento
-o scadenza. Togliere il tag per riprendere il normale funzionamento.
-Questo permette al futuro bridge di associare l'UID alla bobina prima di una
-nuova lettura. I dati della bobina attiva in Moonraker non vengono cambiati dal writer.
-Non avviare OTA durante una scrittura; il protocollo seriale rimane disponibile
-anche se il WiFi è assente.
+After success, error or cancellation, normal reads stay paused until the field is empty
+for three consecutive detections (about 4.5 s), unless `write-resume` is sent. While a
+ticket is still valid the session stays open until commit, cancellation or expiry.
+This lets the bridge link the UID to the spool before a new read. The writer does not
+change the data of the spool that is active in Moonraker. Do not start an OTA during a
+write; the serial protocol remains available even when WiFi is absent.
 
-## Prova manuale su Phoenix
+## Manual test on Phoenix
 
-Prima installare il firmware di questo branch (USB oppure OTA con la procedura
-esistente). Copiare `host/phoenix_opentag_write.py` accanto al demone Python;
-usa solo la libreria standard, compatibile con Python 3.9 della CB1.
+First install the firmware of this branch (USB, or OTA with the existing procedure).
+Copy `host/phoenix_opentag_write.py` next to the Python daemon; it only uses the
+standard library and works with the CB1's Python 3.9.
 
-Fermare **solo il demone OpenTag** per liberare la seriale:
+Stop **only the OpenTag daemon** to free the serial port:
 
 ```bash
 sudo systemctl stop phoenix-opentag
 ```
 
-Appoggiare un solo tag di prova e ispezionarlo:
+Place a single test tag and inspect it:
 
 ```bash
 cd ~/phoenix-opentag/host
@@ -115,35 +118,41 @@ python3 phoenix_opentag_write.py \
   --serial /dev/serial/by-id/usb-1a86_USB_Serial-if00-port0
 ```
 
-L'ispezione non scrive memoria. Annotare l'UID. Per scrivere un'immagine preparata
-per quella bobina (sostituire il percorso e l'UID di esempio):
+The inspection does not write memory. Note the UID. To write an image prepared for that
+spool (replace the example path and UID):
 
 ```bash
 python3 phoenix_opentag_write.py \
   --serial /dev/serial/by-id/usb-1a86_USB_Serial-if00-port0 \
-  --image /percorso/bobina.bin --expect-uid E004010866073472
+  --image /path/to/spool.bin --expect-uid E004010866073472
 ```
 
-Aggiungere `--replace` solo se si vuole cancellare/sostituire il contenuto esistente.
-Il client verifica UID e conferma firmware, non ritenta un commit fallito.
+Add `--replace` only if you want to erase/replace the existing content. The client
+checks the UID and confirms with the firmware; it does not retry a failed commit.
 
-### Copia di sicurezza prima di sostituire
+### Backup before replacing
 
-Il firmware non ha rollback: se una scrittura si interrompe, il contenuto precedente
-del tag è perso. Per questo, quando il tag **non è vuoto**, il client salva la sua
-memoria (316 byte esatti, blocchi 0–78, dal `memory_hex` di `write-info`) in un file **prima**
-di inviare il commit:
+The firmware has no rollback: if a write is interrupted, the previous content of the tag
+is lost. For this reason, when the tag is **not blank**, the client saves its memory
+(exactly 316 bytes, blocks 0–78, from the `memory_hex` of `write-info`) to a file
+**before** sending the commit:
 
-- cartella predefinita `~/phoenix-tag-backups` (`--backup-dir` per cambiarla, creata con permessi `0700`);
-- nome `<UID>-<AAAAMMGG>-<HHMMSS>.bin`, permessi `0600`, scritto con `fsync` e riletto per verifica;
-- non sovrascrive mai un backup esistente (aggiunge un suffisso `-2`, `-3`…);
-- **se la copia non riesce** (disco pieno, cartella non scrivibile, dump non fornito dal
-  firmware) il client annulla la sessione con `write-cancel` **senza inviare il commit**:
-  il tag resta intatto;
-- il percorso compare nel risultato (`backup`) e nel messaggio d'errore se la scrittura
-  non è confermata. Un tag vuoto non ne ha bisogno e non produce alcun file.
+- default folder `~/phoenix-tag-backups` (`--backup-dir` to change it, created with
+  `0700` permissions);
+- name `<UID>-<YYYYMMDD>-<HHMMSS>.bin`, permissions `0600`, written with `fsync` and read
+  back for verification;
+- an existing backup is never overwritten (a `-2`, `-3`… suffix is added);
+- **if the copy fails** (disk full, folder not writable, dump not supplied by the
+  firmware) the client cancels the session with `write-cancel` **without sending the
+  commit**: the tag stays intact;
+- the path appears in the result (`backup`) and in the error message if the write is not
+  confirmed. A blank tag does not need one and produces no file.
 
-Per ripristinare il contenuto precedente, con l'UID del tag e dopo aver tolto e rimesso il tag:
+Older backups of 320 bytes (made before the block-79 fix) are still accepted as `--image`:
+the last four bytes (the counter) are dropped.
+
+To restore the previous content, with the tag's UID and after removing and replacing the
+tag:
 
 ```bash
 python3 phoenix_opentag_write.py \
@@ -152,74 +161,87 @@ python3 phoenix_opentag_write.py \
   --expect-uid E004010866073472 --replace
 ```
 
-Il ripristino passa dalle stesse regole di qualsiasi scrittura: il backup deve essere
-un'immagine OpenPrintTag valida per il firmware (CC, TLV NDEF, terminatore, resto a zero).
-Se il tag conteneva altro, o dati già corrotti, il file resta comunque la copia fedele dei
-byte da cui partire. Dopo un ripristino non riuscito o un tag lasciato con NDEF vuoto
-(`03 00 FE 00` nel blocco 1) serve `--replace`, perché il tag non è più vuoto.
-Non usare i fixture ufficiali su bobine reali: contengono identità/dati di esempio.
-Non copiare lo stesso `instance_uuid` su più bobine: l'encoder deve gestire l'identità
-secondo la specifica. Usare esclusivamente la porta dell'ESP32, mai una MCU Klipper.
+A restore follows the same rules as any write: the backup must be an OpenPrintTag image
+that is valid for the firmware (CC, NDEF TLV, terminator, the rest zero). If the tag held
+something else, or data that was already corrupted, the file is still the faithful copy
+of the bytes to start from. After a failed restore, or a tag left with an empty NDEF
+(`03 00 FE 00` in block 1), `--replace` is needed because the tag is no longer blank.
+Do not use the official fixtures on real spools: they contain sample identities/data.
+Do not copy the same `instance_uuid` to several spools: the encoder must handle the
+identity as the specification requires. Use only the ESP32's port, never a Klipper MCU.
 
-Dopo la prova, anche in caso di errore, togliere il tag e riavviare il bridge:
+After the test, even after an error, remove the tag and restart the daemon:
 
 ```bash
 sudo systemctl start phoenix-opentag
 ```
 
-## Collegamento futuro al fork Spoolman
+## Automated tests
 
-Il bridge dovrà gestire lettura e scrittura sulla stessa connessione, serializzando
-le operazioni. Il flusso del pulsante sarà: salva bobina → genera/valida immagine →
-entra in sessione → mostra UID e anteprima → conferma eventuale sostituzione →
-commit → rilettura verificata → associa UID alla bobina salvata → chiedi rimozione.
-Bloccare la gestione ordinaria degli eventi del lettore prima della scansione di
-scrittura, così un evento precedente non crea/attiva una bobina durante il flusso.
-Non associare l'UID dopo un timeout o una verifica fallita. La futura API web dovrà
-applicare autenticazione e autorizzazioni: il ticket seriale non le sostituisce.
+`bash tests/run_host.sh` and `python3 -m unittest discover -s tests -p 'test_*.py'`.
+The simulations include interruptions at every write, failed verifications, protections,
+a changed tag, expired/reused tickets, paused sending, an unwritable block 79 and a
+non-zero block-79 counter. Physical testing is still needed after any change to the
+firmware.
 
-Test automatici: `bash tests/run_host.sh` e
-`python3 -m unittest discover -s tests -p 'test_*.py'`. Le simulazioni includono
-interruzioni ad ogni scrittura, verifiche fallite, protezioni, cambio tag, ticket
-scaduti/riutilizzati e sospensione degli invii. La prova fisica resta necessaria.
+## Bridge for the Spoolman «Scrivi tag» button
 
-## Bridge per il pulsante Spoolman «Scrivi tag»
+The daemon exposes the authenticated API `/writer/{arm,prepare,commit,finish,cancel,reset}`.
+It is disabled until the `PHOENIX_WRITER_TOKEN` variable is set (at least 32 random
+characters). It requires `--serial`: the existing serial thread is the only owner of the
+port, even when normal reads arrive over WiFi. Do not run the serial monitor or the manual
+writer in parallel.
 
-Il branch `codex/spoolman-write-bridge` aggiunge al demone l'API autenticata
-`/writer/{arm,prepare,commit,finish,cancel,reset}`. È disattivata finché non è
-configurata la variabile `PHOENIX_WRITER_TOKEN` (almeno 32 caratteri casuali).
-Richiede `--serial`: il thread seriale esistente è l'unico proprietario della
-porta, anche quando le letture normali arrivano via WiFi. Non avviare in parallelo
-il monitor seriale o il writer manuale.
+Deploy `host/phoenix_opentag_daemon.py`, `host/phoenix_opentag_write.py` and
+`host/phoenix_writer_bridge.py` together. The firmware must include the 316-byte fix.
+The systemd service keeps its arguments; set the token through the service
+environment (for example `EnvironmentFile=`), never in the repository.
+`PHOENIX_TAG_BACKUP_DIR` changes the backup directory (default `~/phoenix-tag-backups`).
 
-Distribuire insieme `host/phoenix_opentag_daemon.py`,
-`host/phoenix_opentag_write.py` e `host/phoenix_writer_bridge.py`. Il firmware
-0.6.0-dev già provato sul banco non richiede modifiche per questo bridge.
-Il servizio systemd mantiene i suoi argomenti; impostare il token tramite
-ambiente del servizio. Non salvarlo nel repository. `PHOENIX_TAG_BACKUP_DIR`
-consente di cambiare la directory dei backup (default `~/phoenix-tag-backups`).
+The `Ricky1966/Spoolman` fork requires `SPOOLMAN_WRITER_TOKEN` with the same value and
+`SPOOLMAN_WRITER_URL=http://192.168.1.36:7913` (an address reachable from the
+container). Configure a single Spoolman process and a single USB reader. The complete
+documentation is `docs/phoenix-writer.md` in the fork.
 
-Il fork `Ricky1966/Spoolman`, branch `codex/openprinttag-write-ui`, richiede
-`SPOOLMAN_WRITER_TOKEN` con lo stesso valore e
-`SPOOLMAN_WRITER_URL=http://192.168.1.36:7913` (indirizzo raggiungibile dal
-container). Configurare un solo processo Spoolman e un solo lettore USB.
-La documentazione completa è `docs/phoenix-writer.md` nel fork.
+Opening the form reserves the reader **before** the user places the tag: the daemon
+pauses the automatic processing of USB and HTTP reads, avoiding spool creation or
+changes during the write. The preparation acquires the UID, the firmware ticket and the
+original memory. The commit consumes the session, saves the backup before a replacement
+and does not retry after errors or lost responses. Spoolman links the UID only after a
+positive firmware verification. Closing the dialog releases the reader; after a verified
+and linked write it also sends `write-resume`, so the tag is read again without being
+removed and the spool becomes active.
 
-L'apertura del form riserva il lettore **prima** che l'utente appoggi il tag:
-il demone sospende l'elaborazione automatica delle letture USB e HTTP, evitando
-creazioni o cambi bobina durante la scrittura. La preparazione acquisisce UID,
-ticket firmware e memoria originale. Il commit consuma la sessione, salva il
-backup prima di una sostituzione e non ritenta dopo errori o risposte perse.
-Spoolman associa l'UID solo dopo verifica positiva del firmware. Rimuovere il
-tag e chiudere il dialogo per rilasciare il lettore.
+After a closed page or a restart, remove the tag and use the explicit session recovery
+in the form. A recovery neither repeats a write nor restores the memory. The API rejects
+direct browser requests and requires Bearer auth; keep the services on a trusted network
+or use TLS between machines.
 
-Dopo una pagina chiusa o un riavvio, rimuovere il tag e utilizzare il recupero
-esplicito della sessione nel form. Un recupero non ripete una scrittura né
-ripristina la memoria. L'API rifiuta richieste browser dirette e richiede Bearer
-auth; mantenere i servizi su una rete fidata o usare TLS tra macchine.
+Validation: unit tests, a local test with real HTTP, a Spoolman SQLite database, a browser
+and an emulated serial line, and a physical test on Phoenix on 1 October 2026 (SLIX2
+`E004010866073075`): recovery after an interruption with `--replace`, a write from the
+Spoolman UI verified by the firmware, the tag linked to the spool, and a correct re-read
+without creating a duplicate.
 
-Validazione del bridge: test unitari e prova locale con HTTP reale, database
-SQLite Spoolman, browser e seriale emulata. Il flusso web completo deve ancora
-essere provato su Phoenix. La primitiva firmware è stata provata dall'utente
-il 1 ottobre 2026: SLIX2 `E004010866073075`, recupero dopo interruzione con
-`--replace`, verifica positiva e rilettura corretta del campione Prusament.
+## Blank tag on the reader (offer to write)
+
+When an ICODE SLIX2 tag (UID `E00401…`) whose blocks 0–78 are all zero is placed on the
+reader, the firmware reports it **once per presence**:
+
+- USB: line `PHOENIX-BLANK {"schema_version":1,"uid":"E004…","reader_id":"…","blank":true}`;
+- WiFi: `POST /blank` with the same JSON (in `auto` mode it falls back to the USB line).
+
+The daemon **creates and activates nothing**: if the printer is idle it forwards a scan
+to Spoolman, `POST /api/v1/tag/scan` with `format: "openprinttag-blank"`, and Spoolman
+asks the user for confirmation (see `docs/phoenix-writer.md` in the fork). The reader
+stays "disarmed", meaning the signal is ignored, if:
+
+- Moonraker is unreachable;
+- `print_stats.state` is `printing` or `paused`;
+- `idle_timeout.state` is `Printing` (Klipper is running G-code: macros, heating,
+  filament load/unload);
+- a write session is open.
+
+After a verified and linked write, closing the session sends `write-resume` (not just
+`write-cancel`): the firmware reads the tag again without it being removed, and the normal
+pipeline recognizes it and makes the spool active.

@@ -6,6 +6,10 @@ Riceve le letture del firmware (src/transport.cpp) in due modi, anche insieme:
   --listen HOST:PORT   HTTP POST /tag con il JSON del tag (modalita' wifi del firmware)
   --serial PATH        righe "PHOENIX-TAG {json}" sulla seriale USB (modalita' usb)
 
+Un tag SLIX2 vuoto (riga "PHOENIX-BLANK {json}" o POST /blank) non crea nulla: viene
+solo proposto a Spoolman con una scansione di formato "openprinttag-blank", se la
+stampante e' ferma (non in stampa, in pausa o con macro/caricamento in corso).
+
 Per ogni tag:
 
   1. POST /api/v1/tag/scan su Spoolman: risolve l'UID nella bobina associata e
@@ -39,6 +43,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
 LINE_PREFIX = "PHOENIX-TAG "
+BLANK_PREFIX = "PHOENIX-BLANK "
+BLANK_FORMAT = "openprinttag-blank"  # `format` of the Spoolman scan that offers to write a blank tag
 READER_ID_RE = re.compile(r"^[A-Za-z0-9._:-]{1,64}$")
 DEDUP_SECONDS = 5.0
 MAX_BODY = 4096
@@ -168,6 +174,49 @@ class Daemon:
             self.last_time = time.monotonic()
             self.last_result = result
             return result
+
+    def _printer_busy(self) -> str | None:
+        """Why the reader must stay disarmed, or None. Fails closed when Moonraker is unreachable."""
+        try:
+            status = self.moonraker.call(
+                "GET", "/printer/objects/query", query={"print_stats": "", "idle_timeout": ""}
+            )["result"]["status"]
+            if status["print_stats"]["state"] in ("printing", "paused"):
+                return "stampante in stato " + status["print_stats"]["state"]
+            # Klipper reports "Printing" while any G-code runs: filament load/unload, heating, macros.
+            if status["idle_timeout"]["state"] == "Printing":
+                return "stampante occupata (macro o caricamento filamento in corso)"
+        except (ApiError, OSError, KeyError, ValueError, TypeError) as e:
+            log.error("Moonraker: %s", e)
+            return "Moonraker non raggiungibile"
+        return None
+
+    def handle_blank(self, event: dict) -> dict:
+        """A blank tag is on the reader: offer it to Spoolman, which asks the user before writing."""
+        event = normalize_event(event)
+        uid = event["uid"]
+        reader = event.get("reader_id")
+        if not isinstance(reader, str) or not READER_ID_RE.fullmatch(reader):
+            reader = self.default_reader
+        with self.lock:
+            if getattr(self, "writer", None) and self.writer.busy:
+                return {"ignored": "writer session active"}
+            reason = self._printer_busy()
+            if reason:
+                return {"ignored": reason, "uid": uid}
+            scan = self.spoolman.call("POST", "/tag/scan", {
+                "uid": uid, "reader_id": reader, "name": "Phoenix OpenTag", "format": BLANK_FORMAT,
+            })
+            return {"uid": scan["uid"], "spool_id": scan["matched_spool_id"], "blank": True, "offered": True}
+
+    def handle_blank_logged(self, event: dict, source: str) -> dict:
+        try:
+            result = self.handle_blank(event)
+        except (ApiError, OSError, ValueError, KeyError) as e:
+            log.error("[%s] tag vuoto %s: %s", source, event.get("uid"), e)
+            return {"error": str(e)}
+        log.info("[%s] tag vuoto: %s", source, json.dumps(result))
+        return result
 
     def _scan(self, uid: str, reader: str) -> dict:
         return self.spoolman.call("POST", "/tag/scan", {
@@ -323,7 +372,7 @@ def make_handler(daemon: Daemon) -> type[BaseHTTPRequestHandler]:
                 if self.headers.get("Origin") or not hmac.compare_digest(auth, "Bearer " + writer.token):
                     self._reply(403, {"error": "writer authorization failed"})
                     return
-            if self.path != "/tag" and not is_writer:
+            if self.path not in ("/tag", "/blank") and not is_writer:
                 self._reply(404, {"error": "not found"})
                 return
             try:
@@ -348,7 +397,11 @@ def make_handler(daemon: Daemon) -> type[BaseHTTPRequestHandler]:
                 except (ValueError, OSError, RuntimeError) as exc:
                     self._reply(409, {"error": str(exc)})
                 return
-            result = daemon.handle_logged(event, f"http {self.client_address[0]}")
+            source = f"http {self.client_address[0]}"
+            if self.path == "/blank":
+                result = daemon.handle_blank_logged(event, source)
+            else:
+                result = daemon.handle_logged(event, source)
             self._reply(502 if "error" in result else 200, result)
 
         def log_message(self, fmt: str, *args: Any) -> None:
@@ -430,6 +483,14 @@ def serial_loop(daemon: Daemon, path: str, baud: int) -> None:
                                     if not writable:
                                         raise OSError("timeout conferma USB")
                                     ack = ack[os.write(fd, ack):]
+                    elif line.startswith(BLANK_PREFIX):
+                        try:
+                            event = json.loads(line[len(BLANK_PREFIX):])
+                        except ValueError:
+                            log.warning("Riga non valida: %s", line)
+                            continue
+                        if isinstance(event, dict):
+                            daemon.handle_blank_logged(event, "usb")
                     elif line:
                         log.debug("esp32: %s", line)
                 if len(buf) > 8192:

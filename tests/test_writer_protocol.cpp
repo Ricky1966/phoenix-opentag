@@ -69,5 +69,9 @@ int main() {
   send("write-info");ticket=writeTicket.c_str();nfc.uid[0]^=1;
   send("write-commit "+ticket+" replace "+hex);assert(has("tag_changed") && nfc.writes==writes);
   send("write-info");send("write-cancel");assert(has("cancelled") && writeTicket.length()==0 && nfcWriterHolding());
+  // write-resume lifts the inhibition once nothing is pending; never with an open ticket
+  send("write-info");send("write-resume");assert(has("ticket_open") && nfcWriterHolding());
+  send("write-cancel");spool.valid=true;spool.present=true;
+  send("write-resume");assert(has("resumed") && !nfcWriterHolding() && !spool.valid && !spool.present);
   puts("Writer protocol: tickets, expiry, replay, identity, delivery inhibition: PASS");
 }
