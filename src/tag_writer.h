@@ -36,6 +36,8 @@ struct WriteResult {
 };
 const char *writeCodeName(WriteCode code);
 WriteResult inspectTag(TagWriteIO &io, TagSnapshot &snapshot);
+// An all-zero 316-byte image is accepted as an erase: the tag goes back to blank. It follows the
+// same rules as any write (overwrite consent, snapshot, readback), so a tag with data needs overwrite=true.
 // Explicit full reinitialization, NOT a region update. Unknown fields/records
 // in the supplied image are retained byte-for-byte. Old content may be replaced
 // only with overwrite=true. Nothing is locked or password-configured.

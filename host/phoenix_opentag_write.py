@@ -147,21 +147,25 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--serial", required=True, help="porta by-id dell'ESP32, mai una MCU Klipper")
     parser.add_argument("--image", type=Path, help="immagine NFC-V .bin; omettere per sola ispezione")
+    parser.add_argument("--erase", action="store_true",
+                        help="azzera il tag (torna vuoto); richiede --expect-uid e, se contiene dati, --replace")
     parser.add_argument("--expect-uid", help="UID esatto del tag autorizzato alla scrittura")
     parser.add_argument("--replace", action="store_true", help="autorizza la sostituzione completa dei dati esistenti")
     parser.add_argument("--klipper-config", default=os.path.expanduser("~/printer_data/config"))
     parser.add_argument("--backup-dir", type=Path, default=Path(os.path.expanduser(DEFAULT_BACKUP_DIR)),
                         help="dove salvare la memoria del tag prima di sostituirla (predefinita: %s)" % DEFAULT_BACKUP_DIR)
     args = parser.parse_args()
-    if args.image and not args.expect_uid:
-        parser.error("--image richiede --expect-uid")
-    if args.replace and not args.image:
-        parser.error("--replace richiede --image")
+    if args.erase and args.image:
+        parser.error("--erase e --image si escludono")
+    if (args.image or args.erase) and not args.expect_uid:
+        parser.error("--image e --erase richiedono --expect-uid")
+    if args.replace and not (args.image or args.erase):
+        parser.error("--replace richiede --image o --erase")
     if os.path.realpath(args.serial) in klipper_serial_ports(args.klipper_config):
         parser.error("Questa porta è utilizzata da Klipper")
     fd = None
     try:
-        image = args.image.read_bytes() if args.image else None
+        image = bytes(MEMORY_BYTES) if args.erase else (args.image.read_bytes() if args.image else None)
         if image is not None and len(image) == 320:
             image = image[:MEMORY_BYTES]  # vecchi backup da 320 byte: scarta il contatore (blocco 79)
         if image is not None and not 10 <= len(image) <= MEMORY_BYTES:

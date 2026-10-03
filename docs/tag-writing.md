@@ -223,6 +223,26 @@ and an emulated serial line, and a physical test on Phoenix on 1 October 2026 (S
 Spoolman UI verified by the firmware, the tag linked to the spool, and a correct re-read
 without creating a duplicate.
 
+## Erasing a tag (reuse)
+
+An **erase** returns a tag to the blank state so it can be reused. It is an ordinary write whose image is
+**316 zero bytes**: the firmware accepts exactly that image (and no other all-zero or shorter one) and applies
+the same safeguards as any write: UID check, snapshot comparison, `replace` consent when the tag holds data,
+the same block order, readback of every block, and a backup of the previous memory before the commit. Block 79
+(the NXP counter) is never touched. Erasing a tag that is already blank changes nothing (`unchanged`).
+
+From the command line (daemon stopped, see "Manual test on Phoenix"):
+
+```bash
+python3 phoenix_opentag_write.py --serial /dev/serial/by-id/usb-1a86_USB_Serial-if00-port0 \
+  --erase --expect-uid E004010866073472 --replace
+```
+
+An interrupted erase can leave the tag partly cleared; repeat it, or restore from the backup. The Spoolman fork
+adds a **Cancella** button next to each tag of a spool that erases the tag and removes its link to the spool
+(see `docs/phoenix-writer.md` in the fork). A freshly erased tag is blank, so placing it on the reader again
+offers it for writing, like any new tag.
+
 ## Blank tag on the reader (offer to write)
 
 When an ICODE SLIX2 tag (UID `E00401…`) whose blocks 0–78 are all zero is placed on the

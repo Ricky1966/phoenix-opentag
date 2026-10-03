@@ -65,6 +65,26 @@ int main() {
   { // CC capacity above SLIX2 user memory is refused
     auto big=image;big[2]=0x28;MemoryTag t;auto s=snapshot(t);
     assert(writeTag(t,s,big.data(),big.size(),false).code==WriteCode::InvalidImage && t.calls==0); }
+  { // erase: an all-zero image returns a written tag to blank, with the usual safeguards
+    std::vector<uint8_t> zeros(TAG_WRITE_BYTES,0);
+    MemoryTag t;auto s0=snapshot(t);
+    assert(writeTag(t,s0,image.data(),image.size(),false).ok());
+    auto s1=snapshot(t);assert(!s1.blank);
+    assert(writeTag(t,s1,zeros.data(),zeros.size(),false).code==WriteCode::OverwriteRequired);
+    int before=t.calls;assert(before>0);
+    auto r=writeTag(t,s1,zeros.data(),zeros.size(),true);
+    assert(r.code==WriteCode::Verified);
+    for(unsigned b:t.written) assert(b<79);
+    auto s2=snapshot(t);assert(s2.blank);
+    for(size_t i=0;i<TAG_WRITE_BYTES;++i) assert(t.memory[i]==0);
+    // erasing a blank tag changes nothing
+    int calls=t.calls;assert(writeTag(t,s2,zeros.data(),zeros.size(),false).code==WriteCode::Unchanged);assert(t.calls==calls);
+    // a shorter all-zero image is not an erase
+    assert(writeTag(t,s2,zeros.data(),zeros.size()-4,true).code==WriteCode::InvalidImage);
+    // interruption part-way leaves the tag recoverable, never reported as success
+    MemoryTag u;auto u0=snapshot(u);assert(writeTag(u,u0,image.data(),image.size(),false).ok());
+    auto u1=snapshot(u);u.failWrite=u.calls+5;
+    assert(writeTag(u,u1,zeros.data(),zeros.size(),true).code==WriteCode::WriteFailed); }
   { MemoryTag t;auto s=snapshot(t);t.uid[0]^=1;
     assert(writeTag(t,s,image.data(),image.size(),false).code==WriteCode::TagChanged);assert(t.calls==0); }
   { MemoryTag t;auto s=snapshot(t);t.memory[70]=1;

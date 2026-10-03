@@ -37,7 +37,14 @@ WriteResult inspectTag(TagWriteIO &io, TagSnapshot &snapshot) {
   return WriteResult(WriteCode::Verified);
 }
 namespace {
+// The erase image: all 316 user bytes zero. Writing it returns a tag to the blank state.
+bool isEraseImage(const uint8_t *image,size_t size) {
+  if(!image || size!=TAG_WRITE_BYTES) return false;
+  for(size_t i=0;i<size;++i) if(image[i]!=0) return false;
+  return true;
+}
 bool validateImage(const uint8_t *image,size_t size) {
+  if(isEraseImage(image,size)) return true;
   // Canonical writable four-byte CC and first TLV at block 1. The one-block
   // commit marker relies on this layout. Other valid layouts are read-only here.
   if(!image || size<10 || size>TAG_WRITE_BYTES || image[0]!=0xe1 || image[1]!=0x40 ||
