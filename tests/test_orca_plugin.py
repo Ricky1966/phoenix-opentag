@@ -71,7 +71,21 @@ def fake_orca():
         orca.panels.append(Panel(**kw))
         return orca.panels[-1]
 
-    orca.bundle = types.SimpleNamespace(prints=lambda: [], filament_presets=["PLA"], _hidden=1)
+    orca.selected = {"names": ["Polymaker PolyTerra PLA @Phoenix 0.4"], "filament_type": "PLA", "nozzle_temperature": "215"}
+
+    def full_config_value(key):
+        if key not in orca.selected:
+            raise KeyError(key)
+        return orca.selected[key]
+
+    orca.bundle = types.SimpleNamespace(
+        prints=lambda: [],
+        filament_presets=["PLA"],
+        current_filament_preset_names=lambda: orca.selected["names"],
+        current_filament_presets=lambda: [],
+        full_config_value=full_config_value,
+        _hidden=1,
+    )
     orca.host = types.SimpleNamespace(
         ui=types.SimpleNamespace(
             message=lambda text, **kw: orca.messages.append((text, kw)),
@@ -401,6 +415,59 @@ class PanelTests(unittest.TestCase):
         spool = {"id": 1, "filament": {"color_hex": "red; background:url(x)"}}
         self.assertEqual(self.plugin.spool_summary(spool)["color"], "")
         self.assertEqual(self.plugin.spool_summary({"id": 1, "filament": {"color_hex": "#abcdef"}})["color"], "ABCDEF")
+
+    def message_after(self, kind="selection"):
+        self.cap.execute()
+        panel = self.orca.panels[0]
+        panel.kw["on_message"]({"type": "ready"})
+        self.assertTrue(self.wait_for(lambda: panel.posts))
+        before = len(panel.posts)
+        panel.kw["on_message"]({"type": kind})
+        self.assertGreater(len(panel.posts), before)
+        return panel.posts[-1]
+
+    def test_panel_reports_a_matching_selected_profile(self):
+        state = self.message_after()
+        self.assertEqual(state["selected"], {"name": "Polymaker PolyTerra PLA @Phoenix 0.4", "type": "PLA", "nozzle": 215.0})
+        self.assertEqual(state["problems"], [])
+
+    def test_panel_flags_a_mismatch_when_the_selection_changes(self):
+        self.orca.selected.update(names=["Generic ASA"], filament_type="ASA", nozzle_temperature="260")
+        state = self.message_after()
+        self.assertEqual(state["selected"]["type"], "ASA")
+        self.assertEqual(len(state["problems"]), 2)
+        self.assertIn("the spool is PLA but the selected profile is ASA", state["problems"][0])
+
+    def test_panel_copes_with_per_extruder_lists_and_missing_values(self):
+        self.orca.selected.update(filament_type=["PLA", "PETG"], nozzle_temperature=["205", "230"])
+        self.assertEqual(self.plugin.read_selected_filament()["type"], "PLA")
+        self.assertEqual(self.plugin.read_selected_filament()["nozzle"], 205.0)
+        del self.orca.selected["nozzle_temperature"]
+        selected = self.plugin.read_selected_filament()
+        self.assertIsNone(selected["nozzle"])
+        self.assertEqual(self.plugin.compare_summary({"material": "PLA", "nozzle": 210}, selected, 25), [])
+
+    def test_unreadable_preset_api_gives_no_verdict_but_still_shows_the_spool(self):
+        def broken():
+            raise RuntimeError("no host yet")
+
+        self.orca.host.preset_bundle = broken
+        state = self.message_after()
+        self.assertIsNone(state["selected"])
+        self.assertIsNone(state["problems"])
+        self.assertTrue(state["ok"])
+        self.assertEqual(state["spool"]["id"], 4)
+
+    def test_no_verdict_without_an_active_spool(self):
+        self.servers.active = None
+        state = self.message_after("refresh")
+        self.assertTrue(self.wait_for(lambda: self.orca.panels[0].posts[-1]["spool"] is None))
+        self.assertIsNone(self.orca.panels[0].posts[-1]["problems"])
+
+    def test_inspect_shows_the_selected_filament_first(self):
+        text = self.plugin.InspectPresetApi().execute().message
+        self.assertLess(text.index("current_filament_preset_names()"), text.index("Members:"))
+        self.assertIn("read_selected_filament()", text)
 
     def test_inspect_preset_api_lists_public_members(self):
         result = self.plugin.InspectPresetApi().execute()

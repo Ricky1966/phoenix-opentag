@@ -6,7 +6,7 @@
 # name = "Phoenix Spoolman"
 # description = "Shows the spool that the Phoenix reader activated and checks it against the exported G-code (Moonraker + Spoolman). Standard library only."
 # author = "Ricky1966"
-# version = "0.4.0"
+# version = "0.5.0"
 # ///
 """Phoenix Spoolman plugin for OrcaSlicer (Python plugin API, nightly builds / releases after 2.4.2).
 
@@ -302,6 +302,65 @@ def panel_payload(config):
     return {"type": "state", "ok": True, "spool": None if spool is None else spool_summary(spool)}
 
 
+def _first_text(value):
+    """The first entry of what OrcaSlicer returns for a per-extruder setting, as plain text."""
+    if isinstance(value, (list, tuple)):
+        value = value[0] if value else ""
+    text = str(value if value is not None else "").strip().strip('"')
+    return re.split(r"[;,]", text)[0].strip().strip('"')
+
+
+def read_selected_filament():
+    """The filament profile currently selected in OrcaSlicer, or None when it cannot be read.
+
+    Must run on the UI thread (it reads the live host). Returns {"name", "type", "nozzle"}; "type" and
+    "nozzle" are empty/None when the preset does not say.
+    """
+    try:
+        bundle = orca.host.preset_bundle()
+        names = bundle.current_filament_preset_names()
+        name = _first_text(names)
+        kind = nozzle = None
+        try:
+            kind = _first_text(bundle.full_config_value("filament_type"))
+        except Exception:
+            kind = ""
+        try:
+            nozzle = float(_first_text(bundle.full_config_value("nozzle_temperature")))
+        except (TypeError, ValueError):
+            nozzle = None
+        except Exception:
+            nozzle = None
+        return {"name": name, "type": kind or "", "nozzle": nozzle}
+    except Exception:
+        return None
+
+
+def compare_summary(summary, selected, tolerance):
+    """Problems between the active spool (spool_summary) and the selected profile; None if unknown."""
+    if not summary or not selected:
+        return None
+    problems = []
+    spool_material = str(summary.get("material") or "").strip()
+    chosen = str(selected.get("type") or "").strip()
+    if spool_material and chosen and spool_material.upper() != chosen.upper():
+        problems.append("the spool is %s but the selected profile is %s" % (spool_material, chosen))
+    spool_temp, chosen_temp = summary.get("nozzle"), selected.get("nozzle")
+    if isinstance(spool_temp, (int, float)) and spool_temp and isinstance(chosen_temp, (int, float)):
+        if abs(chosen_temp - spool_temp) > tolerance:
+            problems.append("nozzle %g C in the profile, the spool's usual temperature is %g C" % (chosen_temp, spool_temp))
+    return problems
+
+
+def with_selection(payload, selected, tolerance):
+    """The panel message: the network state plus what is selected in OrcaSlicer and whether it matches."""
+    merged = dict(payload)
+    merged["selected"] = selected
+    spool = payload.get("spool") if payload.get("ok") else None
+    merged["problems"] = compare_summary(spool, selected, tolerance)
+    return merged
+
+
 PANEL_HTML = """<!doctype html>
 <html><head><meta charset="utf-8"><title>Phoenix active spool</title>
 <style>
@@ -314,6 +373,8 @@ h3 { margin: 0 0 10px; font-size: 14px; }
 dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; margin: 12px 0; font-size: 12px; }
 dt { color: var(--orca-muted); } dd { margin: 0; word-break: break-all; }
 .err { color: #d9534f; font-size: 12px; margin: 8px 0; }
+.ok { color: #3c9d5d; font-size: 12px; margin: 8px 0; }
+.verdict { margin: 10px 0; padding: 8px; border: 1px solid var(--orca-border); border-radius: 8px; font-size: 12px; }
 button { margin-top: 6px; }
 </style></head><body>
 <h3>Active spool (Phoenix)</h3>
@@ -323,6 +384,7 @@ button { margin-top: 6px; }
   <div><div id="name" class="name"></div><div id="sub" class="muted"></div></div>
 </div>
 <dl id="details" hidden></dl>
+<div id="verdict" class="verdict" hidden></div>
 <div id="err" class="err" hidden></div>
 <div class="muted" id="when"></div>
 <button id="refresh">Refresh now</button>
@@ -351,10 +413,27 @@ function render(m) {
   if (s.bed) row('Bed', s.bed + ' C');
   if (s.remaining !== null) row('Remaining', Math.round(s.remaining) + ' g');
   if (s.tags.length) row('NFC tag', s.tags.join(', '));
+  verdict(m);
+}
+function verdict(m) {
+  const box = $('verdict');
+  if (!m.spool) { box.hidden = true; return; }
+  box.hidden = false;
+  box.replaceChildren();
+  const sel = m.selected;
+  const line = document.createElement('div');
+  line.textContent = 'Selected profile: ' + (sel ? (sel.name || '(unnamed)') : 'cannot be read');
+  box.append(line);
+  if (!sel || m.problems === null || m.problems === undefined) return;
+  const res = document.createElement('div');
+  res.className = m.problems.length ? 'err' : 'ok';
+  res.textContent = m.problems.length ? 'Mismatch: ' + m.problems.join('; ') : 'Matches the active spool.';
+  box.append(res);
 }
 orca.onMessage((m) => { if (m && m.type === 'state') render(m); });
 $('refresh').onclick = () => orca.postMessage({ type: 'refresh' });
 orca.postMessage({ type: 'ready' });     // ask for the first data: a post right after creation can be dropped
+setInterval(() => orca.postMessage({ type: 'selection' }), 2000);  // the plugin reads the selected profile on the UI thread
 </script></body></html>"""
 
 
@@ -366,7 +445,8 @@ class PanelState:
         self.stop = threading.Event()
         self.wake = threading.Event()
         self.thread = None
-        self.last = None
+        self.last = None            # latest network state (without the selection)
+        self.selected = None        # latest selected profile, read on the UI thread
         self.config = dict(DEFAULT_CONFIG)
 
     def is_open(self):
@@ -385,6 +465,16 @@ class PanelState:
         self.wake.set()
         self.panel = None
         self.last = None
+        self.selected = None
+
+    def tolerance(self):
+        try:
+            return float(self.config.get("nozzle_temp_tolerance", DEFAULT_CONFIG["nozzle_temp_tolerance"]))
+        except (TypeError, ValueError):
+            return float(DEFAULT_CONFIG["nozzle_temp_tolerance"])
+
+    def message(self):
+        return with_selection(self.last, self.selected, self.tolerance())
 
     def _loop(self):
         while not self.stop.is_set():
@@ -396,7 +486,7 @@ class PanelState:
             try:
                 if panel.is_open():
                     self.last = payload
-                    panel.post(payload)
+                    panel.post(self.message())
             except Exception:
                 return                       # the panel went away while we were reading
             try:
@@ -432,9 +522,11 @@ class ActiveSpoolPanel(orca.script.ScriptPluginCapabilityBase):
     def _on_message(self, data):
         # UI thread: keep it quick; the polling happens on the worker thread.
         kind = data.get("type") if isinstance(data, dict) else None
+        if kind in ("ready", "refresh", "selection"):
+            PANEL.selected = read_selected_filament()  # live host data: read here, on the UI thread
+            if PANEL.last is not None and PANEL.is_open():
+                PANEL.panel.post(PANEL.message())  # a reopened page, or a changed profile, shows at once
         if kind in ("ready", "refresh"):
-            if kind == "ready" and PANEL.last is not None and PANEL.is_open():
-                PANEL.panel.post(PANEL.last)  # a reopened or reloaded page gets the last state at once
             PANEL.start(self._config())
 
     def _on_close(self):
@@ -471,17 +563,32 @@ class InspectPresetApi(orca.script.ScriptPluginCapabilityBase):
             bundle = orca.host.preset_bundle()
         except Exception as exc:
             return orca.ExecutionResult.failure(orca.PluginResult.RecoverableError, "preset_bundle() failed: %s" % exc)
-        lines = ["preset_bundle() -> %s" % type(bundle).__name__]
+        members = []
         for name in sorted(n for n in dir(bundle) if not n.startswith("_")):
             try:
                 member = getattr(bundle, name)
                 kind = "method" if callable(member) else type(member).__name__
             except Exception as exc:
                 kind = "error: %s" % exc
-            lines.append("  %s  (%s)" % (name, kind))
+            members.append("  %s  (%s)" % (name, kind))
+        selected = []
+        for label, call in (
+            ("current_filament_preset_names()", lambda: bundle.current_filament_preset_names()),
+            ("current_filament_presets()", lambda: bundle.current_filament_presets()),
+            ("full_config_value('filament_type')", lambda: bundle.full_config_value("filament_type")),
+            ("full_config_value('nozzle_temperature')", lambda: bundle.full_config_value("nozzle_temperature")),
+        ):
+            try:
+                value = call()
+                selected.append("  %s -> %s %r" % (label, type(value).__name__, value))
+            except Exception as exc:
+                selected.append("  %s -> error: %s" % (label, exc))
+        selected.append("  read_selected_filament() -> %r" % (read_selected_filament(),))
+        lines = ["preset_bundle() -> %s" % type(bundle).__name__, "Selected filament, as the panel reads it:"]
+        lines += selected + ["", "Members:"] + members
         text = "\n".join(lines)
         print(text, file=sys.stderr)         # also lands in OrcaSlicer's python log
-        orca.host.ui.message(text[:3000], title="Phoenix Spoolman", buttons="ok", icon="info")
+        orca.host.ui.message(text[:3500], title="Phoenix Spoolman", buttons="ok", icon="info")
         return orca.ExecutionResult.success(text)
 
 

@@ -28,12 +28,18 @@ reads; nothing is written to the printer, to Spoolman or to Orca's presets.
 bed temperature, remaining weight and NFC tag. Place a spool on the reader and the panel updates within a few
 seconds (`poll_seconds`, default 3, minimum 1). A background thread asks Moonraker and Spoolman; the page never talks
 to them. If Moonraker or Spoolman cannot be reached the panel keeps the last spool and shows the error. Run the script
-once from the Plugins window; running it again just shows the same panel. The panel only reads: OrcaSlicer's plugin
-API gives no way to change the selected filament preset, so it cannot select the spool's profile for you.
+once from the Plugins window; running it again just shows the same panel.
 
-**Inspect preset API** (script, diagnostic) lists what `orca.host.preset_bundle()` exposes, in a dialog and in
-OrcaSlicer's Python log. It is there to find out whether the selected filament preset can be read, which would let the
-panel flag a mismatch with the active spool before you slice.
+Since 0.5.0 the panel also shows the **filament profile currently selected in OrcaSlicer** and whether it matches the
+active spool: the spool's material against the profile's `filament_type`, and the profile's nozzle temperature against
+the spool's within `nozzle_temp_tolerance` (the same rule as *Spool check*). A mismatch is shown in red as soon as you
+place a spool or change the profile (the page asks the plugin every 2 s, and the plugin reads the selection on the UI
+thread). If the selection cannot be read, the panel just says so. The panel only reads: OrcaSlicer's plugin API gives
+no way to change the selected filament preset, so it cannot select the spool's profile for you.
+
+**Inspect preset API** (script, diagnostic) shows what the panel reads as the selected filament, followed by the members
+of `orca.host.preset_bundle()`, in a dialog and in OrcaSlicer's Python log. Use it to see why the panel cannot read the
+selection, if it ever cannot.
 
 **Spool check** (G-code post-processing, experimental in OrcaSlicer) runs when a G-code file is
 exported. It compares the active spool with the filament profile that was sliced, reading
