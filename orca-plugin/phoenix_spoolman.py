@@ -6,7 +6,7 @@
 # name = "Phoenix Spoolman"
 # description = "Shows the spool that the Phoenix reader activated and checks it against the exported G-code (Moonraker + Spoolman). Standard library only."
 # author = "Ricky1966"
-# version = "0.3.0"
+# version = "0.5.1"
 # ///
 """Phoenix Spoolman plugin for OrcaSlicer (Python plugin API, nightly builds / releases after 2.4.2).
 
@@ -27,6 +27,9 @@ OrcaSlicer asks for permission the first time the plugin contacts the network.
 import json
 import os
 import re
+import sys
+import threading
+import time
 import urllib.error
 import urllib.request
 
@@ -46,6 +49,8 @@ DEFAULT_CONFIG = {
     # writes the comment block. The old value "warn" is treated as "block".
     "on_mismatch": "block",
     "nozzle_temp_tolerance": 25,
+    # Active spool panel only: how often the panel asks Moonraker which spool is active.
+    "poll_seconds": 3,
 }
 CONFIG_TAIL_BYTES = 512 * 1024  # Orca writes the settings block at the end of the G-code
 
@@ -263,8 +268,380 @@ class SpoolCheck(orca.slicing.SlicingPipelineCapabilityBase):
         return orca.ExecutionResult.success(message)
 
 
+# ───────────────────────── Active spool panel ─────────────────────────
+
+HEX_COLOR = re.compile(r"[0-9A-Fa-f]{6}")
+
+
+def spool_summary(spool):
+    """The fields the panel shows, as plain JSON-able values."""
+    filament = spool.get("filament") or {}
+    color = str(filament.get("color_hex") or "").lstrip("#")
+    return {
+        "id": spool.get("id"),
+        "vendor": (filament.get("vendor") or {}).get("name") or "",
+        "name": filament.get("name") or "",
+        "material": filament.get("material") or "",
+        "color": color.upper() if HEX_COLOR.fullmatch(color) else "",
+        "diameter": filament.get("diameter"),
+        "nozzle": filament.get("settings_extruder_temp"),
+        "bed": filament.get("settings_bed_temp"),
+        "remaining": spool.get("remaining_weight") if isinstance(spool.get("remaining_weight"), (int, float)) else None,
+        "tags": [t.get("uid") for t in spool.get("tags") or [] if t.get("uid")],
+    }
+
+
+def panel_payload(config):
+    """What the panel displays right now. Never raises: a failure becomes {"ok": False, "error": ...}."""
+    try:
+        spool = fetch_active_spool(config)
+    except PhoenixError as exc:
+        return {"type": "state", "ok": False, "error": str(exc)}
+    except Exception as exc:  # e.g. an operation refused by OrcaSlicer's audit hook
+        return {"type": "state", "ok": False, "error": "%s: %s" % (type(exc).__name__, exc)}
+    return {"type": "state", "ok": True, "spool": None if spool is None else spool_summary(spool)}
+
+
+def _first_text(value):
+    """The first entry of what OrcaSlicer returns for a per-extruder setting, as plain text."""
+    if isinstance(value, (list, tuple)):
+        value = value[0] if value else ""
+    text = str(value if value is not None else "").strip().strip('"')
+    return re.split(r"[;,]", text)[0].strip().strip('"')
+
+
+def read_selected_filament():
+    """The filament profile currently selected in OrcaSlicer, or None when it cannot be read.
+
+    Must run on the UI thread (it reads the live host). Returns {"name", "type", "nozzle"}; "type" and
+    "nozzle" are empty/None when the preset does not say.
+    """
+    try:
+        bundle = orca.host.preset_bundle()
+        names = bundle.current_filament_preset_names()
+        name = _first_text(names)
+        kind = nozzle = None
+        try:
+            kind = _first_text(bundle.full_config_value("filament_type"))
+        except Exception:
+            kind = ""
+        try:
+            nozzle = float(_first_text(bundle.full_config_value("nozzle_temperature")))
+        except (TypeError, ValueError):
+            nozzle = None
+        except Exception:
+            nozzle = None
+        return {"name": name, "type": kind or "", "nozzle": nozzle}
+    except Exception:
+        return None
+
+
+def compare_summary(summary, selected, tolerance):
+    """Problems between the active spool (spool_summary) and the selected profile; None if unknown."""
+    if not summary or not selected:
+        return None
+    problems = []
+    spool_material = str(summary.get("material") or "").strip()
+    chosen = str(selected.get("type") or "").strip()
+    if spool_material and chosen and spool_material.upper() != chosen.upper():
+        problems.append("the spool is %s but the selected profile is %s" % (spool_material, chosen))
+    spool_temp, chosen_temp = summary.get("nozzle"), selected.get("nozzle")
+    if isinstance(spool_temp, (int, float)) and spool_temp and isinstance(chosen_temp, (int, float)):
+        if abs(chosen_temp - spool_temp) > tolerance:
+            problems.append("nozzle %g C in the profile, the spool's usual temperature is %g C" % (chosen_temp, spool_temp))
+    return problems
+
+
+GENERIC_WORDS = {
+    "the", "and", "filament", "filaments", "3d", "printing", "series", "spool",
+    "pla", "petg", "abs", "asa", "tpu", "pet", "pc", "pa", "pp", "pva", "hips", "plus", "pro",
+}
+
+
+def _tokens(text):
+    """Lower-case alphanumeric words of at least three characters, without generic filler words."""
+    words = re.findall(r"[a-z0-9]+", str(text or "").lower())
+    return {w for w in words if len(w) >= 3 and w not in GENERIC_WORDS}
+
+
+def compare_product(summary, selected):
+    """A note when the selected profile looks like a different brand or product than the active spool.
+
+    This is a hint, not an error: profile names are free text. The part after "@" (the printer) is ignored.
+    Returns None when the profile name is unknown or nothing suggests a difference.
+    """
+    if not summary or not selected or not selected.get("name"):
+        return None
+    profile_name = str(selected["name"]).split("@")[0]
+    profile = _tokens(profile_name)
+    vendor, product = _tokens(summary.get("vendor")), _tokens(summary.get("name"))
+    # A specific product name (PolyTerra) is what identifies the spool; when the filament name is only
+    # generic words ("The Filament PLA") the vendor is all there is to compare.
+    if product:
+        same = bool(product & profile)
+    else:
+        same = not vendor or bool(vendor & profile)
+    if same:
+        return None
+    spool = " ".join(part for part in (summary.get("vendor"), summary.get("name")) if part)
+    return "the spool is %s but the selected profile is %s" % (spool, profile_name.strip())
+
+
+def with_selection(payload, selected, tolerance):
+    """The panel message: the network state plus what is selected in OrcaSlicer and whether it matches."""
+    merged = dict(payload)
+    merged["selected"] = selected
+    spool = payload.get("spool") if payload.get("ok") else None
+    merged["problems"] = compare_summary(spool, selected, tolerance)
+    merged["notes"] = [] if merged["problems"] is None else [n for n in [compare_product(spool, selected)] if n]
+    return merged
+
+
+PANEL_HTML = """<!doctype html>
+<html><head><meta charset="utf-8"><title>Phoenix active spool</title>
+<style>
+body { margin: 0; padding: 12px; font-family: var(--orca-font, sans-serif); color: var(--orca-fg); background: var(--orca-bg); }
+h3 { margin: 0 0 10px; font-size: 14px; }
+.card { display: flex; gap: 10px; align-items: center; padding: 10px; border: 1px solid var(--orca-border); border-radius: 8px; }
+.swatch { width: 38px; height: 38px; border-radius: 6px; border: 1px solid var(--orca-border); flex: none; }
+.name { font-weight: 600; word-break: break-word; }
+.muted { color: var(--orca-muted); font-size: 12px; }
+dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; margin: 12px 0; font-size: 12px; }
+dt { color: var(--orca-muted); } dd { margin: 0; word-break: break-all; }
+.err { color: #d9534f; font-size: 12px; margin: 8px 0; }
+.ok { color: #3c9d5d; font-size: 12px; margin: 8px 0; }
+.warn { color: #d9a441; font-size: 12px; margin: 8px 0; }
+.verdict { margin: 10px 0; padding: 8px; border: 1px solid var(--orca-border); border-radius: 8px; font-size: 12px; }
+button { margin-top: 6px; }
+</style></head><body>
+<h3>Active spool (Phoenix)</h3>
+<div id="empty" class="muted">Waiting for the first reading...</div>
+<div id="card" class="card" hidden>
+  <div id="swatch" class="swatch"></div>
+  <div><div id="name" class="name"></div><div id="sub" class="muted"></div></div>
+</div>
+<dl id="details" hidden></dl>
+<div id="verdict" class="verdict" hidden></div>
+<div id="err" class="err" hidden></div>
+<div class="muted" id="when"></div>
+<button id="refresh">Refresh now</button>
+<script>
+const $ = (id) => document.getElementById(id);
+function row(k, v) {
+  const dt = document.createElement('dt'); dt.textContent = k;
+  const dd = document.createElement('dd'); dd.textContent = v;
+  $('details').append(dt, dd);
+}
+function render(m) {
+  $('when').textContent = 'Updated ' + new Date().toLocaleTimeString();
+  const bad = !m.ok;
+  $('err').hidden = !bad; $('err').textContent = bad ? m.error : '';
+  if (bad) return;                       // keep showing the last good spool next to the error
+  const s = m.spool;
+  $('card').hidden = !s; $('details').hidden = !s;
+  $('empty').hidden = !!s; $('empty').textContent = 'No spool is active in Moonraker.';
+  if (!s) return;
+  $('swatch').style.background = s.color ? '#' + s.color : 'transparent';
+  $('name').textContent = '#' + s.id + ' ' + [s.vendor, s.name].filter(Boolean).join(' ');
+  $('sub').textContent = [s.material, s.diameter ? s.diameter + ' mm' : ''].filter(Boolean).join(' · ');
+  $('details').replaceChildren();
+  if (s.color) row('Colour', '#' + s.color);
+  if (s.nozzle) row('Nozzle', s.nozzle + ' C');
+  if (s.bed) row('Bed', s.bed + ' C');
+  if (s.remaining !== null) row('Remaining', Math.round(s.remaining) + ' g');
+  if (s.tags.length) row('NFC tag', s.tags.join(', '));
+  verdict(m);
+}
+function verdict(m) {
+  const box = $('verdict');
+  if (!m.spool) { box.hidden = true; return; }
+  box.hidden = false;
+  box.replaceChildren();
+  const sel = m.selected;
+  const line = document.createElement('div');
+  line.textContent = 'Selected profile: ' + (sel ? (sel.name || '(unnamed)') : 'cannot be read');
+  box.append(line);
+  if (!sel || m.problems === null || m.problems === undefined) return;
+  const res = document.createElement('div');
+  const notes = m.notes || [];
+  if (m.problems.length) {
+    res.className = 'err';
+    res.textContent = 'Mismatch: ' + m.problems.join('; ');
+  } else if (notes.length) {
+    res.className = 'warn';
+    res.textContent = 'Same material, but check the profile: ' + notes.join('; ');
+  } else {
+    res.className = 'ok';
+    res.textContent = 'Matches the active spool.';
+  }
+  box.append(res);
+}
+orca.onMessage((m) => { if (m && m.type === 'state') render(m); });
+$('refresh').onclick = () => orca.postMessage({ type: 'refresh' });
+orca.postMessage({ type: 'ready' });     // ask for the first data: a post right after creation can be dropped
+setInterval(() => orca.postMessage({ type: 'selection' }), 2000);  // the plugin reads the selected profile on the UI thread
+</script></body></html>"""
+
+
+class PanelState:
+    """The panel handle and its poller. The authoritative state lives here, not in the page."""
+
+    def __init__(self):
+        self.panel = None
+        self.stop = threading.Event()
+        self.wake = threading.Event()
+        self.thread = None
+        self.last = None            # latest network state (without the selection)
+        self.selected = None        # latest selected profile, read on the UI thread
+        self.config = dict(DEFAULT_CONFIG)
+
+    def is_open(self):
+        return self.panel is not None and self.panel.is_open()
+
+    def start(self, config):
+        self.config = dict(config)
+        self.stop.clear()
+        self.wake.set()                      # read straight away
+        if self.thread is None or not self.thread.is_alive():
+            self.thread = threading.Thread(target=self._loop, name="phoenix-spoolman-panel", daemon=True)
+            self.thread.start()
+
+    def close(self):
+        self.stop.set()
+        self.wake.set()
+        self.panel = None
+        self.last = None
+        self.selected = None
+
+    def tolerance(self):
+        try:
+            return float(self.config.get("nozzle_temp_tolerance", DEFAULT_CONFIG["nozzle_temp_tolerance"]))
+        except (TypeError, ValueError):
+            return float(DEFAULT_CONFIG["nozzle_temp_tolerance"])
+
+    def message(self):
+        return with_selection(self.last, self.selected, self.tolerance())
+
+    def _loop(self):
+        while not self.stop.is_set():
+            self.wake.clear()
+            payload = panel_payload(self.config)
+            panel = self.panel
+            if panel is None or self.stop.is_set():
+                return
+            try:
+                if panel.is_open():
+                    self.last = payload
+                    panel.post(self.message())
+            except Exception:
+                return                       # the panel went away while we were reading
+            try:
+                interval = max(1.0, float(self.config.get("poll_seconds", DEFAULT_CONFIG["poll_seconds"])))
+            except (TypeError, ValueError):
+                interval = float(DEFAULT_CONFIG["poll_seconds"])
+            self.wake.wait(interval)
+
+
+PANEL = PanelState()
+
+
+class ActiveSpoolPanel(orca.script.ScriptPluginCapabilityBase):
+    """Run it once: a panel docked beside the 3D view follows the spool the Phoenix reader activated."""
+
+    def get_name(self):
+        return "Active spool panel"
+
+    def get_default_config(self):
+        return dict(DEFAULT_CONFIG)
+
+    def _config(self):
+        config = dict(DEFAULT_CONFIG)
+        try:
+            config.update(json.loads(self.get_config() or "{}"))
+        except ValueError:
+            pass
+        return config
+
+    def on_unload(self):
+        PANEL.close()
+
+    def _on_message(self, data):
+        # UI thread: keep it quick; the polling happens on the worker thread.
+        kind = data.get("type") if isinstance(data, dict) else None
+        if kind in ("ready", "refresh", "selection"):
+            PANEL.selected = read_selected_filament()  # live host data: read here, on the UI thread
+            if PANEL.last is not None and PANEL.is_open():
+                PANEL.panel.post(PANEL.message())  # a reopened page, or a changed profile, shows at once
+        if kind in ("ready", "refresh"):
+            PANEL.start(self._config())
+
+    def _on_close(self):
+        PANEL.close()
+
+    def execute(self):
+        if PANEL.is_open():
+            PANEL.panel.show()
+            return orca.ExecutionResult.success("The active spool panel is already open.")
+        try:
+            PANEL.panel = orca.host.ui.create_dock_panel(
+                html=PANEL_HTML,
+                title="Phoenix active spool",
+                width=320,
+                height=420,
+                on_message=self._on_message,
+                on_close=self._on_close,
+                dock="right",
+            )
+        except Exception as exc:
+            return orca.ExecutionResult.failure(orca.PluginResult.RecoverableError, "Cannot open the panel: %s" % exc)
+        return orca.ExecutionResult.success("Active spool panel opened.")
+
+
+class InspectPresetApi(orca.script.ScriptPluginCapabilityBase):
+    """Diagnostic: lists what `orca.host.preset_bundle()` exposes, to find out whether the selected
+    filament preset can be read (needed to flag a mismatch with the active spool in the panel)."""
+
+    def get_name(self):
+        return "Inspect preset API"
+
+    def execute(self):
+        try:
+            bundle = orca.host.preset_bundle()
+        except Exception as exc:
+            return orca.ExecutionResult.failure(orca.PluginResult.RecoverableError, "preset_bundle() failed: %s" % exc)
+        members = []
+        for name in sorted(n for n in dir(bundle) if not n.startswith("_")):
+            try:
+                member = getattr(bundle, name)
+                kind = "method" if callable(member) else type(member).__name__
+            except Exception as exc:
+                kind = "error: %s" % exc
+            members.append("  %s  (%s)" % (name, kind))
+        selected = []
+        for label, call in (
+            ("current_filament_preset_names()", lambda: bundle.current_filament_preset_names()),
+            ("current_filament_presets()", lambda: bundle.current_filament_presets()),
+            ("full_config_value('filament_type')", lambda: bundle.full_config_value("filament_type")),
+            ("full_config_value('nozzle_temperature')", lambda: bundle.full_config_value("nozzle_temperature")),
+        ):
+            try:
+                value = call()
+                selected.append("  %s -> %s %r" % (label, type(value).__name__, value))
+            except Exception as exc:
+                selected.append("  %s -> error: %s" % (label, exc))
+        selected.append("  read_selected_filament() -> %r" % (read_selected_filament(),))
+        lines = ["preset_bundle() -> %s" % type(bundle).__name__, "Selected filament, as the panel reads it:"]
+        lines += selected + ["", "Members:"] + members
+        text = "\n".join(lines)
+        print(text, file=sys.stderr)         # also lands in OrcaSlicer's python log
+        orca.host.ui.message(text[:3500], title="Phoenix Spoolman", buttons="ok", icon="info")
+        return orca.ExecutionResult.success(text)
+
+
 @orca.plugin
 class PhoenixSpoolmanPlugin(orca.base):
     def register_capabilities(self):
         orca.register_capability(ActiveSpool)
         orca.register_capability(SpoolCheck)
+        orca.register_capability(ActiveSpoolPanel)
+        orca.register_capability(InspectPresetApi)
