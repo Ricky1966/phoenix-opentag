@@ -23,6 +23,18 @@ releases **after 2.4.2** (OrcaSlicer 2.4.2 itself does not have it). Standard li
 filament, material, colour, diameter, temperatures, remaining weight and the NFC tag. It only
 reads; nothing is written to the printer, to Spoolman or to Orca's presets.
 
+**Active spool panel** (script, **new in 0.4.0, not yet run inside OrcaSlicer**) opens a panel docked beside the
+3D view that follows the spool the Phoenix reader activated: swatch, vendor and name, material, diameter, nozzle and
+bed temperature, remaining weight and NFC tag. Place a spool on the reader and the panel updates within a few
+seconds (`poll_seconds`, default 3, minimum 1). A background thread asks Moonraker and Spoolman; the page never talks
+to them. If Moonraker or Spoolman cannot be reached the panel keeps the last spool and shows the error. Run the script
+once from the Plugins window; running it again just shows the same panel. The panel only reads: OrcaSlicer's plugin
+API gives no way to change the selected filament preset, so it cannot select the spool's profile for you.
+
+**Inspect preset API** (script, diagnostic) lists what `orca.host.preset_bundle()` exposes, in a dialog and in
+OrcaSlicer's Python log. It is there to find out whether the selected filament preset can be read, which would let the
+panel flag a mismatch with the active spool before you slice.
+
 **Spool check** (G-code post-processing, experimental in OrcaSlicer) runs when a G-code file is
 exported. It compares the active spool with the filament profile that was sliced, reading
 `filament_type` and `nozzle_temperature` from the settings block that Orca writes at the end of the
@@ -75,7 +87,7 @@ Not done yet: writing a filament preset from the active spool.
 2. Expand the plugin, find the **Active spool** script and press **Run**.
 3. OrcaSlicer asks whether the plugin may contact the network. The plugin talks only to the
    Moonraker and Spoolman addresses in its configuration.
-4. **Spool check** is a slicing-pipeline plugin: in the **Process** settings, tab **Others**, section **Slicing Pipeline Plugin**, press **Add plugin** and pick "Spool check". Slice, export a G-code file and open its last lines.
+4. **Active spool panel** and **Inspect preset API** are scripts: expand the plugin and press **Run**. **Spool check** is a slicing-pipeline plugin: in the **Process** settings, tab **Others**, section **Slicing Pipeline Plugin**, press **Add plugin** and pick "Spool check". Slice, export a G-code file and open its last lines.
 
 ## Configuration
 
@@ -83,7 +95,7 @@ Plugins window → select the plugin → **Config** tab → choose **Active spoo
 
 ```json
 {"moonraker_url": "http://192.168.1.36:7125", "spoolman_url": "http://192.168.1.36:7912", "timeout_seconds": 5,
- "on_mismatch": "block", "nozzle_temp_tolerance": 25}
+ "on_mismatch": "block", "nozzle_temp_tolerance": 25, "poll_seconds": 3}
 ```
 
 Away from home with Tailscale, use the Phoenix's Tailscale address in both URLs.

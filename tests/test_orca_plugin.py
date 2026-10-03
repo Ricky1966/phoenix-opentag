@@ -4,6 +4,7 @@ import json
 import sys
 import tempfile
 import threading
+import time
 import types
 import unittest
 from unittest import mock
@@ -48,8 +49,35 @@ def fake_orca():
     orca.plugin = lambda cls: cls
     orca.registered = []
     orca.register_capability = orca.registered.append
+    orca.panels = []
+
+    class Panel:
+        def __init__(self, **kw):
+            self.kw, self.posts, self.open, self.shown = kw, [], True, 0
+
+        def post(self, data):
+            self.posts.append(data)
+
+        def is_open(self):
+            return self.open
+
+        def show(self):
+            self.shown += 1
+
+        def close(self):
+            self.open = False
+
+    def create_dock_panel(**kw):
+        orca.panels.append(Panel(**kw))
+        return orca.panels[-1]
+
+    orca.bundle = types.SimpleNamespace(prints=lambda: [], filament_presets=["PLA"], _hidden=1)
     orca.host = types.SimpleNamespace(
-        ui=types.SimpleNamespace(message=lambda text, **kw: orca.messages.append((text, kw)))
+        ui=types.SimpleNamespace(
+            message=lambda text, **kw: orca.messages.append((text, kw)),
+            create_dock_panel=create_dock_panel,
+        ),
+        preset_bundle=lambda: orca.bundle,
     )
     return orca
 
@@ -115,7 +143,10 @@ class PluginTests(unittest.TestCase):
 
     def test_registers_one_script_capability(self):
         self.plugin.PhoenixSpoolmanPlugin().register_capabilities()
-        self.assertEqual(self.orca.registered, [self.plugin.ActiveSpool, self.plugin.SpoolCheck])
+        self.assertEqual(
+            self.orca.registered,
+            [self.plugin.ActiveSpool, self.plugin.SpoolCheck, self.plugin.ActiveSpoolPanel, self.plugin.InspectPresetApi],
+        )
         self.assertEqual(self.cap.get_name(), "Active spool")
         self.assertEqual(self.plugin.SpoolCheck().get_name(), "Spool check")
 
@@ -262,6 +293,121 @@ class SpoolCheckTests(unittest.TestCase):
     def test_unwritable_file_is_a_recoverable_error(self):
         ctx = types.SimpleNamespace(step="post", gcode_path=str(Path(self.dir.name) / "missing" / "x.gcode"))
         self.assertEqual(self.cap.execute(ctx).status, "recoverable")
+
+
+class PanelTests(unittest.TestCase):
+    def setUp(self):
+        self.plugin, self.orca = load_plugin()
+        self.servers = Servers()
+        self.addCleanup(self.servers.close)
+        self.addCleanup(self.plugin.PANEL.close)
+        self.cap = self.plugin.ActiveSpoolPanel()
+        self.cap.config = json.dumps({"moonraker_url": self.servers.url, "spoolman_url": self.servers.url,
+                                      "timeout_seconds": 2, "poll_seconds": 1})
+
+    def wait_for(self, predicate, seconds=5):
+        end = time.monotonic() + seconds
+        while time.monotonic() < end:
+            if predicate():
+                return True
+            time.sleep(0.02)
+        return False
+
+    def test_execute_opens_one_docked_panel(self):
+        self.assertEqual(self.cap.execute().status, "success")
+        panel = self.orca.panels[0]
+        self.assertEqual(panel.kw["dock"], "right")
+        self.assertIn("orca.postMessage({ type: 'ready' })", panel.kw["html"])
+        self.cap.execute()  # a second run shows the same panel instead of opening another
+        self.assertEqual(len(self.orca.panels), 1)
+        self.assertEqual(panel.shown, 1)
+
+    def test_ready_starts_polling_and_posts_the_active_spool(self):
+        self.cap.execute()
+        panel = self.orca.panels[0]
+        panel.kw["on_message"]({"type": "ready"})
+        self.assertTrue(self.wait_for(lambda: panel.posts))
+        state = panel.posts[0]
+        self.assertTrue(state["ok"])
+        self.assertEqual(state["spool"]["id"], 4)
+        self.assertEqual(state["spool"]["vendor"], "Polymaker")
+        self.assertEqual(state["spool"]["color"], "C7BE5C")
+        self.assertEqual(state["spool"]["tags"], ["E004010866073472"])
+
+    def test_it_follows_a_change_of_spool(self):
+        self.cap.execute()
+        panel = self.orca.panels[0]
+        panel.kw["on_message"]({"type": "ready"})
+        self.assertTrue(self.wait_for(lambda: panel.posts))
+        self.servers.active = None
+        panel.kw["on_message"]({"type": "refresh"})
+        self.assertTrue(self.wait_for(lambda: panel.posts[-1]["spool"] is None))
+
+    def test_errors_are_shown_not_raised(self):
+        self.cap.config = json.dumps({"moonraker_url": "http://127.0.0.1:9", "timeout_seconds": 1})
+        payload = self.plugin.panel_payload(self.cap._config())
+        self.assertFalse(payload["ok"])
+        self.assertIn("Cannot reach", payload["error"])
+
+    def test_unexpected_error_is_a_state_too(self):
+        def refused(*args, **kwargs):
+            raise RuntimeError("blocked by the audit hook")
+
+        with mock.patch.object(self.plugin.urllib.request, "urlopen", refused):
+            payload = self.plugin.panel_payload(self.cap._config())
+        self.assertFalse(payload["ok"])
+        self.assertIn("RuntimeError", payload["error"])
+
+    def test_closing_the_panel_stops_the_poller(self):
+        self.cap.execute()
+        panel = self.orca.panels[0]
+        panel.kw["on_message"]({"type": "ready"})
+        self.assertTrue(self.wait_for(lambda: panel.posts))
+        thread = self.plugin.PANEL.thread
+        panel.kw["on_close"]()
+        thread.join(3)
+        self.assertFalse(thread.is_alive())
+        self.assertFalse(self.plugin.PANEL.is_open())
+        self.cap.execute()  # reopens a fresh panel after a close
+        self.assertEqual(len(self.orca.panels), 2)
+
+    def test_unloading_stops_the_poller(self):
+        self.cap.execute()
+        panel = self.orca.panels[0]
+        panel.kw["on_message"]({"type": "ready"})
+        self.assertTrue(self.wait_for(lambda: panel.posts))
+        thread = self.plugin.PANEL.thread
+        self.cap.on_unload()
+        thread.join(3)
+        self.assertFalse(thread.is_alive())
+
+    def test_reopened_page_gets_the_last_state_at_once(self):
+        self.cap.execute()
+        panel = self.orca.panels[0]
+        panel.kw["on_message"]({"type": "ready"})
+        self.assertTrue(self.wait_for(lambda: panel.posts))
+        before = len(panel.posts)
+        panel.kw["on_message"]({"type": "ready"})  # page reloaded: asks again
+        self.assertGreater(len(panel.posts), before)
+
+    def test_messages_from_the_page_are_validated(self):
+        self.cap.execute()
+        panel = self.orca.panels[0]
+        for junk in (None, "ready", 5, {"type": "evil"}, {}):
+            panel.kw["on_message"](junk)  # no exception, no polling started
+        self.assertIsNone(self.plugin.PANEL.thread)
+
+    def test_bad_colour_never_reaches_the_page(self):
+        spool = {"id": 1, "filament": {"color_hex": "red; background:url(x)"}}
+        self.assertEqual(self.plugin.spool_summary(spool)["color"], "")
+        self.assertEqual(self.plugin.spool_summary({"id": 1, "filament": {"color_hex": "#abcdef"}})["color"], "ABCDEF")
+
+    def test_inspect_preset_api_lists_public_members(self):
+        result = self.plugin.InspectPresetApi().execute()
+        self.assertEqual(result.status, "success")
+        self.assertIn("filament_presets", result.message)
+        self.assertNotIn("_hidden", result.message)
+        self.assertEqual(len(self.orca.messages), 1)
 
 
 if __name__ == "__main__":
