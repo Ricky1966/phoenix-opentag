@@ -6,7 +6,7 @@
 # name = "Phoenix Spoolman"
 # description = "Shows the spool that the Phoenix reader activated and checks it against the exported G-code (Moonraker + Spoolman). Standard library only."
 # author = "Ricky1966"
-# version = "0.5.0"
+# version = "0.5.1"
 # ///
 """Phoenix Spoolman plugin for OrcaSlicer (Python plugin API, nightly builds / releases after 2.4.2).
 
@@ -352,12 +352,48 @@ def compare_summary(summary, selected, tolerance):
     return problems
 
 
+GENERIC_WORDS = {
+    "the", "and", "filament", "filaments", "3d", "printing", "series", "spool",
+    "pla", "petg", "abs", "asa", "tpu", "pet", "pc", "pa", "pp", "pva", "hips", "plus", "pro",
+}
+
+
+def _tokens(text):
+    """Lower-case alphanumeric words of at least three characters, without generic filler words."""
+    words = re.findall(r"[a-z0-9]+", str(text or "").lower())
+    return {w for w in words if len(w) >= 3 and w not in GENERIC_WORDS}
+
+
+def compare_product(summary, selected):
+    """A note when the selected profile looks like a different brand or product than the active spool.
+
+    This is a hint, not an error: profile names are free text. The part after "@" (the printer) is ignored.
+    Returns None when the profile name is unknown or nothing suggests a difference.
+    """
+    if not summary or not selected or not selected.get("name"):
+        return None
+    profile_name = str(selected["name"]).split("@")[0]
+    profile = _tokens(profile_name)
+    vendor, product = _tokens(summary.get("vendor")), _tokens(summary.get("name"))
+    # A specific product name (PolyTerra) is what identifies the spool; when the filament name is only
+    # generic words ("The Filament PLA") the vendor is all there is to compare.
+    if product:
+        same = bool(product & profile)
+    else:
+        same = not vendor or bool(vendor & profile)
+    if same:
+        return None
+    spool = " ".join(part for part in (summary.get("vendor"), summary.get("name")) if part)
+    return "the spool is %s but the selected profile is %s" % (spool, profile_name.strip())
+
+
 def with_selection(payload, selected, tolerance):
     """The panel message: the network state plus what is selected in OrcaSlicer and whether it matches."""
     merged = dict(payload)
     merged["selected"] = selected
     spool = payload.get("spool") if payload.get("ok") else None
     merged["problems"] = compare_summary(spool, selected, tolerance)
+    merged["notes"] = [] if merged["problems"] is None else [n for n in [compare_product(spool, selected)] if n]
     return merged
 
 
@@ -374,6 +410,7 @@ dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; margin: 12px
 dt { color: var(--orca-muted); } dd { margin: 0; word-break: break-all; }
 .err { color: #d9534f; font-size: 12px; margin: 8px 0; }
 .ok { color: #3c9d5d; font-size: 12px; margin: 8px 0; }
+.warn { color: #d9a441; font-size: 12px; margin: 8px 0; }
 .verdict { margin: 10px 0; padding: 8px; border: 1px solid var(--orca-border); border-radius: 8px; font-size: 12px; }
 button { margin-top: 6px; }
 </style></head><body>
@@ -426,8 +463,17 @@ function verdict(m) {
   box.append(line);
   if (!sel || m.problems === null || m.problems === undefined) return;
   const res = document.createElement('div');
-  res.className = m.problems.length ? 'err' : 'ok';
-  res.textContent = m.problems.length ? 'Mismatch: ' + m.problems.join('; ') : 'Matches the active spool.';
+  const notes = m.notes || [];
+  if (m.problems.length) {
+    res.className = 'err';
+    res.textContent = 'Mismatch: ' + m.problems.join('; ');
+  } else if (notes.length) {
+    res.className = 'warn';
+    res.textContent = 'Same material, but check the profile: ' + notes.join('; ');
+  } else {
+    res.className = 'ok';
+    res.textContent = 'Matches the active spool.';
+  }
   box.append(res);
 }
 orca.onMessage((m) => { if (m && m.type === 'state') render(m); });

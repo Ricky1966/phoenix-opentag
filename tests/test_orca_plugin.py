@@ -464,6 +464,39 @@ class PanelTests(unittest.TestCase):
         self.assertTrue(self.wait_for(lambda: self.orca.panels[0].posts[-1]["spool"] is None))
         self.assertIsNone(self.orca.panels[0].posts[-1]["problems"])
 
+    def test_same_material_but_different_product_gets_a_note_not_an_error(self):
+        # the spool is Polymaker PolyTerra PLA; the profile is another PLA
+        self.orca.selected.update(names=["Spectrum HT-PLA @Phoenix 0.4"])
+        state = self.message_after()
+        self.assertEqual(state["problems"], [])
+        self.assertEqual(len(state["notes"]), 1)
+        self.assertIn("the spool is Polymaker PolyTerra PLA but the selected profile is Spectrum HT-PLA", state["notes"][0])
+
+    def test_product_check_follows_the_names(self):
+        note = self.plugin.compare_product
+        polyterra = {"vendor": "Polymaker", "name": "PolyTerra"}
+        self.assertIsNone(note(polyterra, {"name": "Polymaker PolyTerra PLA @Phoenix 0.4"}))
+        self.assertIsNone(note(polyterra, {"name": "polyterra pla"}))      # product alone is enough
+        # same vendor but another product: the product is what counts when the spool has one
+        self.assertIsNotNone(note(polyterra, {"name": "Polymaker PolyLite PLA @Phoenix 0.4"}))
+        self.assertIsNotNone(note(polyterra, {"name": "Spectrum HT-PLA @Phoenix 0.4"}))
+        # a spool whose name is only generic words is checked on the vendor
+        spectrum = {"vendor": "Spectrum Filament", "name": "The Filament PLA"}
+        self.assertIsNone(note(spectrum, {"name": "Spectrum HT-PLA @Phoenix 0.4"}))
+        self.assertIsNotNone(note(spectrum, {"name": "Polymaker PolyTerra PLA @Phoenix 0.4"}))
+        # the printer part after "@" is ignored, and unknown names give no verdict
+        self.assertIsNotNone(note(polyterra, {"name": "Generic PLA @Polymaker PolyTerra"}))
+        self.assertIsNone(note(polyterra, {"name": ""}))
+        self.assertIsNone(note(None, {"name": "x"}))
+        self.assertIsNone(note({"vendor": "", "name": ""}, {"name": "anything"}))
+
+    def test_a_clean_match_has_no_notes(self):
+        self.assertEqual(self.message_after()["notes"], [])
+
+    def test_no_notes_without_a_verdict(self):
+        self.orca.host.preset_bundle = lambda: (_ for _ in ()).throw(RuntimeError("no host yet"))
+        self.assertEqual(self.message_after()["notes"], [])
+
     def test_inspect_shows_the_selected_filament_first(self):
         text = self.plugin.InspectPresetApi().execute().message
         self.assertLess(text.index("current_filament_preset_names()"), text.index("Members:"))

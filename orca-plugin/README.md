@@ -32,7 +32,10 @@ once from the Plugins window; running it again just shows the same panel.
 
 Since 0.5.0 the panel also shows the **filament profile currently selected in OrcaSlicer** and whether it matches the
 active spool: the spool's material against the profile's `filament_type`, and the profile's nozzle temperature against
-the spool's within `nozzle_temp_tolerance` (the same rule as *Spool check*). A mismatch is shown in red as soon as you
+the spool's within `nozzle_temp_tolerance` (the same rule as *Spool check*). A mismatch is shown in red, and a profile that has the right material but looks like another product is
+shown in amber ("Same material, but check the profile"): the product is judged from the names, ignoring the printer
+part after `@`, using the spool's product name (PolyTerra) or, when that is only generic words, its vendor. The
+amber note is a hint, not an error: profile names are free text. Both update as soon as you
 place a spool or change the profile (the page asks the plugin every 2 s, and the plugin reads the selection on the UI
 thread). If the selection cannot be read, the panel just says so. The panel only reads: OrcaSlicer's plugin API gives
 no way to change the selected filament preset, so it cannot select the spool's profile for you.
