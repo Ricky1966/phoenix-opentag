@@ -17,7 +17,10 @@ Per ogni tag:
   2. se l'UID non e' associato a nulla e i dati OpenPrintTag bastano, crea
      fornitore, filamento e bobina (riusando quelli esistenti) e associa il tag;
   3. imposta la bobina attiva in Moonraker (POST /server/spoolman/spool_id),
-     ma non durante una stampa o una pausa.
+     ma non durante una stampa o una pausa;
+  4. con --lane-data, pubblica la bobina attiva nel database di Moonraker
+     (namespace "lane_data"), da dove OrcaSlicer la legge con "Synchronize filament
+     list" e sceglie il profilo del filamento.
 
 Solo libreria standard: gira con il python3 di sistema della CB1.
 """
@@ -53,6 +56,9 @@ KNOWN_MATERIALS = {
     "PLA", "PETG", "PET", "ASA", "ABS", "TPU", "PA", "PA6", "PA11", "PA12", "PC", "PP",
     "PVA", "HIPS", "PVB", "PCTG", "PEEK", "PEI", "PEKK", "CPE", "FLEX",
 }
+
+LANE_NAMESPACE = "lane_data"  # namespace del database di Moonraker letto da OrcaSlicer
+ORCA_ID_FIELD = "orca_filament_id"  # campo extra (testo) del filamento in Spoolman
 
 log = logging.getLogger("phoenix-opentag")
 
@@ -140,12 +146,50 @@ def normalize_event(event: dict) -> dict:
     return event
 
 
+def extra_text(filament: dict, key: str) -> str | None:
+    """Valore di un campo extra di tipo testo. Spoolman lo salva come JSON: '"OFW29a9R"'."""
+    raw = (filament.get("extra") or {}).get(key)
+    if not isinstance(raw, str):
+        return None
+    try:
+        value = json.loads(raw)
+    except ValueError:
+        return None
+    return value.strip() if isinstance(value, str) and value.strip() else None
+
+
+def lane_from_spool(spool: dict, lane_index: int, id_field: str = ORCA_ID_FIELD) -> dict | None:
+    """Lane nel formato che OrcaSlicer legge da lane_data, o None se la bobina non basta.
+
+    Orca vuole "lane", "color", "material" e "filament_id" come stringhe; le temperature
+    come numeri (0 o assenti = non indicate). Senza materiale lo slot risulterebbe vuoto.
+    """
+    filament = spool.get("filament") or {}
+    material = filament.get("material")
+    if not isinstance(material, str) or not material.strip():
+        return None
+    lane: dict[str, Any] = {"lane": str(lane_index), "material": material.strip()}
+    color = filament.get("color_hex")
+    if isinstance(color, str) and re.fullmatch(r"[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?", color):
+        lane["color"] = "#" + color[:6].upper()
+    for source, target in (("settings_extruder_temp", "nozzle_temp"), ("settings_bed_temp", "bed_temp")):
+        value = filament.get(source)
+        if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+            lane[target] = value
+    orca_id = extra_text(filament, id_field)
+    if orca_id:
+        lane["filament_id"] = orca_id
+    return lane
+
+
 class Daemon:
     def __init__(self, args: argparse.Namespace) -> None:
         self.spoolman = Api(args.spoolman + "/api/v1")
         self.moonraker = Api(args.moonraker)
         self.create = not args.no_create
         self.activate = not args.no_activate
+        self.lane_data = getattr(args, "lane_data", False)
+        self.lane_index = getattr(args, "lane_index", 0)
         self.default_reader = args.reader_id
         self.lock = threading.Lock()
         self.last_event = None
@@ -252,6 +296,8 @@ class Daemon:
             result["active"], note = self._activate(result["spool_id"])
             if note:
                 result["note"] = note
+            if result["active"] and self.lane_data:
+                result["lane_data"] = self._publish_lane(result["spool_id"])
         return result
 
     # ───────────────────────── creazione in Spoolman ─────────────────────────
@@ -330,6 +376,23 @@ class Daemon:
             raise OSError("bobina non attivata: Moonraker non raggiungibile, riprovare") from e
         log.info("Bobina attiva in Moonraker: %s", spool_id)
         return True, None
+
+    def _publish_lane(self, spool_id: int) -> bool:
+        """Scrive la bobina attiva in lane_data. Un errore qui non annulla l'attivazione."""
+        try:
+            spool = self.spoolman.call("GET", f"/spool/{spool_id}")
+            lane = lane_from_spool(spool, self.lane_index)
+            if lane is None:
+                log.warning("lane_data: la bobina %s non ha un materiale, lane non scritta", spool_id)
+                return False
+            self.moonraker.call("POST", "/server/database/item", {
+                "namespace": LANE_NAMESPACE, "key": f"lane{self.lane_index}", "value": lane,
+            })
+        except (ApiError, OSError, KeyError, ValueError, TypeError) as e:
+            log.warning("lane_data non scritto per la bobina %s: %s", spool_id, e)
+            return False
+        log.info("lane_data aggiornato: %s", json.dumps(lane))
+        return True
 
     def handle_logged(self, event: dict, source: str) -> dict:
         try:
@@ -517,6 +580,10 @@ def main() -> int:
     p.add_argument("--klipper-config", default=os.path.expanduser("~/printer_data/config"))
     p.add_argument("--no-create", action="store_true", help="non creare bobine per tag sconosciuti")
     p.add_argument("--no-activate", action="store_true", help="non impostare la bobina attiva")
+    p.add_argument("--lane-data", action="store_true",
+                   help="pubblica la bobina attiva in Moonraker (lane_data) per la sincronizzazione filamenti di OrcaSlicer")
+    p.add_argument("--lane-index", type=int, default=0,
+                   help="indice dello slot (estrusore) per --lane-data, 0 per un solo estrusore")
     p.add_argument("-v", "--verbose", action="store_true")
     args = p.parse_args()
 
@@ -526,6 +593,8 @@ def main() -> int:
     )
     if not READER_ID_RE.match(args.reader_id):
         p.error("--reader-id: solo [A-Za-z0-9._:-], 1-64 caratteri")
+    if args.lane_index < 0:
+        p.error("--lane-index: deve essere >= 0")
     if args.listen == "off" and not args.serial:
         p.error("serve almeno uno tra --listen e --serial")
 

@@ -124,8 +124,23 @@ An activation refused during `printing`/`paused` is a final outcome: it is not q
 1. it calls `POST /api/v1/tag/scan` on Spoolman (≥ 0.27.0), which resolves the UID to the linked spool;
 2. if the UID is unknown and the tag carries at least `material` and `density`, it creates the spool, reusing the vendor (`brand`) and filament (name, vendor, colour, diameter) if they already exist, and links the tag to it;
 3. it sets the active spool with `POST /server/spoolman/spool_id` on Moonraker, **but not if the printer is `printing` or `paused`**.
+4. with `--lane-data` (off by default), it also publishes the active spool to Moonraker's `lane_data` database namespace, see [Loading the filament profile in OrcaSlicer](#loading-the-filament-profile-in-orcaslicer-optional).
 
-Only consecutive identical events handled successfully within 5 s are deduplicated; A → B → A reactivates A. Temporary errors are not remembered as successes. Useful options: `--no-create`, `--no-activate`, `-v`.
+Only consecutive identical events handled successfully within 5 s are deduplicated; A → B → A reactivates A. Temporary errors are not remembered as successes. Useful options: `--no-create`, `--no-activate`, `--lane-data`, `-v`.
+
+### Loading the filament profile in OrcaSlicer (optional)
+
+> **Experimental, not yet tested with OrcaSlicer.** Unreleased: the `filament_id` part needs a small OrcaSlicer patch (`orca-patches/0003-moonraker-lane-data-filament-id.patch` in the `sv08-ultimate-build-dev` repository, not merged upstream). Without it, Orca still reads the material, colour and temperatures but picks a generic profile.
+
+With `--lane-data`, after the spool is activated the daemon writes one lane to Moonraker's database (`POST /server/database/item`, namespace `lane_data`, key `lane<N>`, with `N` from `--lane-index`, default `0`):
+
+```json
+{"lane": "0", "material": "PLA", "color": "#A1B2C3", "nozzle_temp": 215, "bed_temp": 60, "filament_id": "OFW29a9R"}
+```
+
+It is built from the Spoolman filament: `material`, `color_hex`, `settings_extruder_temp`, `settings_bed_temp`, and an optional **text** extra field `orca_filament_id` (create it in Spoolman under Settings → Extra fields → Filament) holding the `filament_id` of the OrcaSlicer profile. The lane is skipped if the filament has no material. A failure here is logged and never undoes the activation. Nothing is written while the printer is `printing` or `paused`, because the activation is skipped then.
+
+In OrcaSlicer, press *Synchronize filament list* in the sidebar to load the profile: nothing changes by itself. To read what Orca will see: `curl -s "http://localhost:7125/server/database/item?namespace=lane_data"`.
 
 ```bash
 # manual test on Phoenix

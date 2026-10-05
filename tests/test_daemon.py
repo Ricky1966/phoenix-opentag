@@ -18,17 +18,22 @@ spec.loader.exec_module(m)
 A, B = 'E0040108660715E3', 'E004010866071917'
 
 class Spoolman:
-    def __init__(self): self.calls = []
+    def __init__(self): self.calls = []; self.spools = {}
     def call(self, method, path, body=None, **kwargs):
         self.calls.append((method, path, body))
         if path == '/tag/scan':
             return dict(uid=body['uid'], matched_spool_id=1 if body['uid']==A else 2, matched_filament_id=None)
+        if method=='GET' and path.startswith('/spool/'):
+            return self.spools[int(path.rsplit('/',1)[1])]
         raise AssertionError((method, path))
 
 class Moonraker:
-    def __init__(self): self.active=None; self.state='standby'; self.idle='Ready'; self.offline=False; self.writes=[]
+    def __init__(self): self.active=None; self.state='standby'; self.idle='Ready'; self.offline=False; self.writes=[]; self.lanes=[]; self.lane_error=False
     def call(self, method, path, body=None, **kwargs):
         if self.offline: raise OSError('offline')
+        if path=='/server/database/item':
+            if self.lane_error: raise OSError('database error')
+            self.lanes.append(body); return None
         if method=='GET': return {'result':{'status':{'print_stats':{'state':self.state},'idle_timeout':{'state':self.idle}}}}
         self.active=body['spool_id']; self.writes.append(self.active)
 
@@ -124,3 +129,65 @@ class Tests(unittest.TestCase):
         self.assertTrue(all(path=='/tag/scan' for _,path,_ in self.d.spoolman.calls))
 
 if __name__=='__main__': unittest.main()
+
+
+SPOOL1 = {'id': 1, 'filament': {
+    'material': 'PLA', 'color_hex': 'a1b2c3', 'settings_extruder_temp': 215, 'settings_bed_temp': 60,
+    'extra': {'orca_filament_id': '"OFW29a9R"'}}}
+
+class LaneDataTests(unittest.TestCase):
+    def make(self, **flags):
+        args = dict(spoolman='http://unused', moonraker='http://unused', no_create=False, no_activate=False,
+                    reader_id='test', lane_data=True, lane_index=0)
+        args.update(flags)
+        d = m.Daemon(argparse.Namespace(**args))
+        d.spoolman = Spoolman(); d.moonraker = Moonraker()
+        d.spoolman.spools = {1: SPOOL1, 2: {'id': 2, 'filament': {'material': 'PETG'}}}
+        return d
+
+    def test_lane_from_spool_formats_for_orca(self):
+        lane = m.lane_from_spool(SPOOL1, 0)
+        self.assertEqual(lane, {'lane': '0', 'material': 'PLA', 'color': '#A1B2C3',
+                                'nozzle_temp': 215, 'bed_temp': 60, 'filament_id': 'OFW29a9R'})
+        self.assertIsInstance(lane['lane'], str)  # Orca reads "lane" as a string
+
+    def test_lane_without_optional_fields(self):
+        self.assertEqual(m.lane_from_spool(self.make().spoolman.spools[2], 1), {'lane': '1', 'material': 'PETG'})
+
+    def test_lane_needs_material(self):
+        self.assertIsNone(m.lane_from_spool({'filament': {'color_hex': 'ffffff'}}, 0))
+        self.assertIsNone(m.lane_from_spool({}, 0))
+
+    def test_bad_extra_values_are_ignored(self):
+        for raw in ('not json', '42', '""', None):
+            spool = {'filament': {'material': 'PLA', 'extra': {'orca_filament_id': raw}}}
+            self.assertNotIn('filament_id', m.lane_from_spool(spool, 0))
+
+    def test_activation_publishes_lane(self):
+        d = self.make()
+        r = d.handle({'uid': A})
+        self.assertTrue(r['active'] and r['lane_data'])
+        self.assertEqual(d.moonraker.lanes, [{'namespace': 'lane_data', 'key': 'lane0',
+                                              'value': m.lane_from_spool(SPOOL1, 0)}])
+
+    def test_disabled_by_default(self):
+        d = self.make(lane_data=False)
+        self.assertNotIn('lane_data', d.handle({'uid': A}))
+        self.assertEqual(d.moonraker.lanes, [])
+
+    def test_not_published_while_printing(self):
+        d = self.make(); d.moonraker.state = 'printing'
+        self.assertFalse(d.handle({'uid': A})['active'])
+        self.assertEqual(d.moonraker.lanes, [])
+
+    def test_lane_failure_keeps_activation(self):
+        d = self.make(); d.moonraker.lane_error = True
+        r = d.handle({'uid': A})
+        self.assertTrue(r['active'])
+        self.assertFalse(r['lane_data'])
+        self.assertEqual(d.moonraker.writes, [1])
+
+    def test_spool_without_material_is_not_published(self):
+        d = self.make(); d.spoolman.spools[1] = {'id': 1, 'filament': {}}
+        self.assertFalse(d.handle({'uid': A})['lane_data'])
+        self.assertEqual(d.moonraker.lanes, [])
