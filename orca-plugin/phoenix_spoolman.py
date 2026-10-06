@@ -41,8 +41,8 @@ import encodings.idna  # noqa: F401
 import orca
 
 DEFAULT_CONFIG = {
-    "moonraker_url": "http://192.168.1.36:7125",
-    "spoolman_url": "http://192.168.1.36:7912",
+    "moonraker_url": "http://phoenix.local:7125",
+    "spoolman_url": "http://phoenix.local:7912",
     "timeout_seconds": 5,
     # Spool check only. "block" stops the export with an error dialog (OrcaSlicer aborts the export when
     # a post-processing plugin fails, so there is no softer "warning"); "ignore" exports anyway and only

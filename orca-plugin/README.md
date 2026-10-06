@@ -103,7 +103,7 @@ Not done yet: writing a filament preset from the active spool.
 Plugins window → select the plugin → **Config** tab → choose **Active spool** or **Spool check** (each has its own configuration; `on_mismatch` and `nozzle_temp_tolerance` only matter for **Spool check**). Defaults:
 
 ```json
-{"moonraker_url": "http://192.168.1.36:7125", "spoolman_url": "http://192.168.1.36:7912", "timeout_seconds": 5,
+{"moonraker_url": "http://phoenix.local:7125", "spoolman_url": "http://phoenix.local:7912", "timeout_seconds": 5,
  "on_mismatch": "block", "nozzle_temp_tolerance": 25, "poll_seconds": 3}
 ```
 

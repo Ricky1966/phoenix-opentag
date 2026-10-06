@@ -14,7 +14,7 @@ constexpr unsigned long NFC_POLL_MS = 1500;  // cadenza polling lettore NFC
 // Invio letture al demone su Phoenix: valori iniziali, modificabili da seriale
 // (comandi mode/host/reader, vedi transport.h) e poi conservati in flash.
 #define TRANSPORT_DEFAULT_MODE   "usb"                        // usb | wifi | auto
-#define TRANSPORT_DEFAULT_HOST   "http://192.168.1.36:7913"   // demone su Phoenix
+#define TRANSPORT_DEFAULT_HOST   "http://phoenix.local:7913"    // demone su Phoenix: imposta il tuo con il comando seriale host
 #define TRANSPORT_DEFAULT_READER "phoenix-opentag"
 
 // Nome di rete per l'OTA: phoenix-opentag.local (password OTA_PASSWORD in secrets.h)
