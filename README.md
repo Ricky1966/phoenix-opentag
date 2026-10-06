@@ -228,3 +228,5 @@ lib/PN5180-Library/  Vendored PN5180 library (from Odin-ESP32)
 Distributed under the GNU Affero General Public License v3.0.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
+
+The repository includes third-party code and data with their own licences (a modified copy of the PN5180 Library, LGPL-2.1-or-later, and OpenPrintTag test data, MIT): see [NOTICE.md](NOTICE.md).

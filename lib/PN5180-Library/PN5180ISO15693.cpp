@@ -1,3 +1,6 @@
+// MODIFIED: this file differs from PN5180 Library 1.8.1 by Andreas Trappmann (LGPL-2.1-or-later);
+// changed between 2026-05-10 and 2026-09-30 for Phoenix OpenTag. See NOTICE.md in the repository root.
+
 // NAME: PN5180ISO15693.h
 //
 // DESC: ISO15693 protocol on NXP Semiconductors PN5180 module for Arduino.
