@@ -151,6 +151,20 @@ class LaneDataTests(unittest.TestCase):
                                 'nozzle_temp': 215, 'bed_temp': 60, 'filament_id': 'OFW29a9R'})
         self.assertIsInstance(lane['lane'], str)  # Orca reads "lane" as a string
 
+    def test_lane_name_and_time(self):
+        spool = {'filament': {'material': 'PLA', 'name': 'The Filament PLA', 'vendor': {'name': 'Spectrum'}}}
+        lane = m.lane_from_spool(spool, 0, now=1790000000.9)
+        self.assertEqual(lane['name'], 'Spectrum The Filament PLA')
+        self.assertEqual(lane['updated'], 1790000000)
+        only_name = m.lane_from_spool({'filament': {'material': 'PLA', 'name': 'PolyTerra'}}, 0)
+        self.assertEqual(only_name['name'], 'PolyTerra')
+        self.assertNotIn('updated', only_name)
+
+    def test_published_lane_has_a_read_time(self):
+        d = self.make()
+        d.handle({'uid': A})
+        self.assertIsInstance(d.moonraker.lanes[0]['value']['updated'], int)
+
     def test_lane_without_optional_fields(self):
         self.assertEqual(m.lane_from_spool(self.make().spoolman.spools[2], 1), {'lane': '1', 'material': 'PETG'})
 
@@ -167,8 +181,12 @@ class LaneDataTests(unittest.TestCase):
         d = self.make()
         r = d.handle({'uid': A})
         self.assertTrue(r['active'] and r['lane_data'])
-        self.assertEqual(d.moonraker.lanes, [{'namespace': 'lane_data', 'key': 'lane0',
-                                              'value': m.lane_from_spool(SPOOL1, 0)}])
+        self.assertEqual(len(d.moonraker.lanes), 1)
+        written = d.moonraker.lanes[0]
+        self.assertEqual((written['namespace'], written['key']), ('lane_data', 'lane0'))
+        value = dict(written['value'])
+        self.assertIsInstance(value.pop('updated'), int)  # the read time: checked on its own
+        self.assertEqual(value, m.lane_from_spool(SPOOL1, 0))
 
     def test_disabled_by_default(self):
         d = self.make(lane_data=False)

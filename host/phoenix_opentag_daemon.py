@@ -158,11 +158,14 @@ def extra_text(filament: dict, key: str) -> str | None:
     return value.strip() if isinstance(value, str) and value.strip() else None
 
 
-def lane_from_spool(spool: dict, lane_index: int, id_field: str = ORCA_ID_FIELD) -> dict | None:
+def lane_from_spool(spool: dict, lane_index: int, id_field: str = ORCA_ID_FIELD,
+                    now: float | None = None) -> dict | None:
     """Lane nel formato che OrcaSlicer legge da lane_data, o None se la bobina non basta.
 
     Orca vuole "lane", "color", "material" e "filament_id" come stringhe; le temperature
     come numeri (0 o assenti = non indicate). Senza materiale lo slot risulterebbe vuoto.
+    "name" (produttore e nome del filamento) e "updated" (secondi UNIX della lettura) sono
+    informativi: Orca li mostra dopo la sincronizzazione, cosi' si vede quale tag e' stato letto.
     """
     filament = spool.get("filament") or {}
     material = filament.get("material")
@@ -179,6 +182,13 @@ def lane_from_spool(spool: dict, lane_index: int, id_field: str = ORCA_ID_FIELD)
     orca_id = extra_text(filament, id_field)
     if orca_id:
         lane["filament_id"] = orca_id
+    vendor = filament.get("vendor") or {}
+    label = " ".join(part.strip() for part in (vendor.get("name"), filament.get("name"))
+                     if isinstance(part, str) and part.strip())
+    if label:
+        lane["name"] = label
+    if now is not None:
+        lane["updated"] = int(now)
     return lane
 
 
@@ -381,7 +391,7 @@ class Daemon:
         """Scrive la bobina attiva in lane_data. Un errore qui non annulla l'attivazione."""
         try:
             spool = self.spoolman.call("GET", f"/spool/{spool_id}")
-            lane = lane_from_spool(spool, self.lane_index)
+            lane = lane_from_spool(spool, self.lane_index, now=time.time())
             if lane is None:
                 log.warning("lane_data: la bobina %s non ha un materiale, lane non scritta", spool_id)
                 return False

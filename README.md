@@ -140,6 +140,8 @@ With `--lane-data`, after the spool is activated the daemon writes one lane to M
 
 It is built from the Spoolman filament: `material`, `color_hex`, `settings_extruder_temp`, `settings_bed_temp`, and an optional **text** extra field `orca_filament_id` (create it in Spoolman under Settings → Extra fields → Filament) holding the `filament_id` of the OrcaSlicer profile. The lane is skipped if the filament has no material. A failure here is logged and never undoes the activation. Nothing is written while the printer is `printing` or `paused`, because the activation is skipped then.
 
+The lane also carries two informational fields that OrcaSlicer ignores: `name` (vendor and filament name) and `updated` (UNIX seconds of the read), so a tool can show which tag the lane comes from.
+
 In OrcaSlicer, press *Synchronize filament list* in the sidebar to load the profile: nothing changes by itself. To read what Orca will see: `curl -s "http://localhost:7125/server/database/item?namespace=lane_data"`.
 
 ```bash
