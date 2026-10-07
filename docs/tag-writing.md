@@ -199,7 +199,7 @@ environment (for example `EnvironmentFile=`), never in the repository.
 `PHOENIX_TAG_BACKUP_DIR` changes the backup directory (default `~/phoenix-tag-backups`).
 
 The `Ricky1966/Spoolman` fork requires `SPOOLMAN_WRITER_TOKEN` with the same value and
-`SPOOLMAN_WRITER_URL=http://192.168.1.36:7913` (an address reachable from the
+`SPOOLMAN_WRITER_URL=http://<phoenix-ip>:7913` (an address reachable from the
 container). Configure a single Spoolman process and a single USB reader. The complete
 documentation is `docs/phoenix-writer.md` in the fork.
 

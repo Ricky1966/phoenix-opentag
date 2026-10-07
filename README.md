@@ -100,7 +100,7 @@ The mode is chosen from the serial port (`pio device monitor`, 115200) and is ke
 | `mode usb` | every read goes out on the serial port as a `PHOENIX-TAG {json}` line, read by the daemon (default) |
 | `mode wifi` | HTTP `POST <host>/tag` with the same JSON |
 | `mode auto` | WiFi if connected and the POST succeeds, otherwise USB |
-| `host http://192.168.1.36:7913` | address of the daemon on Phoenix |
+| `host http://<phoenix-ip>:7913` | address of the daemon on Phoenix |
 | `reader <id>` | `reader_id` shown in Spoolman (default `phoenix-opentag`) |
 | `test` | resend the last tag read |
 | `reboot` | restart, required after `mode` |
