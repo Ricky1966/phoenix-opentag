@@ -126,6 +126,8 @@ class Servers:
                     body, code = {"result": {"spool_id": outer.active}}, 200
                 elif self.path == "/api/v1/spool/4":
                     body, code = outer.spool, 200
+                elif self.path == "/api/v1/spool":
+                    body, code = [outer.spool], 200
                 else:
                     body, code = {"error": "nope"}, 404
                 raw = json.dumps(body).encode()
@@ -353,6 +355,74 @@ class SpoolNameOutputTests(unittest.TestCase):
         self.assertNotIn("; active_spool = Sovol Sovol PETG Nero", lines)
 
 
+
+class InventoryTests(unittest.TestCase):
+    def setUp(self):
+        self.plugin, _ = load_plugin()
+        self.config = {
+            "spoolman_url": "http://127.0.0.1:7912",
+            "timeout_seconds": 2,
+        }
+
+    def test_inventory_reads_spoolman_directly(self):
+        spools = [{"id": 1}, {"id": 6}]
+        with mock.patch.object(
+            self.plugin, "get_json", return_value=spools
+        ) as request:
+            result = self.plugin.fetch_spool_inventory(self.config)
+
+        self.assertEqual(result, spools)
+        request.assert_called_once_with(
+            "http://127.0.0.1:7912/api/v1/spool", 2.0
+        )
+
+    def test_inventory_rejects_invalid_response(self):
+        with mock.patch.object(
+            self.plugin, "get_json", return_value={"error": "invalid"}
+        ):
+            with self.assertRaises(self.plugin.PhoenixError):
+                self.plugin.fetch_spool_inventory(self.config)
+
+
+
+
+    def test_inventory_payload_returns_spools(self):
+        spools = [{
+            "id": 6,
+            "archived": False,
+            "remaining_weight": 529.8,
+            "filament": {
+                "name": "Sovol PETG Nero",
+                "vendor": {"name": "Sovol"},
+                "material": "PETG",
+            },
+        }]
+        with mock.patch.object(
+            self.plugin, "fetch_spool_inventory", return_value=spools
+        ):
+            result = self.plugin.inventory_payload(self.config)
+
+        self.assertEqual(result["type"], "inventory")
+        self.assertTrue(result["ok"])
+        self.assertEqual(len(result["spools"]), 1)
+        self.assertEqual(result["spools"][0]["id"], 6)
+        self.assertEqual(result["spools"][0]["remaining"], 529.8)
+        self.assertFalse(result["spools"][0]["archived"])
+
+    def test_inventory_payload_handles_spoolman_error(self):
+        with mock.patch.object(
+            self.plugin,
+            "fetch_spool_inventory",
+            side_effect=self.plugin.PhoenixError("Spoolman offline"),
+        ):
+            result = self.plugin.inventory_payload(self.config)
+
+        self.assertEqual(result["type"], "inventory")
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error"], "Spoolman offline")
+
+
+
 class PanelTests(unittest.TestCase):
     def setUp(self):
         self.plugin, self.orca = load_plugin()
@@ -384,8 +454,10 @@ class PanelTests(unittest.TestCase):
         self.cap.execute()
         panel = self.orca.panels[0]
         panel.kw["on_message"]({"type": "ready"})
-        self.assertTrue(self.wait_for(lambda: panel.posts))
-        state = panel.posts[0]
+        self.assertTrue(self.wait_for(
+            lambda: any(m.get("type") == "state" for m in panel.posts)
+        ))
+        state = next(m for m in panel.posts if m.get("type") == "state")
         self.assertTrue(state["ok"])
         self.assertEqual(state["spool"]["id"], 4)
         self.assertEqual(state["spool"]["vendor"], "Polymaker")
@@ -396,10 +468,22 @@ class PanelTests(unittest.TestCase):
         self.cap.execute()
         panel = self.orca.panels[0]
         panel.kw["on_message"]({"type": "ready"})
-        self.assertTrue(self.wait_for(lambda: panel.posts))
+        self.assertTrue(self.wait_for(
+            lambda: any(
+                m.get("type") == "state" and
+                (m.get("spool") or {}).get("id") == 4
+                for m in panel.posts
+            )
+        ))
         self.servers.active = None
         panel.kw["on_message"]({"type": "refresh"})
-        self.assertTrue(self.wait_for(lambda: panel.posts[-1]["spool"] is None))
+        self.assertTrue(self.wait_for(
+            lambda: any(
+                m.get("type") == "state" and
+                m.get("ok") and m.get("spool") is None
+                for m in panel.posts
+            )
+        ))
 
     def test_errors_are_shown_not_raised(self):
         self.cap.config = json.dumps({"moonraker_url": "http://127.0.0.1:9", "timeout_seconds": 1})
@@ -415,6 +499,173 @@ class PanelTests(unittest.TestCase):
             payload = self.plugin.panel_payload(self.cap._config())
         self.assertFalse(payload["ok"])
         self.assertIn("RuntimeError", payload["error"])
+
+    def test_inventory_and_both_pollers_stop_on_close(self):
+        self.cap.execute()
+        panel = self.orca.panels[0]
+        panel.kw["on_message"]({"type": "ready"})
+
+        self.assertTrue(self.wait_for(
+            lambda: any(
+                m.get("type") == "state" and m.get("ok")
+                for m in panel.posts
+            )
+        ))
+        self.assertTrue(self.wait_for(
+            lambda: any(
+                m.get("type") == "inventory"
+                and m.get("ok")
+                and m.get("spools", [{}])[0].get("id") == 4
+                for m in panel.posts
+            )
+        ))
+
+        active_thread = self.plugin.PANEL.thread
+        inventory_thread = self.plugin.PANEL.inventory_thread
+
+        self.assertTrue(active_thread.is_alive())
+        self.assertTrue(inventory_thread.is_alive())
+
+        panel.kw["on_close"]()
+        active_thread.join(3)
+        inventory_thread.join(3)
+
+        self.assertFalse(active_thread.is_alive())
+        self.assertFalse(inventory_thread.is_alive())
+
+
+    def test_refresh_updates_active_spool_and_inventory(self):
+        self.cap.execute()
+        panel = self.orca.panels[0]
+        panel.kw["on_message"]({"type": "ready"})
+
+        self.assertTrue(self.wait_for(
+            lambda: {"state", "inventory"}.issubset(
+                {m.get("type") for m in panel.posts}
+            )
+        ))
+
+        self.servers.spool = dict(
+            self.servers.spool, remaining_weight=321.0
+        )
+        before = len(panel.posts)
+        panel.kw["on_message"]({"type": "refresh"})
+
+        self.assertTrue(self.wait_for(
+            lambda: any(
+                m.get("type") == "state"
+                and m.get("ok")
+                and (m.get("spool") or {}).get("remaining") == 321.0
+                for m in panel.posts[before:]
+            )
+        ))
+        self.assertTrue(self.wait_for(
+            lambda: any(
+                m.get("type") == "inventory"
+                and m.get("ok")
+                and any(
+                    s.get("remaining") == 321.0
+                    for s in m.get("spools", [])
+                )
+                for m in panel.posts[before:]
+            )
+        ))
+
+
+    def test_immediate_reopen_restores_both_pollers(self):
+        self.cap.execute()
+        first = self.orca.panels[0]
+        first.kw["on_message"]({"type": "ready"})
+
+        self.assertTrue(self.wait_for(
+            lambda: {"state", "inventory"}.issubset(
+                {m.get("type") for m in first.posts}
+            )
+        ))
+
+        first.kw["on_close"]()
+        self.assertEqual(self.cap.execute().status, "success")
+        second = self.orca.panels[1]
+        second.kw["on_message"]({"type": "ready"})
+
+        self.assertTrue(self.wait_for(
+            lambda: {"state", "inventory"}.issubset(
+                {
+                    m.get("type") for m in second.posts
+                    if m.get("ok")
+                }
+            )
+        ))
+        self.assertEqual(len(self.orca.panels), 2)
+
+
+    def test_reopen_while_inventory_request_is_blocked(self):
+        entered = threading.Event()
+        release = threading.Event()
+        original = self.plugin.inventory_payload
+
+        def slow_inventory(config):
+            if not entered.is_set():
+                entered.set()
+                release.wait(10)
+            return original(config)
+
+        old_thread = None
+        try:
+            with mock.patch.object(
+                self.plugin, "inventory_payload",
+                side_effect=slow_inventory
+            ):
+                self.cap.execute()
+                first = self.orca.panels[0]
+                first.kw["on_message"]({"type": "ready"})
+                self.assertTrue(entered.wait(2))
+
+                old_thread = self.plugin.PANEL.inventory_thread
+                first.kw["on_close"]()
+
+                self.assertEqual(self.cap.execute().status, "success")
+                second = self.orca.panels[1]
+                second.kw["on_message"]({"type": "ready"})
+
+                self.assertIsNot(
+                    self.plugin.PANEL.inventory_thread, old_thread
+                )
+                self.assertTrue(self.wait_for(
+                    lambda: any(
+                        m.get("type") == "inventory" and m.get("ok")
+                        for m in second.posts
+                    )
+                ))
+        finally:
+            release.set()
+            if old_thread is not None:
+                old_thread.join(3)
+
+
+    def test_reopen_creates_independent_session_events(self):
+        self.cap.execute()
+        first = self.orca.panels[0]
+        first.kw["on_message"]({"type": "ready"})
+
+        state = self.plugin.PANEL
+        old_stop = state.stop
+        old_wake = state.wake
+        old_inventory_wake = state.inventory_wake
+
+        first.kw["on_close"]()
+        self.assertTrue(old_stop.is_set())
+
+        self.assertEqual(self.cap.execute().status, "success")
+        second = self.orca.panels[1]
+        second.kw["on_message"]({"type": "ready"})
+
+        self.assertIsNot(state.stop, old_stop)
+        self.assertIsNot(state.wake, old_wake)
+        self.assertIsNot(state.inventory_wake, old_inventory_wake)
+        self.assertFalse(state.stop.is_set())
+        self.assertTrue(old_stop.is_set())
+
 
     def test_closing_the_panel_stops_the_poller(self):
         self.cap.execute()

@@ -6,7 +6,7 @@
 # name = "Phoenix Spoolman"
 # description = "Shows the spool that the Phoenix reader activated and checks it against the exported G-code (Moonraker + Spoolman). Standard library only."
 # author = "Ricky1966"
-# version = "0.5.1"
+# version = "0.6.0"
 # ///
 """Phoenix Spoolman plugin for OrcaSlicer (Python plugin API, nightly builds / releases after 2.4.2).
 
@@ -51,6 +51,7 @@ DEFAULT_CONFIG = {
     "nozzle_temp_tolerance": 25,
     # Active spool panel only: how often the panel asks Moonraker which spool is active.
     "poll_seconds": 3,
+    "inventory_poll_seconds": 30,
 }
 CONFIG_TAIL_BYTES = 512 * 1024  # Orca writes the settings block at the end of the G-code
 
@@ -129,6 +130,25 @@ def fetch_active_spool(config):
         return None
     base = config.get("spoolman_url", DEFAULT_CONFIG["spoolman_url"]).rstrip("/")
     return get_json("%s/api/v1/spool/%d" % (base, spool_id), timeout)
+
+
+
+def fetch_spool_inventory(config):
+    """Read the spool inventory directly from Spoolman."""
+    timeout = float(config.get(
+        "timeout_seconds", DEFAULT_CONFIG["timeout_seconds"]
+    ))
+    base = config.get(
+        "spoolman_url", DEFAULT_CONFIG["spoolman_url"]
+    ).rstrip("/")
+    spools = get_json(base + "/api/v1/spool", timeout)
+
+    if not isinstance(spools, list):
+        raise PhoenixError(
+            "Unexpected Spoolman inventory response: expected a list"
+        )
+    return spools
+
 
 
 def active_spool_report(config):
@@ -300,6 +320,30 @@ def spool_summary(spool):
     }
 
 
+
+def inventory_payload(config):
+    """Build an inventory message independently of the active spool."""
+    try:
+        spools = fetch_spool_inventory(config)
+        items = []
+        for spool in spools:
+            if not isinstance(spool, dict):
+                raise PhoenixError("Unexpected Spoolman inventory item")
+            item = spool_summary(spool)
+            item["archived"] = bool(spool.get("archived"))
+            items.append(item)
+        return {"type": "inventory", "ok": True, "spools": items}
+    except PhoenixError as exc:
+        return {"type": "inventory", "ok": False, "error": str(exc)}
+    except Exception as exc:
+        return {
+            "type": "inventory",
+            "ok": False,
+            "error": "%s: %s" % (type(exc).__name__, exc),
+        }
+
+
+
 def panel_payload(config):
     """What the panel displays right now. Never raises: a failure becomes {"ok": False, "error": ...}."""
     try:
@@ -422,6 +466,37 @@ dt { color: var(--orca-muted); } dd { margin: 0; word-break: break-all; }
 .warn { color: #d9a441; font-size: 12px; margin: 8px 0; }
 .verdict { margin: 10px 0; padding: 8px; border: 1px solid var(--orca-border); border-radius: 8px; font-size: 12px; }
 button { margin-top: 6px; }
+
+#inventory-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0;
+}
+#inventory-controls input,
+#inventory-controls select {
+  flex: 1 1 120px;
+  min-width: 0;
+  padding: 6px;
+  border: 1px solid var(--orca-border);
+  border-radius: 5px;
+  color: var(--orca-fg);
+  background: var(--orca-bg);
+}
+.inventory-item {
+  padding: 9px 0;
+  border-bottom: 1px solid var(--orca-border);
+  font-size: 12px;
+}
+.inventory-item .name {
+  font-size: 12px;
+}
+.inventory-item .muted {
+  margin-top: 3px;
+}
+.inventory-empty {
+  opacity: 0.6;
+}
 </style></head><body>
 <h3>Active spool (Phoenix)</h3>
 <div id="empty" class="muted">Waiting for the first reading...</div>
@@ -434,6 +509,20 @@ button { margin-top: 6px; }
 <div id="err" class="err" hidden></div>
 <div class="muted" id="when"></div>
 <button id="refresh">Refresh now</button>
+
+<hr style="margin:16px 0; border:0; border-top:1px solid var(--orca-border);">
+<h3>Spoolman inventory</h3>
+<div id="inventory-status" class="muted">Waiting for inventory...</div>
+<div id="inventory-controls">
+  <input id="inventory-search" type="search"
+         placeholder="Search spools..." aria-label="Search inventory">
+  <select id="inventory-material" aria-label="Filter by material">
+    <option value="">All materials</option>
+  </select>
+</div>
+<div id="inventory-list"></div>
+<div id="inventory-error" class="err" hidden></div>
+
 <script>
 const $ = (id) => document.getElementById(id);
 function row(k, v) {
@@ -488,7 +577,104 @@ function verdict(m) {
   }
   box.append(res);
 }
-orca.onMessage((m) => { if (m && m.type === 'state') render(m); });
+let inventorySpools = [];
+
+function renderInventoryList() {
+  const query = $('inventory-search').value.trim().toLowerCase();
+  const material = $('inventory-material').value;
+  const list = $('inventory-list');
+  list.replaceChildren();
+
+  const visible = inventorySpools.filter(s => {
+    const searchable = [s.id, s.vendor, s.name, s.material]
+      .filter(v => v !== null && v !== undefined)
+      .join(' ').toLowerCase();
+    return searchable.includes(query) &&
+      (!material || s.material === material);
+  });
+
+  for (const s of visible) {
+    const item = document.createElement('div');
+    item.className = 'inventory-item';
+
+    const name = document.createElement('div');
+    name.className = 'name';
+
+    const vendor = String(s.vendor || '').trim();
+    const product = String(s.name || '').trim();
+    const fullName = vendor &&
+      product.toLowerCase().startsWith(vendor.toLowerCase() + ' ')
+        ? product : [vendor, product].filter(Boolean).join(' ');
+
+    name.textContent = '#' + s.id + ' ' + fullName;
+
+    const details = document.createElement('div');
+    details.className = 'muted';
+
+    const weight = typeof s.remaining === 'number' &&
+      Number.isFinite(s.remaining)
+        ? Math.round(s.remaining) + ' g'
+        : 'Weight unknown';
+
+    const exhausted = typeof s.remaining === 'number' &&
+      s.remaining <= 0;
+
+    details.textContent = [
+      s.material || 'Unknown material',
+      weight,
+      s.archived ? 'Archived' : exhausted ? 'Empty' : ''
+    ].filter(Boolean).join(' · ');
+
+    if (exhausted || s.archived) item.classList.add('inventory-empty');
+
+    item.append(name, details);
+    list.append(item);
+  }
+
+  if (!visible.length) {
+    const empty = document.createElement('div');
+    empty.className = 'muted';
+    empty.textContent = 'No matching spools.';
+    list.append(empty);
+  }
+}
+
+function renderInventory(m) {
+  $('inventory-error').hidden = !!m.ok;
+  $('inventory-error').textContent = m.ok ? '' : (m.error || 'Inventory error');
+
+  if (!m.ok) {
+    $('inventory-status').textContent = 'Inventory unavailable';
+    return;
+  }
+
+  inventorySpools = Array.isArray(m.spools) ? m.spools : [];
+  $('inventory-status').textContent =
+    inventorySpools.length + ' spools in Spoolman';
+
+  const select = $('inventory-material');
+  const previous = select.value;
+  const materials = [...new Set(
+    inventorySpools.map(s => s.material).filter(Boolean)
+  )].sort();
+
+  select.replaceChildren(new Option('All materials', ''));
+  for (const material of materials) {
+    select.add(new Option(material, material));
+  }
+  select.value = materials.includes(previous) ? previous : '';
+
+  renderInventoryList();
+}
+
+$('inventory-search').addEventListener('input', renderInventoryList);
+$('inventory-material').addEventListener('change', renderInventoryList);
+
+orca.onMessage((m) => {
+  if (!m) return;
+  if (m.type === 'state') render(m);
+  if (m.type === 'inventory') renderInventory(m);
+});
 $('refresh').onclick = () => orca.postMessage({ type: 'refresh' });
 orca.postMessage({ type: 'ready' });     // ask for the first data: a post right after creation can be dropped
 setInterval(() => orca.postMessage({ type: 'selection' }), 2000);  // the plugin reads the selected profile on the UI thread
@@ -503,6 +689,8 @@ class PanelState:
         self.stop = threading.Event()
         self.wake = threading.Event()
         self.thread = None
+        self.inventory_thread = None
+        self.inventory_wake = threading.Event()
         self.last = None            # latest network state (without the selection)
         self.selected = None        # latest selected profile, read on the UI thread
         self.config = dict(DEFAULT_CONFIG)
@@ -512,15 +700,31 @@ class PanelState:
 
     def start(self, config):
         self.config = dict(config)
-        self.stop.clear()
-        self.wake.set()                      # read straight away
+        if self.stop.is_set():
+            # New panel session: old workers retain their stopped event.
+            self.stop = threading.Event()
+            self.wake = threading.Event()
+            self.inventory_wake = threading.Event()
+            self.thread = None
+            self.inventory_thread = None
+        self.wake.set()
+        self.inventory_wake.set()                      # read straight away
         if self.thread is None or not self.thread.is_alive():
-            self.thread = threading.Thread(target=self._loop, name="phoenix-spoolman-panel", daemon=True)
+            self.thread = threading.Thread(target=self._loop, args=(self.stop, self.wake), name="phoenix-spoolman-panel", daemon=True)
             self.thread.start()
+        if self.inventory_thread is None or not self.inventory_thread.is_alive():
+            self.inventory_thread = threading.Thread(
+                target=self._inventory_loop,
+                args=(self.stop, self.inventory_wake),
+                name="phoenix-spoolman-inventory",
+                daemon=True,
+            )
+            self.inventory_thread.start()
 
     def close(self):
         self.stop.set()
         self.wake.set()
+        self.inventory_wake.set()
         self.panel = None
         self.last = None
         self.selected = None
@@ -534,12 +738,12 @@ class PanelState:
     def message(self):
         return with_selection(self.last, self.selected, self.tolerance())
 
-    def _loop(self):
-        while not self.stop.is_set():
-            self.wake.clear()
+    def _loop(self, stop, wake):
+        while not stop.is_set():
+            wake.clear()
             payload = panel_payload(self.config)
             panel = self.panel
-            if panel is None or self.stop.is_set():
+            if panel is None or stop.is_set() or panel is not self.panel:
                 return
             try:
                 if panel.is_open():
@@ -551,7 +755,30 @@ class PanelState:
                 interval = max(1.0, float(self.config.get("poll_seconds", DEFAULT_CONFIG["poll_seconds"])))
             except (TypeError, ValueError):
                 interval = float(DEFAULT_CONFIG["poll_seconds"])
-            self.wake.wait(interval)
+            wake.wait(interval)
+
+
+    def _inventory_loop(self, stop, wake):
+        """Poll Spoolman independently of Moonraker."""
+        while not stop.is_set():
+            wake.clear()
+            payload = inventory_payload(self.config)
+            panel = self.panel
+            if panel is None or stop.is_set() or panel is not self.panel:
+                return
+            try:
+                if panel.is_open():
+                    panel.post(payload)
+            except Exception:
+                return
+            try:
+                interval = max(5.0, float(self.config.get(
+                    "inventory_poll_seconds",
+                    DEFAULT_CONFIG["inventory_poll_seconds"]
+                )))
+            except (TypeError, ValueError):
+                interval = float(DEFAULT_CONFIG["inventory_poll_seconds"])
+            wake.wait(interval)
 
 
 PANEL = PanelState()
