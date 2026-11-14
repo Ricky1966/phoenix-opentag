@@ -82,11 +82,20 @@ def active_spool_id(moonraker_url, timeout):
     return spool_id if isinstance(spool_id, int) and not isinstance(spool_id, bool) else None
 
 
+def spool_display_name(vendor, name):
+    """Compose vendor and product without repeating the vendor."""
+    vendor = str(vendor or "").strip()
+    name = str(name or "").strip()
+    if vendor and name.casefold().startswith(vendor.casefold() + " "):
+        return name
+    return " ".join(part for part in (vendor, name) if part)
+
+
 def describe_spool(spool):
     """One readable block of text for a Spoolman spool dictionary."""
     filament = spool.get("filament") or {}
     vendor = (filament.get("vendor") or {}).get("name")
-    name = " ".join(part for part in (vendor, filament.get("name")) if part) or "(unnamed)"
+    name = spool_display_name(vendor, filament.get("name")) or "(unnamed)"
     lines = ["Spool #%s: %s" % (spool.get("id"), name)]
     details = []
     if filament.get("material"):
@@ -174,8 +183,8 @@ def stamp_lines(spool, settings, problems, failure=None):
     else:
         filament = spool.get("filament") or {}
         lines.append("; active_spool_id = %s" % spool.get("id"))
-        lines.append("; active_spool = %s" % " ".join(
-            part for part in ((filament.get("vendor") or {}).get("name"), filament.get("name")) if part))
+        lines.append("; active_spool = %s" % spool_display_name(
+            (filament.get("vendor") or {}).get("name"), filament.get("name")))
         lines.append("; active_spool_material = %s" % (filament.get("material") or ""))
         lines.append("; sliced_filament_type = %s" % settings.get("filament_type", ""))
         for tag in spool.get("tags") or []:
@@ -383,7 +392,7 @@ def compare_product(summary, selected):
         same = not vendor or bool(vendor & profile)
     if same:
         return None
-    spool = " ".join(part for part in (summary.get("vendor"), summary.get("name")) if part)
+    spool = spool_display_name(summary.get("vendor"), summary.get("name"))
     return "the spool is %s but the selected profile is %s" % (spool, profile_name.strip())
 
 
@@ -442,7 +451,10 @@ function render(m) {
   $('empty').hidden = !!s; $('empty').textContent = 'No spool is active in Moonraker.';
   if (!s) return;
   $('swatch').style.background = s.color ? '#' + s.color : 'transparent';
-  $('name').textContent = '#' + s.id + ' ' + [s.vendor, s.name].filter(Boolean).join(' ');
+  const vendor = (s.vendor || '').trim();
+  const name = (s.name || '').trim();
+  const alreadyPrefixed = vendor && name.toLowerCase().startsWith(vendor.toLowerCase() + ' ');
+  $('name').textContent = '#' + s.id + ' ' + (alreadyPrefixed ? name : [vendor, name].filter(Boolean).join(' '));
   $('sub').textContent = [s.material, s.diameter ? s.diameter + ' mm' : ''].filter(Boolean).join(' · ');
   $('details').replaceChildren();
   if (s.color) row('Colour', '#' + s.color);

@@ -309,6 +309,50 @@ class SpoolCheckTests(unittest.TestCase):
         self.assertEqual(self.cap.execute(ctx).status, "recoverable")
 
 
+
+class SpoolNameTests(unittest.TestCase):
+    def test_vendor_not_duplicated_in_warning(self):
+        plugin, _ = load_plugin()
+        summary = {
+            "vendor": "Sovol",
+            "name": "Sovol PETG Nero",
+        }
+        selected = {
+            "name": "Polymaker PolyLite PETG @Phoenix 0.4"
+        }
+        result = plugin.compare_product(summary, selected)
+        self.assertEqual(
+            result,
+            "the spool is Sovol PETG Nero but the selected profile is Polymaker PolyLite PETG"
+        )
+
+
+
+class SpoolNameOutputTests(unittest.TestCase):
+    def setUp(self):
+        self.plugin, _ = load_plugin()
+        self.spool = {
+            "id": 6,
+            "filament": {
+                "name": "Sovol PETG Nero",
+                "vendor": {"name": "Sovol"},
+                "material": "PETG",
+            },
+        }
+
+    def test_describe_spool_no_duplicate_vendor(self):
+        result = self.plugin.describe_spool(self.spool)
+        self.assertIn("Spool #6: Sovol PETG Nero", result)
+        self.assertNotIn("Sovol Sovol", result)
+
+    def test_gcode_comment_no_duplicate_vendor(self):
+        lines = self.plugin.stamp_lines(
+            self.spool, {"filament_type": "PETG"}, []
+        )
+        self.assertIn("; active_spool = Sovol PETG Nero", lines)
+        self.assertNotIn("; active_spool = Sovol Sovol PETG Nero", lines)
+
+
 class PanelTests(unittest.TestCase):
     def setUp(self):
         self.plugin, self.orca = load_plugin()
