@@ -441,6 +441,97 @@ class PanelTests(unittest.TestCase):
             time.sleep(0.02)
         return False
 
+
+    def test_offline_panel_hides_stale_match(self):
+        import re
+        import shutil
+        import subprocess
+
+        if not shutil.which("node"):
+            self.skipTest("Node.js unavailable")
+
+        match = re.search(
+            r"<script>(.*?)</script>", self.plugin.PANEL_HTML, re.S
+        )
+        self.assertIsNotNone(match)
+
+        setup = r"""
+const elements = {};
+function element() {
+  return {
+    hidden: false, textContent: '', value: '', style: {},
+    children: [],
+    replaceChildren(...items) { this.children = items; },
+    append(...items) { this.children.push(...items); },
+    addEventListener() {},
+    classList: { add() {} }
+  };
+}
+const document = {
+  getElementById(id) {
+    return elements[id] || (elements[id] = element());
+  },
+  createElement() { return element(); }
+};
+const orca = {
+  onMessage(fn) { this.receive = fn; },
+  postMessage() {}
+};
+const setInterval = () => 0;
+"""
+
+        checks = r"""
+function check(condition, message) {
+  if (!condition) throw new Error(message);
+}
+
+orca.receive({
+  type: 'state', ok: true,
+  spool: {
+    id: 6, vendor: 'Sovol', name: 'Sovol PETG Nero',
+    material: 'PETG', color: '000000',
+    diameter: 1.75, remaining: 527, tags: []
+  },
+  selected: { name: 'Sovol PETG Nero @Phoenix 0.4' },
+  problems: [], notes: []
+});
+
+const previous = elements.when.textContent;
+check(previous.startsWith('Updated '), 'Missing online timestamp');
+check(!elements.verdict.hidden, 'Match should be visible online');
+
+orca.receive({
+  type: 'state', ok: false, error: 'No route to host'
+});
+
+check(elements.verdict.hidden, 'Stale match remains visible');
+check(
+  elements.when.textContent.includes(previous.slice(8)),
+  'Last successful timestamp was lost'
+);
+check(
+  elements.when.textContent.startsWith('Offline'),
+  'Offline status missing'
+);
+check(!elements.card.hidden, 'Last known spool was lost');
+
+orca.receive({
+  type: 'state', ok: true, spool: null,
+  selected: null, problems: null
+});
+check(elements.verdict.hidden, 'Old verdict remains without spool');
+"""
+
+        result = subprocess.run(
+            ["node"],
+            input=setup + match.group(1) + checks,
+            text=True,
+            capture_output=True,
+            timeout=10,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+
     def test_execute_opens_one_docked_panel(self):
         self.assertEqual(self.cap.execute().status, "success")
         panel = self.orca.panels[0]
@@ -807,3 +898,106 @@ class PanelTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class InventoryOfflineUITests(unittest.TestCase):
+    def test_offline_cache_and_reconnection(self):
+        import re
+        import shutil
+        import subprocess
+
+        if not shutil.which("node"):
+            self.skipTest("Node.js non disponibile")
+
+        plugin, _ = load_plugin()
+        match = re.search(
+            r"<script>(.*?)</script>", plugin.PANEL_HTML, re.S
+        )
+        self.assertIsNotNone(match)
+
+        setup = """
+const elements = {};
+function element() {
+  return {
+    hidden: false, textContent: '', value: '', style: {},
+    children: [],
+    replaceChildren(...items) { this.children = items; },
+    append(...items) { this.children.push(...items); },
+    add(item) { this.children.push(item); },
+    addEventListener() {},
+    classList: { add() {} }
+  };
+}
+const document = {
+  getElementById(id) {
+    return elements[id] || (elements[id] = element());
+  },
+  createElement() { return element(); }
+};
+function Option(text, value) {
+  this.textContent = text;
+  this.value = value;
+}
+const orca = {
+  onMessage(fn) { this.receive = fn; },
+  postMessage() {}
+};
+const setInterval = () => 0;
+"""
+
+        checks = """
+function check(ok, message) {
+  if (!ok) throw new Error(message);
+}
+
+orca.receive({
+  type: 'inventory', ok: true,
+  spools: [{
+    id: 6, vendor: 'Sovol', name: 'Sovol PETG Nero',
+    material: 'PETG', remaining: 527, archived: false
+  }]
+});
+
+check(elements['inventory-list'].children.length === 1,
+      'Inventario non visualizzato');
+check(elements['inventory-status'].textContent.includes('Updated'),
+      'Orario iniziale mancante');
+
+orca.receive({
+  type: 'inventory', ok: false, error: 'No route to host'
+});
+
+check(elements['inventory-list'].children.length === 1,
+      'Inventario conservato perso');
+check(elements['inventory-status'].textContent.startsWith('Offline'),
+      'Indicazione offline mancante');
+check(elements['inventory-status'].textContent.includes('1 cached spools'),
+      'Conteggio bobine conservate mancante');
+check(!elements['inventory-error'].hidden,
+      'Errore di rete non visualizzato');
+
+orca.receive({
+  type: 'inventory', ok: true,
+  spools: [{
+    id: 6, vendor: 'Sovol', name: 'Sovol PETG Nero',
+    material: 'PETG', remaining: 510, archived: false
+  }]
+});
+
+check(elements['inventory-error'].hidden,
+      'Errore ancora visibile dopo riconnessione');
+check(elements['inventory-status'].textContent.includes('Updated'),
+      'Stato online non ripristinato');
+check(elements['inventory-list'].children[0].children[1]
+      .textContent.includes('510 g'),
+      'Peso aggiornato non visualizzato');
+"""
+
+        result = subprocess.run(
+            ["node"],
+            input=setup + match.group(1) + checks,
+            text=True,
+            capture_output=True,
+            timeout=10,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)

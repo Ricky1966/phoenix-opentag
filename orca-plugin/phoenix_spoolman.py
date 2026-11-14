@@ -6,7 +6,7 @@
 # name = "Phoenix Spoolman"
 # description = "Shows the spool that the Phoenix reader activated and checks it against the exported G-code (Moonraker + Spoolman). Standard library only."
 # author = "Ricky1966"
-# version = "0.6.0"
+# version = "0.6.1"
 # ///
 """Phoenix Spoolman plugin for OrcaSlicer (Python plugin API, nightly builds / releases after 2.4.2).
 
@@ -530,15 +530,30 @@ function row(k, v) {
   const dd = document.createElement('dd'); dd.textContent = v;
   $('details').append(dt, dd);
 }
+let lastSuccessfulReading = null;
+
 function render(m) {
-  $('when').textContent = 'Updated ' + new Date().toLocaleTimeString();
   const bad = !m.ok;
-  $('err').hidden = !bad; $('err').textContent = bad ? m.error : '';
-  if (bad) return;                       // keep showing the last good spool next to the error
+  $('err').hidden = !bad;
+  $('err').textContent = bad ? m.error : '';
+
+  if (bad) {
+    $('when').textContent = lastSuccessfulReading
+      ? 'Offline - last successful reading: ' + lastSuccessfulReading
+      : 'Offline - no successful reading';
+    $('verdict').hidden = true;
+    return;
+  }
+
+  lastSuccessfulReading = new Date().toLocaleTimeString();
+  $('when').textContent = 'Updated ' + lastSuccessfulReading;
   const s = m.spool;
   $('card').hidden = !s; $('details').hidden = !s;
   $('empty').hidden = !!s; $('empty').textContent = 'No spool is active in Moonraker.';
-  if (!s) return;
+  if (!s) {
+    $('verdict').hidden = true;
+    return;
+  }
   $('swatch').style.background = s.color ? '#' + s.color : 'transparent';
   const vendor = (s.vendor || '').trim();
   const name = (s.name || '').trim();
@@ -639,18 +654,26 @@ function renderInventoryList() {
   }
 }
 
+let lastSuccessfulInventoryReading = null;
+
 function renderInventory(m) {
   $('inventory-error').hidden = !!m.ok;
   $('inventory-error').textContent = m.ok ? '' : (m.error || 'Inventory error');
 
   if (!m.ok) {
-    $('inventory-status').textContent = 'Inventory unavailable';
+    $('inventory-status').textContent = lastSuccessfulInventoryReading
+      ? 'Offline - last inventory update: ' +
+        lastSuccessfulInventoryReading +
+        ' (' + inventorySpools.length + ' cached spools)'
+      : 'Offline - no inventory data available';
     return;
   }
 
   inventorySpools = Array.isArray(m.spools) ? m.spools : [];
+  lastSuccessfulInventoryReading = new Date().toLocaleTimeString();
   $('inventory-status').textContent =
-    inventorySpools.length + ' spools in Spoolman';
+    inventorySpools.length + ' spools in Spoolman · Updated ' +
+    lastSuccessfulInventoryReading;
 
   const select = $('inventory-material');
   const previous = select.value;
