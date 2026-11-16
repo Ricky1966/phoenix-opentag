@@ -1,4 +1,5 @@
 """Tests for orca-plugin/phoenix_spoolman.py with a stand-in `orca` module and local HTTP servers."""
+import asyncio
 import importlib.util
 import json
 import sys
@@ -38,6 +39,14 @@ def fake_orca():
         def get_config(self):
             return self.config
 
+        def save_config(self, config):
+            try:
+                json.loads(config)
+            except (TypeError, ValueError):
+                return False
+            self.config = config
+            return True
+
     orca.ExecutionResult = Result
     orca.PluginResult = types.SimpleNamespace(RecoverableError="recoverable", FatalError="fatal")
     orca.script = types.SimpleNamespace(ScriptPluginCapabilityBase=Base)
@@ -49,6 +58,20 @@ def fake_orca():
     orca.plugin = lambda cls: cls
     orca.registered = []
     orca.register_capability = orca.registered.append
+    orca.permission_requests = []
+
+    def request_permissions(
+        fs_read=(),
+        fs_readwrite=(),
+        network_http=(),
+        network_socket=(),
+        process=(),
+        threading=False,
+        network=(),
+    ):
+        orca.permission_requests.append({"threading": bool(threading), "network": list(network)})
+
+    orca.request_permissions = request_permissions
     orca.panels = []
 
     class Panel:
@@ -78,11 +101,55 @@ def fake_orca():
             raise KeyError(key)
         return orca.selected[key]
 
+    def current_filament_presets():
+        names = orca.selected.get("names", [])
+        if isinstance(names, str):
+            names = [names]
+
+        result = []
+        config_names = (
+            "filament_type",
+            "nozzle_temperature",
+            "filament_vendor",
+            "filament_diameter",
+            "filament_density",
+        )
+
+        for index, name in enumerate(names):
+            if not name:
+                result.append(None)
+                continue
+
+            def config_keys():
+                return [key for key in config_names if key in orca.selected]
+
+            def config_value(key, index=index):
+                if key not in orca.selected:
+                    raise KeyError(key)
+                value = orca.selected[key]
+                if isinstance(value, (list, tuple)):
+                    if index >= len(value):
+                        raise KeyError(key)
+                    return value[index]
+                return value
+
+            result.append(types.SimpleNamespace(
+                name=name,
+                config_keys=config_keys,
+                config_value=config_value,
+            ))
+
+        return result
+
     orca.bundle = types.SimpleNamespace(
+        filaments=types.SimpleNamespace(
+            preset_names=lambda: [],
+            find_preset=lambda name: None,
+        ),
         prints=lambda: [],
         filament_presets=["PLA"],
         current_filament_preset_names=lambda: orca.selected["names"],
-        current_filament_presets=lambda: [],
+        current_filament_presets=current_filament_presets,
         full_config_value=full_config_value,
         _hidden=1,
     )
@@ -159,6 +226,7 @@ class PluginTests(unittest.TestCase):
 
     def test_registers_one_script_capability(self):
         self.plugin.PhoenixSpoolmanPlugin().register_capabilities()
+        self.assertEqual(self.orca.permission_requests, [{"threading": True, "network": ["http://100.93.111.109"]}])
         self.assertEqual(
             self.orca.registered,
             [self.plugin.ActiveSpool, self.plugin.SpoolCheck, self.plugin.ActiveSpoolPanel, self.plugin.InspectPresetApi],
@@ -423,6 +491,394 @@ class InventoryTests(unittest.TestCase):
 
 
 
+
+class PanelCommandQueueTests(unittest.TestCase):
+    def test_attach_worker_requires_open_panel(self):
+        plugin, _ = load_plugin()
+        loop = object()
+        queue = object()
+
+        self.assertFalse(plugin.PANEL.attach_command_worker(loop, queue))
+        self.assertIsNone(plugin.PANEL.command_loop)
+
+        plugin.PANEL.panel = types.SimpleNamespace(is_open=lambda: True)
+        self.assertTrue(plugin.PANEL.attach_command_worker(loop, queue))
+        self.assertIs(plugin.PANEL.command_loop, loop)
+        self.assertIs(plugin.PANEL.command_queue, queue)
+
+    def test_detach_only_matching_worker(self):
+        plugin, _ = load_plugin()
+        panel = plugin.PANEL
+        panel.panel = types.SimpleNamespace(is_open=lambda: True)
+
+        old_loop = object()
+        new_loop = object()
+        queue = object()
+
+        self.assertTrue(panel.attach_command_worker(old_loop, queue))
+        self.assertTrue(panel.attach_command_worker(new_loop, queue))
+
+        self.assertFalse(panel.detach_command_worker(old_loop))
+        self.assertIs(panel.command_loop, new_loop)
+
+        self.assertTrue(panel.detach_command_worker(new_loop))
+        self.assertIsNone(panel.command_loop)
+        self.assertIsNone(panel.command_queue)
+
+    def test_enqueue_without_worker_returns_false(self):
+        plugin, _ = load_plugin()
+        self.assertFalse(plugin.PANEL.enqueue_command(
+            {"type": "select_preset", "name": "Test"}
+        ))
+
+
+class FilamentAssociationTests(unittest.TestCase):
+    def test_associations_are_saved_and_preserved(self):
+        plugin, _ = load_plugin()
+        cap = plugin.ActiveSpoolPanel()
+        cap.config = json.dumps({"poll_seconds": 7})
+
+        self.assertEqual(cap.save_filament_association(42, "PLA A"), ["PLA A"])
+        self.assertEqual(cap.save_filament_association(42, "PLA B"), ["PLA A", "PLA B"])
+        self.assertEqual(cap.save_filament_association(42, "PLA A"), ["PLA A", "PLA B"])
+
+        saved = json.loads(cap.config)
+        self.assertEqual(saved["poll_seconds"], 7)
+        self.assertEqual(saved["filament_preset_map"], {"42": ["PLA A", "PLA B"]})
+
+        reopened = plugin.ActiveSpoolPanel()
+        reopened.config = cap.config
+        self.assertEqual(reopened.filament_associations(), {"42": ["PLA A", "PLA B"]})
+
+    def test_invalid_association_is_rejected(self):
+        plugin, _ = load_plugin()
+        cap = plugin.ActiveSpoolPanel()
+        with self.assertRaises(ValueError):
+            cap.save_filament_association(0, "PLA")
+        with self.assertRaises(ValueError):
+            cap.save_filament_association(42, "")
+
+    def test_failed_save_raises_error(self):
+        plugin, _ = load_plugin()
+        cap = plugin.ActiveSpoolPanel()
+        with mock.patch.object(cap, "save_config", return_value=False):
+            with self.assertRaises(plugin.PhoenixError):
+                cap.save_filament_association(42, "PLA")
+
+
+class AutomaticPresetSelectionTests(unittest.TestCase):
+    def test_auto_selection_uses_begin_update_without_commit(self):
+        import asyncio
+        from types import SimpleNamespace
+
+        plugin, orca = load_plugin()
+        cap = plugin.ActiveSpoolPanel()
+        cap.config = json.dumps({
+            "filament_preset_map": {"42": ["PLA A"]}
+        })
+        calls = []
+
+        class Transaction:
+            def set(self, *args):
+                raise AssertionError("Preset parameters must not change")
+
+            def commit(self):
+                raise AssertionError("Transaction must not be committed")
+
+        def begin_update(slot, name):
+            calls.append((slot, name))
+            return Transaction()
+
+        orca.host.preset = SimpleNamespace(
+            filament=SimpleNamespace(begin_update=begin_update)
+        )
+
+        async def scenario():
+            with mock.patch.object(plugin.PANEL, "start"):
+                task = asyncio.create_task(cap.execute())
+                await asyncio.sleep(0)
+                plugin.PANEL.last = {
+                    "ok": True,
+                    "spool": {"id": 4, "filament_id": 42},
+                }
+                self.assertTrue(plugin.PANEL.enqueue_command({
+                    "type": "auto_select",
+                    "spool_id": 4,
+                    "filament_id": 42,
+                }))
+                await asyncio.sleep(0.02)
+                plugin.PANEL.close()
+                await task
+
+        asyncio.run(scenario())
+        self.assertEqual(calls, [(1, "PLA A")])
+
+
+class PresetChoiceTests(unittest.TestCase):
+    def test_multiple_associations_require_choice(self):
+        import asyncio
+        from types import SimpleNamespace
+
+        plugin, orca = load_plugin()
+        cap = plugin.ActiveSpoolPanel()
+        cap.config = json.dumps({
+            "filament_preset_map": {"42": ["PLA A", "PLA B"]}
+        })
+        calls = []
+        orca.host.preset = SimpleNamespace(
+            filament=SimpleNamespace(
+                begin_update=lambda *args: calls.append(args)
+            )
+        )
+
+        async def scenario():
+            with mock.patch.object(plugin.PANEL, "start"):
+                task = asyncio.create_task(cap.execute())
+                await asyncio.sleep(0)
+                plugin.PANEL.last = {
+                    "ok": True,
+                    "spool": {"id": 4, "filament_id": 42},
+                }
+                self.assertTrue(plugin.PANEL.enqueue_command({
+                    "type": "auto_select",
+                    "spool_id": 4,
+                    "filament_id": 42,
+                }))
+                await asyncio.sleep(0.02)
+                posts = list(orca.panels[0].posts)
+                plugin.PANEL.close()
+                await task
+                return posts
+
+        posts = asyncio.run(scenario())
+        choices = [
+            m for m in posts
+            if m.get("type") == "preset_selection"
+        ]
+        self.assertEqual(choices[-1]["status"], "choose")
+        self.assertEqual(choices[-1]["names"], ["PLA A", "PLA B"])
+        self.assertEqual(calls, [])
+
+    def test_manual_selection_targets_requested_slot(self):
+        import asyncio
+        from types import SimpleNamespace
+
+        plugin, orca = load_plugin()
+        cap = plugin.ActiveSpoolPanel()
+        cap.config = json.dumps({
+            "filament_preset_map": {"42": ["PLA A", "PLA B"]}
+        })
+        calls = []
+        orca.host.preset = SimpleNamespace(
+            filament=SimpleNamespace(
+                begin_update=lambda *args: calls.append(args)
+            )
+        )
+
+        async def scenario():
+            with mock.patch.object(plugin.PANEL, "start"):
+                task = asyncio.create_task(cap.execute())
+                await asyncio.sleep(0)
+                plugin.PANEL.last = {
+                    "ok": True,
+                    "spool": {"id": 4, "filament_id": 42},
+                }
+                plugin.PANEL.slots = [
+                    {"slot": 1}, {"slot": 2}
+                ]
+                plugin.PANEL.available_presets = [
+                    {"name": "PLA A", "compatible": True},
+                    {"name": "PLA B", "compatible": True},
+                ]
+                self.assertTrue(plugin.PANEL.enqueue_command({
+                    "type": "select_associated",
+                    "filament_id": 42,
+                    "preset_name": "PLA B",
+                    "slot": 2,
+                }))
+                await asyncio.sleep(0.02)
+                plugin.PANEL.close()
+                await task
+
+        asyncio.run(scenario())
+        self.assertEqual(calls, [(2, "PLA B")])
+
+
+class AssociationWorkerTests(unittest.TestCase):
+    def test_associate_persists_and_selects_preset(self):
+        import asyncio
+        from types import SimpleNamespace
+
+        plugin, orca = load_plugin()
+        cap = plugin.ActiveSpoolPanel()
+        cap.config = json.dumps({"filament_preset_map": {}})
+        calls = []
+
+        orca.host.preset = SimpleNamespace(
+            filament=SimpleNamespace(
+                begin_update=lambda *args: calls.append(args)
+            )
+        )
+
+        async def scenario():
+            with mock.patch.object(plugin.PANEL, "start"):
+                task = asyncio.create_task(cap.execute())
+                await asyncio.sleep(0)
+                plugin.PANEL.last = {
+                    "ok": True,
+                    "spool": {"id": 4, "filament_id": 42},
+                }
+                plugin.PANEL.available_presets = [
+                    {"name": "PLA A", "compatible": True}
+                ]
+                cap._on_message({
+                    "type": "associate",
+                    "filament_id": 42,
+                    "preset_name": "PLA A",
+                })
+                await asyncio.sleep(0.05)
+                posts = list(orca.panels[0].posts)
+                plugin.PANEL.close()
+                await task
+                return posts
+
+        posts = asyncio.run(scenario())
+        self.assertEqual(
+            json.loads(cap.config)["filament_preset_map"],
+            {"42": ["PLA A"]},
+        )
+        self.assertEqual(calls, [(1, "PLA A")])
+        self.assertTrue(any(
+            m.get("type") == "association_result" and m.get("ok")
+            for m in posts
+        ))
+
+
+class AssociationRemovalTests(unittest.TestCase):
+    def test_removal_preserves_other_associations(self):
+        plugin, _ = load_plugin()
+        cap = plugin.ActiveSpoolPanel()
+        cap.config = json.dumps({
+            "poll_seconds": 7,
+            "filament_preset_map": {
+                "1": ["PLA A", "PLA B"],
+                "6": ["PETG A"],
+            },
+        })
+
+        self.assertEqual(
+            cap.remove_filament_association(1, "PLA A"),
+            ["PLA B"],
+        )
+        self.assertEqual(
+            cap.remove_filament_association(1, "PLA B"),
+            [],
+        )
+
+        saved = json.loads(cap.config)
+        self.assertEqual(saved["filament_preset_map"], {
+            "6": ["PETG A"],
+        })
+        self.assertEqual(saved["poll_seconds"], 7)
+
+    def test_removal_persists_after_reload(self):
+        plugin, _ = load_plugin()
+        cap = plugin.ActiveSpoolPanel()
+        cap.save_filament_association(42, "PLA A")
+        cap.remove_filament_association(42, "PLA A")
+
+        reopened = plugin.ActiveSpoolPanel()
+        reopened.config = cap.config
+        self.assertEqual(reopened.filament_associations(), {})
+
+    def test_failed_removal_preserves_saved_config(self):
+        plugin, _ = load_plugin()
+        cap = plugin.ActiveSpoolPanel()
+        cap.save_filament_association(42, "PLA A")
+        original = cap.config
+
+        with mock.patch.object(cap, "save_config", return_value=False):
+            with self.assertRaises(plugin.PhoenixError):
+                cap.remove_filament_association(42, "PLA A")
+
+        self.assertEqual(cap.config, original)
+
+
+class FilamentSlotIntegrationTests(unittest.TestCase):
+    def setUp(self):
+        self.plugin, self.orca = load_plugin()
+        self.addCleanup(self.plugin.PANEL.close)
+
+    def test_reads_all_selected_slots(self):
+        names = ["PLA Slot 1", "PETG Slot 2", "ASA Slot 3"]
+        self.orca.selected["names"] = names
+        slots = self.plugin.read_filament_slots()
+        self.assertEqual([s["slot"] for s in slots], [1, 2, 3])
+        self.assertEqual([s["name"] for s in slots], names)
+
+    def test_panel_exposes_mappings_and_compatible_presets(self):
+        panel = self.plugin.PANEL
+        panel.last = {"type": "state", "ok": True, "spool": None}
+        panel.slots = self.plugin.read_filament_slots()
+        panel.available_presets = [
+            {"name": "PLA A", "compatible": True},
+            {"name": "PLA B", "compatible": False},
+        ]
+        panel.config = {"filament_preset_map": {"42": ["PLA A"]}}
+
+        message = panel.message()
+        self.assertEqual(message["preset_options"], ["PLA A"])
+        self.assertEqual(
+            message["filament_preset_map"], {"42": ["PLA A"]}
+        )
+        self.assertEqual(len(message["slots"]), 1)
+
+
+class OrcaPresetCollectionTests(unittest.TestCase):
+    def test_list_filament_presets(self):
+        plugin, orca = load_plugin()
+
+        config = {
+            "filament_type": "PETG",
+            "nozzle_temperature": "240,250,250,250,250,250",
+            "filament_vendor": "Sovol",
+            "filament_diameter": "1.75",
+            "filament_density": "1.27",
+        }
+
+        preset = types.SimpleNamespace(
+            is_user=lambda: True,
+            is_visible=True,
+            is_compatible=True,
+            config_keys=lambda: list(config),
+            config_value=config.get,
+        )
+
+        presets = {
+            "Sovol PETG Nero @Phoenix 0.4": preset,
+        }
+
+        orca.bundle.filaments = types.SimpleNamespace(
+            preset_names=lambda: list(presets) + ["Missing"],
+            find_preset=presets.get,
+        )
+
+        result = plugin.list_orca_filament_presets()
+
+        self.assertEqual(result, [{
+            "name": "Sovol PETG Nero @Phoenix 0.4",
+            "user": True,
+            "visible": True,
+            "compatible": True,
+            "type": "PETG",
+            "nozzle": 240.0,
+            "vendor": "Sovol",
+            "diameter": 1.75,
+            "density": 1.27,
+        }])
+
+
+
 class PanelTests(unittest.TestCase):
     def setUp(self):
         self.plugin, self.orca = load_plugin()
@@ -433,6 +889,51 @@ class PanelTests(unittest.TestCase):
         self.cap.config = json.dumps({"moonraker_url": self.servers.url, "spoolman_url": self.servers.url,
                                       "timeout_seconds": 2, "poll_seconds": 1})
 
+        self._panel_threads = []
+        self._panel_errors = []
+        self._async_execute = self.cap.execute
+        self.cap.execute = lambda: self.start_panel_worker()
+        self.addCleanup(self.cleanup_panel_worker)
+
+    def start_panel_worker(self):
+        if self.plugin.PANEL.is_open():
+            self.plugin.PANEL.panel.show()
+            return self.orca.ExecutionResult.success(
+                "The active spool panel is already open."
+            )
+
+        def run():
+            try:
+                asyncio.run(self._async_execute())
+            except BaseException as exc:
+                self._panel_errors.append(exc)
+
+        thread = threading.Thread(
+            target=run,
+            name="test-phoenix-panel",
+            daemon=True,
+        )
+        self._panel_threads.append(thread)
+        thread.start()
+
+        if not self.wait_for(
+            lambda: self.plugin.PANEL.command_loop is not None
+            or not thread.is_alive()
+        ):
+            raise AssertionError("Async panel worker did not start")
+
+        if self._panel_errors:
+            raise self._panel_errors[-1]
+
+        return self.orca.ExecutionResult.success("Active spool panel opened.")
+
+    def cleanup_panel_worker(self):
+        self.plugin.PANEL.close()
+        for thread in self._panel_threads:
+            thread.join(5)
+            if thread.is_alive():
+                raise AssertionError("Async panel worker did not stop")
+
     def wait_for(self, predicate, seconds=5):
         end = time.monotonic() + seconds
         while time.monotonic() < end:
@@ -441,6 +942,54 @@ class PanelTests(unittest.TestCase):
             time.sleep(0.02)
         return False
 
+
+    def test_panel_shutdown_terminates_async_worker(self):
+        self.cap.execute()
+
+        panel = self.orca.panels[0]
+        worker_loop = self.plugin.PANEL.command_loop
+
+        self.assertIsNotNone(worker_loop)
+        self.assertTrue(worker_loop.is_running())
+
+        worker_thread = next(
+            thread for thread in self._panel_threads
+            if thread.is_alive()
+        )
+
+        panel.kw["on_close"]()
+
+        worker_thread.join(3)
+
+        self.assertFalse(
+            worker_thread.is_alive(),
+            "Async Script worker did not terminate after shutdown"
+        )
+        self.assertIsNone(self.plugin.PANEL.command_loop)
+        self.assertIsNone(self.plugin.PANEL.command_queue)
+
+    def test_panel_cancellation_terminates_async_worker(self):
+        self.cap.execute()
+
+        panel = self.orca.panels[0]
+        worker_thread = next(
+            thread for thread in self._panel_threads
+            if thread.is_alive()
+        )
+
+        self.assertIsNotNone(self.plugin.PANEL.command_loop)
+
+        self.cap.on_cancelled()
+
+        worker_thread.join(3)
+
+        self.assertFalse(
+            worker_thread.is_alive(),
+            "Async Script worker did not terminate after cancellation"
+        )
+        self.assertIsNone(self.plugin.PANEL.command_loop)
+        self.assertIsNone(self.plugin.PANEL.command_queue)
+        self.assertFalse(self.plugin.PANEL.is_open())
 
     def test_offline_panel_hides_stale_match(self):
         import re
@@ -793,9 +1342,27 @@ check(elements.verdict.hidden, 'Old verdict remains without spool');
     def test_messages_from_the_page_are_validated(self):
         self.cap.execute()
         panel = self.orca.panels[0]
+        active_thread = self.plugin.PANEL.thread
+        inventory_thread = self.plugin.PANEL.inventory_thread
+
+        self.assertIsNotNone(active_thread)
+        self.assertIsNotNone(inventory_thread)
+
         for junk in (None, "ready", 5, {"type": "evil"}, {}):
-            panel.kw["on_message"](junk)  # no exception, no polling started
-        self.assertIsNone(self.plugin.PANEL.thread)
+            panel.kw["on_message"](junk)  # invalid messages must be ignored
+
+        self.assertIs(self.plugin.PANEL.thread, active_thread)
+        self.assertIs(self.plugin.PANEL.inventory_thread, inventory_thread)
+        self.assertTrue(active_thread.is_alive())
+        self.assertTrue(inventory_thread.is_alive())
+
+    def test_spool_summary_includes_nested_filament_id(self):
+        summary = self.plugin.spool_summary({
+            "id": 7,
+            "filament": {"id": 42}
+        })
+        self.assertEqual(summary["id"], 7)
+        self.assertEqual(summary["filament_id"], 42)
 
     def test_bad_colour_never_reaches_the_page(self):
         spool = {"id": 1, "filament": {"color_hex": "red; background:url(x)"}}

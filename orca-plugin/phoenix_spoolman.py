@@ -6,7 +6,7 @@
 # name = "Phoenix Spoolman"
 # description = "Shows the spool that the Phoenix reader activated and checks it against the exported G-code (Moonraker + Spoolman). Standard library only."
 # author = "Ricky1966"
-# version = "0.6.1"
+# version = "0.6.4"
 # ///
 """Phoenix Spoolman plugin for OrcaSlicer (Python plugin API, nightly builds / releases after 2.4.2).
 
@@ -24,6 +24,7 @@ Moonraker which spool is active. If the spool is changed after slicing, nothing 
 OrcaSlicer asks for permission the first time the plugin contacts the network.
 """
 
+import asyncio
 import json
 import os
 import re
@@ -308,6 +309,7 @@ def spool_summary(spool):
     color = str(filament.get("color_hex") or "").lstrip("#")
     return {
         "id": spool.get("id"),
+        "filament_id": filament.get("id"),
         "vendor": (filament.get("vendor") or {}).get("name") or "",
         "name": filament.get("name") or "",
         "material": filament.get("material") or "",
@@ -364,29 +366,117 @@ def _first_text(value):
 
 
 def read_selected_filament():
-    """The filament profile currently selected in OrcaSlicer, or None when it cannot be read.
-
-    Must run on the UI thread (it reads the live host). Returns {"name", "type", "nozzle"}; "type" and
-    "nozzle" are empty/None when the preset does not say.
+    """Read the first filament preset currently assigned in OrcaSlicer.
+    Must run on the UI thread.
     """
     try:
         bundle = orca.host.preset_bundle()
-        names = bundle.current_filament_preset_names()
-        name = _first_text(names)
-        kind = nozzle = None
+        presets = bundle.current_filament_presets()
+        if not presets or presets[0] is None:
+            return None
+
+        preset = presets[0]
+        keys = set(preset.config_keys())
+
+        def read_config(key):
+            if key not in keys:
+                return None
+            return preset.config_value(key)
+
+        name = str(preset.name or "")
+        kind = _first_text(read_config("filament_type"))
+
         try:
-            kind = _first_text(bundle.full_config_value("filament_type"))
-        except Exception:
-            kind = ""
-        try:
-            nozzle = float(_first_text(bundle.full_config_value("nozzle_temperature")))
+            nozzle = float(_first_text(read_config("nozzle_temperature")))
         except (TypeError, ValueError):
             nozzle = None
-        except Exception:
-            nozzle = None
-        return {"name": name, "type": kind or "", "nozzle": nozzle}
+
+        return {
+            "name": name,
+            "type": kind or "",
+            "nozzle": nozzle,
+        }
     except Exception:
         return None
+
+
+def read_filament_slots():
+    """Read all Orca filament slots on the UI thread."""
+    try:
+        presets = orca.host.preset_bundle().current_filament_presets()
+        result = []
+        for index, preset in enumerate(presets, 1):
+            if preset is None:
+                result.append({"slot": index, "name": "", "type": "", "nozzle": None})
+                continue
+            keys = set(preset.config_keys())
+            def value(key):
+                return preset.config_value(key) if key in keys else None
+            kind = _first_text(value("filament_type")) or ""
+            try:
+                nozzle = float(_first_text(value("nozzle_temperature")))
+            except (TypeError, ValueError):
+                nozzle = None
+            result.append({
+                "slot": index,
+                "name": str(preset.name or ""),
+                "type": kind,
+                "nozzle": nozzle,
+            })
+        return result
+    except Exception:
+        return []
+
+
+def list_orca_filament_presets():
+    """Read loaded filament presets and their material properties.
+    Must run on Orca's UI thread.
+    """
+    collection = orca.host.preset_bundle().filaments
+    presets = []
+
+    for name in collection.preset_names():
+        preset = collection.find_preset(name)
+        if preset is None:
+            continue
+
+        try:
+            keys = set(preset.config_keys())
+        except Exception:
+            keys = set()
+
+        def read_config(key):
+            if key not in keys:
+                return None
+            try:
+                return preset.config_value(key)
+            except Exception:
+                return None
+
+        def text_config(key):
+            value = read_config(key)
+            return _first_text(value) if value is not None else ""
+
+        def number_config(key):
+            value = text_config(key)
+            try:
+                return float(value) if value else None
+            except (TypeError, ValueError):
+                return None
+
+        presets.append({
+            "name": str(name),
+            "user": bool(preset.is_user()),
+            "visible": bool(preset.is_visible),
+            "compatible": bool(preset.is_compatible),
+            "type": text_config("filament_type"),
+            "nozzle": number_config("nozzle_temperature"),
+            "vendor": text_config("filament_vendor"),
+            "diameter": number_config("filament_diameter"),
+            "density": number_config("filament_density"),
+        })
+
+    return presets
 
 
 def compare_summary(summary, selected, tolerance):
@@ -506,6 +596,20 @@ button { margin-top: 6px; }
 </div>
 <dl id="details" hidden></dl>
 <div id="verdict" class="verdict" hidden></div>
+<div id="association" class="verdict" hidden>
+  <div id="association-caption" class="muted"></div>
+  <div id="association-saved"></div>
+  <select id="association-preset" style="width:100%;margin-top:8px;padding:6px"
+          aria-label="Orca filament preset"></select>
+  <button id="associate-preset">Associate preset</button>
+  <div id="association-feedback" class="muted"></div>
+</div>
+<div id="preset-choice" class="verdict" hidden>
+  <div class="muted">Choose an associated preset and Orca slot:</div>
+  <select id="preset-choice-name" style="width:100%;margin-top:8px"></select>
+  <select id="preset-choice-slot" style="width:100%;margin-top:8px"></select>
+  <button id="preset-choice-apply">Apply preset</button>
+</div>
 <div id="err" class="err" hidden></div>
 <div class="muted" id="when"></div>
 <button id="refresh">Refresh now</button>
@@ -538,6 +642,7 @@ function render(m) {
   $('err').textContent = bad ? m.error : '';
 
   if (bad) {
+    $('association').hidden = true;
     $('when').textContent = lastSuccessfulReading
       ? 'Offline - last successful reading: ' + lastSuccessfulReading
       : 'Offline - no successful reading';
@@ -551,6 +656,7 @@ function render(m) {
   $('card').hidden = !s; $('details').hidden = !s;
   $('empty').hidden = !!s; $('empty').textContent = 'No spool is active in Moonraker.';
   if (!s) {
+    $('association').hidden = true;
     $('verdict').hidden = true;
     return;
   }
@@ -567,31 +673,186 @@ function render(m) {
   if (s.remaining !== null) row('Remaining', Math.round(s.remaining) + ' g');
   if (s.tags.length) row('NFC tag', s.tags.join(', '));
   verdict(m);
+  renderAssociation(m);
+  updateChoiceSlots(m.slots);
 }
 function verdict(m) {
   const box = $('verdict');
   if (!m.spool) { box.hidden = true; return; }
   box.hidden = false;
   box.replaceChildren();
-  const sel = m.selected;
-  const line = document.createElement('div');
-  line.textContent = 'Selected profile: ' + (sel ? (sel.name || '(unnamed)') : 'cannot be read');
-  box.append(line);
-  if (!sel || m.problems === null || m.problems === undefined) return;
-  const res = document.createElement('div');
-  const notes = m.notes || [];
-  if (m.problems.length) {
-    res.className = 'err';
-    res.textContent = 'Mismatch: ' + m.problems.join('; ');
-  } else if (notes.length) {
-    res.className = 'warn';
-    res.textContent = 'Same material, but check the profile: ' + notes.join('; ');
-  } else {
-    res.className = 'ok';
-    res.textContent = 'Matches the active spool.';
+
+  const slots = Array.isArray(m.slots) && m.slots.length
+    ? m.slots
+    : [{slot: 1, selected: m.selected, problems: m.problems, notes: m.notes}];
+
+  for (const entry of slots) {
+    const selected = entry.selected;
+    const line = document.createElement('div');
+    line.textContent = 'Slot ' + entry.slot + ': ' +
+      (selected ? (selected.name || '(unnamed)') : 'cannot be read');
+    box.append(line);
+
+    if (!selected || !Array.isArray(entry.problems)) continue;
+
+    const result = document.createElement('div');
+    const notes = entry.notes || [];
+
+    if (entry.problems.length) {
+      result.className = 'err';
+      result.textContent = 'Mismatch: ' + entry.problems.join('; ');
+    } else if (notes.length) {
+      result.className = 'warn';
+      result.textContent = 'Check profile: ' + notes.join('; ');
+    } else {
+      result.className = 'ok';
+      result.textContent = 'Matches the active spool.';
+    }
+    box.append(result);
   }
-  box.append(res);
 }
+let activeFilamentId = null;
+
+function renderAssociation(m) {
+  const box = $('association');
+  const id = Number(m.spool && m.spool.filament_id);
+  const previousId = activeFilamentId;
+  activeFilamentId = Number.isSafeInteger(id) && id > 0 ? id : null;
+  if (previousId !== activeFilamentId) {
+    $('preset-choice').hidden = true;
+    $('association-feedback').textContent = '';
+  }
+  box.hidden = activeFilamentId === null;
+  if (box.hidden) return;
+
+  const mappings = m.filament_preset_map || {};
+  const saved = mappings[String(activeFilamentId)] || [];
+  const names = Array.isArray(saved) ? saved : [];
+
+  $('association-caption').textContent =
+    'Spoolman filament #' + activeFilamentId + ' — associated: ' +
+    (names.length ? names.join(', ') : 'none');
+
+  const savedBox = $('association-saved');
+  savedBox.replaceChildren();
+
+  for (const name of names) {
+    const line = document.createElement('div');
+    line.style.marginTop = '6px';
+
+    const label = document.createElement('span');
+    label.textContent = name + ' ';
+
+    const remove = document.createElement('button');
+    remove.textContent = 'Rimuovi';
+    remove.setAttribute('aria-label', 'Rimuovi associazione ' + name);
+    remove.onclick = () => {
+      orca.postMessage({
+        type: 'remove_association',
+        filament_id: activeFilamentId,
+        preset_name: name
+      });
+    };
+
+    line.append(label, remove);
+    savedBox.append(line);
+  }
+
+  const select = $('association-preset');
+  const previous = select.value;
+  select.replaceChildren();
+
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = 'Select an Orca preset...';
+  select.append(placeholder);
+
+  for (const name of (m.preset_options || [])) {
+    const option = document.createElement('option');
+    option.value = name;
+    option.textContent = name;
+    select.append(option);
+  }
+
+  if (Array.from(select.options).some(o => o.value === previous)) {
+    select.value = previous;
+  }
+
+  $('associate-preset').disabled = !select.value;
+}
+
+$('association-preset').addEventListener('change', () => {
+  $('associate-preset').disabled = !$('association-preset').value;
+});
+
+$('associate-preset').onclick = () => {
+  const preset = $('association-preset').value;
+  if (activeFilamentId === null || !preset) return;
+
+  $('association-feedback').textContent = 'Saving association...';
+  orca.postMessage({
+    type: 'associate',
+    filament_id: activeFilamentId,
+    preset_name: preset
+  });
+};
+
+function updateChoiceSlots(slots) {
+  const select = $('preset-choice-slot');
+  const previous = select.value;
+  select.replaceChildren();
+  const numbers = Array.isArray(slots) && slots.length
+    ? slots.map(s => s.slot) : [1];
+  for (const number of numbers) {
+    const option = document.createElement('option');
+    option.value = String(number);
+    option.textContent = 'Orca slot ' + number;
+    select.append(option);
+  }
+  if (numbers.some(n => String(n) === previous)) select.value = previous;
+}
+
+function renderPresetSelection(m) {
+  const box = $('preset-choice');
+  const feedback = $('association-feedback');
+
+  if (m.status === 'choose') {
+    const select = $('preset-choice-name');
+    select.replaceChildren();
+    for (const name of m.names || []) {
+      const option = document.createElement('option');
+      option.value = name;
+      option.textContent = name;
+      select.append(option);
+    }
+    box.hidden = !select.options.length;
+    feedback.textContent = 'Multiple associated presets: choose one.';
+  } else {
+    box.hidden = true;
+    if (m.status === 'selected') {
+      feedback.className = 'ok';
+      feedback.textContent = 'Selected: ' + m.name +
+        ' (slot ' + (m.slot || 1) + ')';
+    } else if (m.status === 'unmapped') {
+      feedback.className = 'warn';
+      feedback.textContent = 'No association yet. Select a preset above.';
+    } else if (m.status === 'error') {
+      feedback.className = 'err';
+      feedback.textContent = m.error || 'Preset selection failed.';
+    }
+  }
+}
+
+$('preset-choice-apply').onclick = () => {
+  if (activeFilamentId === null) return;
+  orca.postMessage({
+    type: 'select_associated',
+    filament_id: activeFilamentId,
+    preset_name: $('preset-choice-name').value,
+    slot: Number($('preset-choice-slot').value)
+  });
+};
+
 let inventorySpools = [];
 
 function renderInventoryList() {
@@ -697,6 +958,16 @@ orca.onMessage((m) => {
   if (!m) return;
   if (m.type === 'state') render(m);
   if (m.type === 'inventory') renderInventory(m);
+  if (m.type === 'preset_selection') renderPresetSelection(m);
+  if (m.type === 'association_result') {
+    $('association-feedback').className = m.ok ? 'ok' : 'err';
+    $('association-feedback').textContent =
+      m.ok
+        ? (m.action === 'removed'
+            ? 'Associazione rimossa.'
+            : 'Association saved.')
+        : (m.error || 'Save failed.');
+  }
 });
 $('refresh').onclick = () => orca.postMessage({ type: 'refresh' });
 orca.postMessage({ type: 'ready' });     // ask for the first data: a post right after creation can be dropped
@@ -715,8 +986,52 @@ class PanelState:
         self.inventory_thread = None
         self.inventory_wake = threading.Event()
         self.last = None            # latest network state (without the selection)
-        self.selected = None        # latest selected profile, read on the UI thread
+        self.selected = None
+        self.slots = []
+        self.available_presets = []
+        self.last_auto_spool_key = None        # latest selected profile, read on the UI thread
+        self.command_loop = None
+        self.command_queue = None
+        self.command_busy = False
         self.config = dict(DEFAULT_CONFIG)
+
+    def attach_command_worker(self, loop, queue):
+        """Register the command worker for the current panel session."""
+        if not self.is_open():
+            return False
+
+        if self.stop.is_set():
+            # A reopened panel gets independent session events.
+            self.stop = threading.Event()
+            self.wake = threading.Event()
+            self.inventory_wake = threading.Event()
+            self.thread = None
+            self.inventory_thread = None
+
+        self.command_loop = loop
+        self.command_queue = queue
+        return True
+
+    def detach_command_worker(self, loop):
+        """Detach only the worker belonging to this session."""
+        if self.command_loop is not loop:
+            return False
+        self.command_loop = None
+        self.command_queue = None
+        self.command_busy = False
+        return True
+
+    def enqueue_command(self, command):
+        """Forward a panel command to the Script worker without blocking the UI."""
+        loop = self.command_loop
+        queue = self.command_queue
+        if loop is None or queue is None or loop.is_closed():
+            return False
+        try:
+            loop.call_soon_threadsafe(queue.put_nowait, command)
+        except RuntimeError:
+            return False
+        return True
 
     def is_open(self):
         return self.panel is not None and self.panel.is_open()
@@ -748,9 +1063,29 @@ class PanelState:
         self.stop.set()
         self.wake.set()
         self.inventory_wake.set()
+
+        loop = self.command_loop
+        queue = self.command_queue
+
+        if loop is not None and queue is not None and not loop.is_closed():
+            try:
+                loop.call_soon_threadsafe(
+                    queue.put_nowait,
+                    {"type": "shutdown"}
+                )
+            except RuntimeError:
+                pass
+
+        self.command_loop = None
+        self.command_queue = None
+        self.command_busy = False
+
         self.panel = None
         self.last = None
         self.selected = None
+        self.slots = []
+        self.available_presets = []
+        self.last_auto_spool_key = None
 
     def tolerance(self):
         try:
@@ -759,7 +1094,26 @@ class PanelState:
             return float(DEFAULT_CONFIG["nozzle_temp_tolerance"])
 
     def message(self):
-        return with_selection(self.last, self.selected, self.tolerance())
+        message = with_selection(self.last, self.selected, self.tolerance())
+        if isinstance(message, dict):
+            message["slots"] = []
+            message["preset_options"] = [
+                preset["name"] for preset in self.available_presets
+                if preset.get("name") and preset.get("compatible")
+            ]
+            associations = self.config.get("filament_preset_map", {})
+            message["filament_preset_map"] = (
+                associations if isinstance(associations, dict) else {}
+            )
+            for slot in self.slots:
+                result = with_selection(self.last, slot, self.tolerance())
+                message["slots"].append({
+                    "slot": slot["slot"],
+                    "selected": slot,
+                    "problems": result.get("problems"),
+                    "notes": result.get("notes"),
+                })
+        return message
 
     def _loop(self, stop, wake):
         while not stop.is_set():
@@ -771,6 +1125,21 @@ class PanelState:
             try:
                 if panel.is_open():
                     self.last = payload
+                    if payload.get("ok"):
+                        spool = payload.get("spool")
+                        key = None
+                        if (isinstance(spool, dict)
+                                and type(spool.get("filament_id")) is int
+                                and spool["filament_id"] > 0):
+                            key = (spool.get("id"), spool["filament_id"])
+                        if key != self.last_auto_spool_key:
+                            self.last_auto_spool_key = key
+                            if key is not None:
+                                self.enqueue_command({
+                                    "type": "auto_select",
+                                    "spool_id": key[0],
+                                    "filament_id": key[1],
+                                })
                     panel.post(self.message())
             except Exception:
                 return                       # the panel went away while we were reading
@@ -824,26 +1193,132 @@ class ActiveSpoolPanel(orca.script.ScriptPluginCapabilityBase):
             pass
         return config
 
+    def filament_associations(self):
+        raw = self._config().get("filament_preset_map", {})
+        if not isinstance(raw, dict):
+            return {}
+        result = {}
+        for key, names in raw.items():
+            if (isinstance(key, str) and key.isdecimal()
+                    and isinstance(names, list)):
+                valid = [
+                    name for name in names
+                    if isinstance(name, str) and name.strip()
+                ]
+                if valid:
+                    result[key] = list(dict.fromkeys(valid))
+        return result
+
+    def save_filament_association(self, filament_id, preset_name):
+        if (type(filament_id) is not int or filament_id <= 0
+                or not isinstance(preset_name, str)
+                or not preset_name.strip()):
+            raise ValueError("Invalid filament ID or preset name")
+
+        config = self._config()
+        associations = self.filament_associations()
+        key = str(filament_id)
+        names = associations.setdefault(key, [])
+
+        if preset_name not in names:
+            names.append(preset_name)
+            config["filament_preset_map"] = associations
+            if not self.save_config(json.dumps(config)):
+                raise PhoenixError("Cannot save filament associations")
+
+        return list(names)
+
+    def remove_filament_association(self, filament_id, preset_name):
+        if (type(filament_id) is not int or filament_id <= 0
+                or not isinstance(preset_name, str)
+                or not preset_name.strip()):
+            raise ValueError("Invalid filament ID or preset name")
+
+        config = self._config()
+        associations = self.filament_associations()
+        key = str(filament_id)
+        names = associations.get(key, [])
+
+        if preset_name not in names:
+            return list(names)
+
+        names = [name for name in names if name != preset_name]
+        if names:
+            associations[key] = names
+        else:
+            associations.pop(key, None)
+
+        config["filament_preset_map"] = associations
+        if not self.save_config(json.dumps(config)):
+            raise PhoenixError("Cannot remove filament association")
+
+        return names
+
     def on_unload(self):
         PANEL.close()
 
+    def on_cancelled(self):
+        """Stop panel workers before Orca cancels this async capability."""
+        PANEL.close()
+
     def _on_message(self, data):
-        # UI thread: keep it quick; the polling happens on the worker thread.
+        # UI thread: read live preset data here, never on the worker.
         kind = data.get("type") if isinstance(data, dict) else None
+
+        if kind == "select_associated":
+            PANEL.enqueue_command({
+                "type": "select_associated",
+                "filament_id": data.get("filament_id"),
+                "preset_name": data.get("preset_name"),
+                "slot": data.get("slot"),
+            })
+            return
+        if kind == "remove_association":
+            response = orca.host.ui.message(
+                "Rimuovere associazione con %s?" % data.get("preset_name"),
+                title="Phoenix Spoolman",
+                buttons="yes_no",
+                icon="question",
+            )
+            if response != "yes":
+                return
+            PANEL.enqueue_command({
+                "type": "remove_association",
+                "filament_id": data.get("filament_id"),
+                "preset_name": data.get("preset_name"),
+            })
+            return
+        if kind == "associate":
+            PANEL.enqueue_command({
+                "type": "associate",
+                "filament_id": data.get("filament_id"),
+                "preset_name": data.get("preset_name"),
+            })
+            return
         if kind in ("ready", "refresh", "selection"):
-            PANEL.selected = read_selected_filament()  # live host data: read here, on the UI thread
+            PANEL.selected = read_selected_filament()
+            PANEL.slots = read_filament_slots()
+            if kind in ("ready", "refresh"):
+                try:
+                    PANEL.available_presets = list_orca_filament_presets()
+                except Exception:
+                    PANEL.available_presets = []
             if PANEL.last is not None and PANEL.is_open():
-                PANEL.panel.post(PANEL.message())  # a reopened page, or a changed profile, shows at once
+                PANEL.panel.post(PANEL.message())
+
         if kind in ("ready", "refresh"):
-            PANEL.start(self._config())
+            PANEL.enqueue_command({"type": kind})
 
     def _on_close(self):
         PANEL.close()
 
-    def execute(self):
+    async def execute(self):
         if PANEL.is_open():
             PANEL.panel.show()
-            return orca.ExecutionResult.success("The active spool panel is already open.")
+            return orca.ExecutionResult.success(
+                "The active spool panel is already open."
+            )
+
         try:
             PANEL.panel = orca.host.ui.create_dock_panel(
                 html=PANEL_HTML,
@@ -855,8 +1330,203 @@ class ActiveSpoolPanel(orca.script.ScriptPluginCapabilityBase):
                 dock="right",
             )
         except Exception as exc:
-            return orca.ExecutionResult.failure(orca.PluginResult.RecoverableError, "Cannot open the panel: %s" % exc)
-        return orca.ExecutionResult.success("Active spool panel opened.")
+            return orca.ExecutionResult.failure(
+                orca.PluginResult.RecoverableError,
+                "Cannot open the panel: %s" % exc
+            )
+
+        loop = asyncio.get_running_loop()
+        queue = asyncio.Queue()
+
+        if not PANEL.attach_command_worker(loop, queue):
+            return orca.ExecutionResult.failure(
+                orca.PluginResult.RecoverableError,
+                "Cannot attach the panel command worker."
+            )
+
+        # Initial read: do not depend on the timing of the HTML ready message.
+        queue.put_nowait({"type": "ready"})
+
+        try:
+            while True:
+                command = await queue.get()
+                kind = command.get("type") if isinstance(command, dict) else None
+
+                if kind == "shutdown":
+                    break
+
+                if kind in ("ready", "refresh"):
+                    PANEL.start(self._config())
+                elif kind == "auto_select":
+                    active = (PANEL.last or {}).get("spool") or {}
+                    filament_id = command.get("filament_id")
+                    if (active.get("id") != command.get("spool_id")
+                            or active.get("filament_id") != filament_id):
+                        continue
+
+                    names = self.filament_associations().get(str(filament_id), [])
+                    if len(names) == 1:
+                        try:
+                            orca.host.preset.filament.begin_update(1, names[0])
+                            result = {
+                                "type": "preset_selection",
+                                "status": "selected",
+                                "name": names[0],
+                            }
+                        except Exception as exc:
+                            result = {
+                                "type": "preset_selection",
+                                "status": "error",
+                                "error": str(exc),
+                            }
+                    elif len(names) > 1:
+                        result = {
+                            "type": "preset_selection",
+                            "status": "choose",
+                            "names": names,
+                        }
+                    else:
+                        result = {
+                            "type": "preset_selection",
+                            "status": "unmapped",
+                        }
+
+                    if PANEL.is_open():
+                        PANEL.panel.post(result)
+                elif kind == "select_associated":
+                    active = (PANEL.last or {}).get("spool") or {}
+                    filament_id = command.get("filament_id")
+                    preset_name = command.get("preset_name")
+                    slot = command.get("slot")
+
+                    try:
+                        if (type(filament_id) is not int
+                                or filament_id <= 0
+                                or active.get("filament_id") != filament_id):
+                            raise ValueError("Active filament changed")
+                        if (type(slot) is not int
+                                or not 1 <= slot <= len(PANEL.slots)):
+                            raise ValueError("Invalid Orca filament slot")
+
+                        associated = self.filament_associations().get(
+                            str(filament_id), []
+                        )
+                        if preset_name not in associated:
+                            raise ValueError("Preset is not associated")
+
+                        allowed = {
+                            item["name"] for item in PANEL.available_presets
+                            if item.get("name") and item.get("compatible")
+                        }
+                        if preset_name not in allowed:
+                            raise ValueError("Preset unavailable or incompatible")
+
+                        orca.host.preset.filament.begin_update(slot, preset_name)
+                        result = {
+                            "type": "preset_selection",
+                            "status": "selected",
+                            "name": preset_name,
+                            "slot": slot,
+                        }
+                    except Exception as exc:
+                        result = {
+                            "type": "preset_selection",
+                            "status": "error",
+                            "error": str(exc),
+                        }
+
+                    if PANEL.is_open():
+                        PANEL.panel.post(result)
+
+                elif kind == "remove_association":
+                    active = (PANEL.last or {}).get("spool") or {}
+                    filament_id = command.get("filament_id")
+                    preset_name = command.get("preset_name")
+
+                    try:
+                        if (type(filament_id) is not int
+                                or filament_id <= 0
+                                or active.get("filament_id") != filament_id):
+                            raise ValueError("Active filament changed")
+
+                        existing = self.filament_associations().get(
+                            str(filament_id), []
+                        )
+                        if preset_name not in existing:
+                            raise ValueError("Association not found")
+
+                        self.remove_filament_association(
+                            filament_id, preset_name
+                        )
+                        PANEL.config = self._config()
+                        result = {
+                            "type": "association_result",
+                            "ok": True,
+                            "action": "removed",
+                        }
+                    except (ValueError, PhoenixError) as exc:
+                        result = {
+                            "type": "association_result",
+                            "ok": False,
+                            "error": str(exc),
+                        }
+
+                    if PANEL.is_open():
+                        PANEL.panel.post(result)
+                        PANEL.panel.post(PANEL.message())
+
+                elif kind == "associate":
+                    filament_id = command.get("filament_id")
+                    preset_name = command.get("preset_name")
+                    active = (PANEL.last or {}).get("spool") or {}
+                    allowed = {
+                        item["name"] for item in PANEL.available_presets
+                        if item.get("name") and item.get("compatible")
+                    }
+
+                    try:
+                        if (type(filament_id) is not int
+                                or filament_id <= 0
+                                or filament_id != active.get("filament_id")):
+                            raise ValueError("Invalid active filament ID")
+                        if preset_name not in allowed:
+                            raise ValueError("Preset unavailable or incompatible")
+
+                        names = self.save_filament_association(
+                            filament_id, preset_name
+                        )
+                        PANEL.config = self._config()
+                        result = {"type": "association_result", "ok": True}
+
+                        if len(names) == 1:
+                            PANEL.enqueue_command({
+                                "type": "auto_select",
+                                "spool_id": active.get("id"),
+                                "filament_id": filament_id,
+                            })
+                        elif len(names) > 1 and PANEL.is_open():
+                            PANEL.panel.post({
+                                "type": "preset_selection",
+                                "status": "choose",
+                                "names": names,
+                            })
+                    except (ValueError, PhoenixError) as exc:
+                        result = {
+                            "type": "association_result",
+                            "ok": False,
+                            "error": str(exc),
+                        }
+
+                    if PANEL.is_open():
+                        PANEL.panel.post(result)
+                        PANEL.panel.post(PANEL.message())
+
+        finally:
+            PANEL.detach_command_worker(loop)
+
+        return orca.ExecutionResult.success(
+            "Active spool panel closed."
+        )
 
 
 class InspectPresetApi(orca.script.ScriptPluginCapabilityBase):
@@ -879,20 +1549,123 @@ class InspectPresetApi(orca.script.ScriptPluginCapabilityBase):
             except Exception as exc:
                 kind = "error: %s" % exc
             members.append("  %s  (%s)" % (name, kind))
+        collection = bundle.filaments
+        members.append("")
+        members.append("Filament PresetCollection:")
+        for name in sorted(n for n in dir(collection) if not n.startswith("_")):
+            member = getattr(collection, name)
+            kind = "method" if callable(member) else type(member).__name__
+            members.append("  %s (%s)" % (name, kind))
+        for label, obj in (("Host API", orca.host), ("Host UI API", orca.host.ui)):
+            members.append("")
+            members.append(label + ":")
+            for name in sorted(n for n in dir(obj) if not n.startswith("_")):
+                members.append("  " + name)
         selected = []
-        for label, call in (
-            ("current_filament_preset_names()", lambda: bundle.current_filament_preset_names()),
-            ("current_filament_presets()", lambda: bundle.current_filament_presets()),
-            ("full_config_value('filament_type')", lambda: bundle.full_config_value("filament_type")),
-            ("full_config_value('nozzle_temperature')", lambda: bundle.full_config_value("nozzle_temperature")),
-        ):
+
+        try:
+            names = bundle.current_filament_preset_names()
+            selected.append(
+                "  current_filament_preset_names() -> %r" % (names,)
+            )
+        except Exception as exc:
+            selected.append("  Preset names error: %s" % exc)
+
+        try:
+            current_presets = bundle.current_filament_presets()
+            selected.append(
+                "  current_filament_presets() -> %d objects" %
+                len(current_presets or [])
+            )
+
+            for index, preset in enumerate(current_presets or []):
+                selected.append(
+                    "  Preset object[%d] -> %s" %
+                    (index, type(preset).__name__)
+                )
+
+                try:
+                    keys = list(preset.config_keys())
+                    relevant_keys = [
+                        key for key in keys
+                        if any(term in str(key).lower() for term in (
+                            "filament", "nozzle", "color", "colour",
+                            "vendor", "density", "diameter"
+                        ))
+                    ]
+
+                    selected.append(
+                        "    Relevant config keys -> %r" % relevant_keys
+                    )
+
+                    candidates = (
+                        "filament_type",
+                        "nozzle_temperature",
+                        "filament_colour",
+                        "filament_color",
+                        "filament_vendor",
+                        "filament_diameter",
+                        "filament_density",
+                    )
+
+                    for key in candidates:
+                        if key in keys:
+                            value = preset.config_value(key)
+                            selected.append(
+                                "    %s -> %r" % (key, value)
+                            )
+                except Exception as exc:
+                    selected.append(
+                        "    Config inspection error: %s" % exc
+                    )
+
+                attrs = []
+                for attr in sorted(
+                    n for n in dir(preset) if not n.startswith("_")
+                ):
+                    try:
+                        value = getattr(preset, attr)
+                        if callable(value):
+                            detail = "<method>"
+                        else:
+                            detail = repr(value)
+                            if len(detail) > 100:
+                                detail = detail[:97] + "..."
+                    except Exception as exc:
+                        detail = "<error: %s>" % exc
+
+                    attrs.append("%s=%s" % (attr, detail))
+
+                selected.extend(
+                    "    " + item
+                    for item in attrs[:25]
+                )
+
+                if len(attrs) > 25:
+                    selected.append(
+                        "    ... %d more attributes" % (len(attrs) - 25)
+                    )
+
+        except Exception as exc:
+            selected.append("  Preset object error: %s" % exc)
+
+        for key in ("filament_type", "nozzle_temperature"):
             try:
-                value = call()
-                selected.append("  %s -> %s %r" % (label, type(value).__name__, value))
+                selected.append(
+                    "  full_config_value(%r) -> %r" %
+                    (key, bundle.full_config_value(key))
+                )
             except Exception as exc:
-                selected.append("  %s -> error: %s" % (label, exc))
-        selected.append("  read_selected_filament() -> %r" % (read_selected_filament(),))
+                selected.append("  %s error: %s" % (key, exc))
+
+        selected.append(
+            "  read_selected_filament() -> %r" %
+            (read_selected_filament(),)
+        )
+
         lines = ["preset_bundle() -> %s" % type(bundle).__name__, "Selected filament, as the panel reads it:"]
+        host_start = members.index("Host API:")
+        members = members[host_start:] + members[:host_start]
         lines += selected + ["", "Members:"] + members
         text = "\n".join(lines)
         print(text, file=sys.stderr)         # also lands in OrcaSlicer's python log
@@ -903,6 +1676,7 @@ class InspectPresetApi(orca.script.ScriptPluginCapabilityBase):
 @orca.plugin
 class PhoenixSpoolmanPlugin(orca.base):
     def register_capabilities(self):
+        orca.request_permissions(threading=True, network=["http://100.93.111.109"])
         orca.register_capability(ActiveSpool)
         orca.register_capability(SpoolCheck)
         orca.register_capability(ActiveSpoolPanel)
