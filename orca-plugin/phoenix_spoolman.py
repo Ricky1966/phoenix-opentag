@@ -6,7 +6,7 @@
 # name = "Phoenix Spoolman"
 # description = "Shows the spool that the Phoenix reader activated and checks it against the exported G-code (Moonraker + Spoolman). Standard library only."
 # author = "Ricky1966"
-# version = "0.6.4"
+# version = "0.6.5"
 # ///
 """Phoenix Spoolman plugin for OrcaSlicer (Python plugin API, nightly builds / releases after 2.4.2).
 
