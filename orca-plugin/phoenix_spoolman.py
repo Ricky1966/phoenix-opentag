@@ -53,6 +53,7 @@ DEFAULT_CONFIG = {
     # Active spool panel only: how often the panel asks Moonraker which spool is active.
     "poll_seconds": 3,
     "inventory_poll_seconds": 30,
+    "auto_open_panel": True,
 }
 CONFIG_TAIL_BYTES = 512 * 1024  # Orca writes the settings block at the end of the G-code
 
@@ -1254,6 +1255,27 @@ class ActiveSpoolPanel(orca.script.ScriptPluginCapabilityBase):
 
         return names
 
+    def on_load(self):
+        if self._config().get("auto_open_panel") is False:
+            return
+        if PANEL.is_open():
+            return
+
+        self._create_panel()
+        self._autostart_thread = threading.Thread(
+            target=self._run_autostart,
+            name="phoenix-spoolman-commands",
+            daemon=True,
+        )
+        self._autostart_thread.start()
+
+    def _run_autostart(self):
+        try:
+            asyncio.run(self._run_commands())
+        except Exception as exc:
+            print("Phoenix Spoolman worker: %s" % exc, file=sys.stderr)
+            PANEL.close()
+
     def on_unload(self):
         PANEL.close()
 
@@ -1312,6 +1334,17 @@ class ActiveSpoolPanel(orca.script.ScriptPluginCapabilityBase):
     def _on_close(self):
         PANEL.close()
 
+    def _create_panel(self):
+        PANEL.panel = orca.host.ui.create_dock_panel(
+            html=PANEL_HTML,
+            title="Phoenix active spool",
+            width=320,
+            height=420,
+            on_message=self._on_message,
+            on_close=self._on_close,
+            dock="right",
+        )
+
     async def execute(self):
         if PANEL.is_open():
             PANEL.panel.show()
@@ -1320,21 +1353,16 @@ class ActiveSpoolPanel(orca.script.ScriptPluginCapabilityBase):
             )
 
         try:
-            PANEL.panel = orca.host.ui.create_dock_panel(
-                html=PANEL_HTML,
-                title="Phoenix active spool",
-                width=320,
-                height=420,
-                on_message=self._on_message,
-                on_close=self._on_close,
-                dock="right",
-            )
+            self._create_panel()
         except Exception as exc:
             return orca.ExecutionResult.failure(
                 orca.PluginResult.RecoverableError,
                 "Cannot open the panel: %s" % exc
             )
 
+        return await self._run_commands()
+
+    async def _run_commands(self):
         loop = asyncio.get_running_loop()
         queue = asyncio.Queue()
 

@@ -879,6 +879,111 @@ class OrcaPresetCollectionTests(unittest.TestCase):
 
 
 
+class PanelAutostartTests(unittest.TestCase):
+    def test_on_load_opens_panel_and_starts_worker(self):
+        plugin, orca = load_plugin()
+        cap = plugin.ActiveSpoolPanel()
+        self.addCleanup(cap.on_unload)
+
+        with mock.patch.object(plugin.PANEL, "start"):
+            cap.on_load()
+            self.assertEqual(len(orca.panels), 1)
+            self.assertEqual(
+                orca.panels[0].kw["title"], "Phoenix active spool"
+            )
+            deadline = time.monotonic() + 2
+            while plugin.PANEL.command_loop is None and time.monotonic() < deadline:
+                time.sleep(0.01)
+            self.assertIsNotNone(plugin.PANEL.command_loop)
+
+
+    def test_autostart_unload_stops_worker(self):
+        plugin, _ = load_plugin()
+        cap = plugin.ActiveSpoolPanel()
+
+        with mock.patch.object(plugin.PANEL, "start"):
+            cap.on_load()
+            worker = cap._autostart_thread
+            try:
+                deadline = time.monotonic() + 2
+                while plugin.PANEL.command_loop is None and time.monotonic() < deadline:
+                    time.sleep(0.01)
+                self.assertIsNotNone(plugin.PANEL.command_loop)
+                cap.on_unload()
+                worker.join(2)
+                self.assertFalse(worker.is_alive())
+                self.assertIsNone(plugin.PANEL.command_loop)
+            finally:
+                cap.on_unload()
+                worker.join(2)
+
+
+    def test_repeated_on_load_does_not_duplicate_workers(self):
+        plugin, orca = load_plugin()
+        cap = plugin.ActiveSpoolPanel()
+
+        with mock.patch.object(plugin.PANEL, "start"):
+            cap.on_load()
+            worker = cap._autostart_thread
+            try:
+                cap.on_load()
+                self.assertIs(cap._autostart_thread, worker)
+                self.assertEqual(len(orca.panels), 1)
+            finally:
+                cap.on_unload()
+                worker.join(2)
+                self.assertFalse(worker.is_alive())
+
+
+    def test_autostart_close_then_manual_reopen(self):
+        plugin, orca = load_plugin()
+        cap = plugin.ActiveSpoolPanel()
+
+        with mock.patch.object(plugin.PANEL, "start"):
+            cap.on_load()
+            worker = cap._autostart_thread
+            try:
+                deadline = time.monotonic() + 2
+                while plugin.PANEL.command_loop is None and time.monotonic() < deadline:
+                    time.sleep(0.01)
+                self.assertIsNotNone(plugin.PANEL.command_loop)
+
+                orca.panels[0].kw["on_close"]()
+                worker.join(2)
+                self.assertFalse(worker.is_alive())
+
+                async def reopen():
+                    task = asyncio.create_task(cap.execute())
+                    await asyncio.sleep(0)
+                    self.assertEqual(len(orca.panels), 2)
+                    self.assertTrue(plugin.PANEL.is_open())
+                    plugin.PANEL.close()
+                    await task
+
+                asyncio.run(reopen())
+            finally:
+                cap.on_unload()
+                worker.join(2)
+
+
+    def test_disabled_autostart_leaves_panel_closed(self):
+        plugin, orca = load_plugin()
+        cap = plugin.ActiveSpoolPanel()
+        cap.config = json.dumps({"auto_open_panel": False})
+
+        with mock.patch.object(plugin.PANEL, "start"):
+            try:
+                cap.on_load()
+                self.assertEqual(len(orca.panels), 0)
+                self.assertFalse(plugin.PANEL.is_open())
+                self.assertIsNone(plugin.PANEL.command_loop)
+            finally:
+                cap.on_unload()
+                worker = getattr(cap, "_autostart_thread", None)
+                if worker is not None:
+                    worker.join(2)
+
+
 class PanelTests(unittest.TestCase):
     def setUp(self):
         self.plugin, self.orca = load_plugin()
