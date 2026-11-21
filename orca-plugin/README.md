@@ -133,7 +133,27 @@ Defaults:
  "on_mismatch": "block", "nozzle_temp_tolerance": 25, "poll_seconds": 3, "inventory_poll_seconds": 30, "auto_open_panel": true}
 ```
 
-Away from home with Tailscale, use the Phoenix's Tailscale address in both URLs.
+### Using another printer or server
+
+The default URLs are specific to Phoenix; they are not discovered automatically.
+
+- Set `moonraker_url` to your printer's Moonraker address (usually port 7125).
+- Set `spoolman_url` to your Spoolman server (commonly port 7912).
+- Moonraker and Spoolman may run on different hosts.
+- OrcaSlicer stores settings separately for each plugin capability. Configure
+  **Active spool panel**, **Active spool** and **Spool check** individually
+  if you use them with non-default addresses.
+- The initial permission declaration includes `phoenix.local`. Other hosts
+  may trigger additional network permission requests.
+- If a network permission is denied, grant the appropriate permission and
+  use the panel's Refresh button to retry.
+
+The plugin reads the active spool through Moonraker's Spoolman integration.
+It does not require Phoenix-specific firmware or NFC hardware, provided
+Moonraker reports an active spool.
+
+Away from home with Tailscale, use the appropriate reachable Moonraker
+and Spoolman addresses.
 
 ## Tests
 
