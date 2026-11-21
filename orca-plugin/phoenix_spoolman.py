@@ -6,7 +6,7 @@
 # name = "Phoenix Spoolman"
 # description = "Shows the spool that the Phoenix reader activated and checks it against the exported G-code (Moonraker + Spoolman). Standard library only."
 # author = "Ricky1966"
-# version = "0.6.5"
+# version = "0.6.6"
 # ///
 """Phoenix Spoolman plugin for OrcaSlicer (Python plugin API, nightly builds / releases after 2.4.2).
 
@@ -24,7 +24,7 @@ Moonraker which spool is active. If the spool is changed after slicing, nothing 
 OrcaSlicer asks for permission the first time the plugin contacts the network.
 """
 
-import asyncio
+import queue
 import json
 import os
 import re
@@ -62,6 +62,19 @@ class PhoenixError(RuntimeError):
     """A problem to show to the user as it is."""
 
 
+class PhoenixPermissionError(PhoenixError):
+    """A network operation was denied by OrcaSlicer's permissions."""
+
+
+def _is_orca_audit_denial(exc):
+    message = str(exc)
+    return (
+        isinstance(exc, PermissionError)
+        and message.startswith('Plugin attempted audited operation "')
+        and " without permission" in message
+    )
+
+
 def get_json(url, timeout):
     request = urllib.request.Request(url, headers={"Accept": "application/json"})
     try:
@@ -69,8 +82,18 @@ def get_json(url, timeout):
             return json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         raise PhoenixError("%s answered HTTP %d" % (url, exc.code)) from None
-    except (urllib.error.URLError, OSError, ValueError) as exc:
-        raise PhoenixError("Cannot reach %s (%s)" % (url, getattr(exc, "reason", exc))) from None
+    except PermissionError as exc:
+        if _is_orca_audit_denial(exc):
+            raise PhoenixPermissionError("Permission denied for %s (%s)" % (url, exc)) from None
+        raise PhoenixError("Cannot reach %s (%s)" % (url, exc)) from None
+    except urllib.error.URLError as exc:
+        if _is_orca_audit_denial(exc.reason):
+            raise PhoenixPermissionError(
+                "Permission denied for %s (%s)" % (url, exc.reason)
+            ) from None
+        raise PhoenixError("Cannot reach %s (%s)" % (url, exc.reason)) from None
+    except (OSError, ValueError) as exc:
+        raise PhoenixError("Cannot reach %s (%s)" % (url, exc)) from None
     except Exception as exc:  # e.g. an operation refused by OrcaSlicer's audit hook
         raise PhoenixError("Request to %s failed (%s: %s)" % (url, type(exc).__name__, exc)) from None
 
@@ -336,6 +359,8 @@ def inventory_payload(config):
             item["archived"] = bool(spool.get("archived"))
             items.append(item)
         return {"type": "inventory", "ok": True, "spools": items}
+    except PhoenixPermissionError as exc:
+        return {"type": "inventory", "ok": False, "error": str(exc), "permission_denied": True}
     except PhoenixError as exc:
         return {"type": "inventory", "ok": False, "error": str(exc)}
     except Exception as exc:
@@ -351,6 +376,8 @@ def panel_payload(config):
     """What the panel displays right now. Never raises: a failure becomes {"ok": False, "error": ...}."""
     try:
         spool = fetch_active_spool(config)
+    except PhoenixPermissionError as exc:
+        return {"type": "state", "ok": False, "error": str(exc), "permission_denied": True}
     except PhoenixError as exc:
         return {"type": "state", "ok": False, "error": str(exc)}
     except Exception as exc:  # e.g. an operation refused by OrcaSlicer's audit hook
@@ -986,75 +1013,79 @@ class PanelState:
         self.thread = None
         self.inventory_thread = None
         self.inventory_wake = threading.Event()
+        self.network_lock = threading.Lock()
+        self.permission_denied = threading.Event()
         self.last = None            # latest network state (without the selection)
         self.selected = None
         self.slots = []
         self.available_presets = []
         self.last_auto_spool_key = None        # latest selected profile, read on the UI thread
-        self.command_loop = None
+        self.command_worker = None
         self.command_queue = None
         self.command_busy = False
         self.config = dict(DEFAULT_CONFIG)
 
-    def attach_command_worker(self, loop, queue):
-        """Register the command worker for the current panel session."""
+    def attach_command_worker(self, worker, commands):
+        """Register the worker for the current panel session."""
         if not self.is_open():
             return False
 
         if self.stop.is_set():
-            # A reopened panel gets independent session events.
             self.stop = threading.Event()
             self.wake = threading.Event()
             self.inventory_wake = threading.Event()
+            self.network_lock = threading.Lock()
+            self.permission_denied = threading.Event()
             self.thread = None
             self.inventory_thread = None
 
-        self.command_loop = loop
-        self.command_queue = queue
+        self.command_worker = worker
+        self.command_queue = commands
         return True
 
-    def detach_command_worker(self, loop):
-        """Detach only the worker belonging to this session."""
-        if self.command_loop is not loop:
+    def detach_command_worker(self, worker):
+        """Detach only the matching worker."""
+        if self.command_worker is not worker:
             return False
-        self.command_loop = None
+        self.command_worker = None
         self.command_queue = None
         self.command_busy = False
         return True
 
     def enqueue_command(self, command):
-        """Forward a panel command to the Script worker without blocking the UI."""
-        loop = self.command_loop
-        queue = self.command_queue
-        if loop is None or queue is None or loop.is_closed():
+        """Queue a command without blocking the UI."""
+        commands = self.command_queue
+        if self.command_worker is None or commands is None:
             return False
-        try:
-            loop.call_soon_threadsafe(queue.put_nowait, command)
-        except RuntimeError:
-            return False
+        commands.put_nowait(command)
         return True
 
     def is_open(self):
         return self.panel is not None and self.panel.is_open()
 
-    def start(self, config):
+    def start(self, config, retry_permissions=False):
         self.config = dict(config)
         if self.stop.is_set():
             # New panel session: old workers retain their stopped event.
             self.stop = threading.Event()
             self.wake = threading.Event()
             self.inventory_wake = threading.Event()
+            self.network_lock = threading.Lock()
+            self.permission_denied = threading.Event()
             self.thread = None
             self.inventory_thread = None
+        if retry_permissions:
+            with self.network_lock:
+                self.permission_denied.clear()
         self.wake.set()
         self.inventory_wake.set()                      # read straight away
         if self.thread is None or not self.thread.is_alive():
-            self.thread = threading.Thread(target=self._loop, args=(self.stop, self.wake), name="phoenix-spoolman-panel", daemon=True)
+            self.thread = threading.Thread(target=self._loop, args=(self.stop, self.wake, self.network_lock, self.permission_denied), name="phoenix-spoolman-panel", daemon=True)
             self.thread.start()
         if self.inventory_thread is None or not self.inventory_thread.is_alive():
             self.inventory_thread = threading.Thread(
                 target=self._inventory_loop,
-                args=(self.stop, self.inventory_wake),
+                args=(self.stop, self.inventory_wake, self.network_lock, self.permission_denied),
                 name="phoenix-spoolman-inventory",
                 daemon=True,
             )
@@ -1065,19 +1096,11 @@ class PanelState:
         self.wake.set()
         self.inventory_wake.set()
 
-        loop = self.command_loop
-        queue = self.command_queue
+        commands = self.command_queue
+        if commands is not None:
+            commands.put_nowait({"type": "shutdown"})
 
-        if loop is not None and queue is not None and not loop.is_closed():
-            try:
-                loop.call_soon_threadsafe(
-                    queue.put_nowait,
-                    {"type": "shutdown"}
-                )
-            except RuntimeError:
-                pass
-
-        self.command_loop = None
+        self.command_worker = None
         self.command_queue = None
         self.command_busy = False
 
@@ -1116,10 +1139,21 @@ class PanelState:
                 })
         return message
 
-    def _loop(self, stop, wake):
+    def _loop(self, stop, wake, network_lock, permission_denied):
         while not stop.is_set():
             wake.clear()
-            payload = panel_payload(self.config)
+            with network_lock:
+                if stop.is_set() or permission_denied.is_set():
+                    payload = None
+                else:
+                    payload = panel_payload(self.config)
+                    if payload.get("permission_denied"):
+                        permission_denied.set()
+            if payload is None:
+                if stop.is_set():
+                    return
+                wake.wait()
+                continue
             panel = self.panel
             if panel is None or stop.is_set() or panel is not self.panel:
                 return
@@ -1151,11 +1185,22 @@ class PanelState:
             wake.wait(interval)
 
 
-    def _inventory_loop(self, stop, wake):
-        """Poll Spoolman independently of Moonraker."""
+    def _inventory_loop(self, stop, wake, network_lock, permission_denied):
+        """Poll Spoolman with shared permission protection."""
         while not stop.is_set():
             wake.clear()
-            payload = inventory_payload(self.config)
+            with network_lock:
+                if stop.is_set() or permission_denied.is_set():
+                    payload = None
+                else:
+                    payload = inventory_payload(self.config)
+                    if payload.get("permission_denied"):
+                        permission_denied.set()
+            if payload is None:
+                if stop.is_set():
+                    return
+                wake.wait()
+                continue
             panel = self.panel
             if panel is None or stop.is_set() or panel is not self.panel:
                 return
@@ -1262,6 +1307,9 @@ class ActiveSpoolPanel(orca.script.ScriptPluginCapabilityBase):
             return
 
         self._create_panel()
+        self._start_worker()
+
+    def _start_worker(self):
         self._autostart_thread = threading.Thread(
             target=self._run_autostart,
             name="phoenix-spoolman-commands",
@@ -1271,7 +1319,7 @@ class ActiveSpoolPanel(orca.script.ScriptPluginCapabilityBase):
 
     def _run_autostart(self):
         try:
-            asyncio.run(self._run_commands())
+            self._run_commands()
         except Exception as exc:
             print("Phoenix Spoolman worker: %s" % exc, file=sys.stderr)
             PANEL.close()
@@ -1345,7 +1393,7 @@ class ActiveSpoolPanel(orca.script.ScriptPluginCapabilityBase):
             dock="right",
         )
 
-    async def execute(self):
+    def execute(self):
         if PANEL.is_open():
             PANEL.panel.show()
             return orca.ExecutionResult.success(
@@ -1360,31 +1408,35 @@ class ActiveSpoolPanel(orca.script.ScriptPluginCapabilityBase):
                 "Cannot open the panel: %s" % exc
             )
 
-        return await self._run_commands()
+        self._start_worker()
+        return orca.ExecutionResult.success("Active spool panel opened.")
 
-    async def _run_commands(self):
-        loop = asyncio.get_running_loop()
-        queue = asyncio.Queue()
+    def _run_commands(self):
+        worker = threading.current_thread()
+        commands = queue.Queue()
 
-        if not PANEL.attach_command_worker(loop, queue):
+        if not PANEL.attach_command_worker(worker, commands):
             return orca.ExecutionResult.failure(
                 orca.PluginResult.RecoverableError,
                 "Cannot attach the panel command worker."
             )
 
         # Initial read: do not depend on the timing of the HTML ready message.
-        queue.put_nowait({"type": "ready"})
+        commands.put_nowait({"type": "ready"})
 
         try:
             while True:
-                command = await queue.get()
+                command = commands.get()
                 kind = command.get("type") if isinstance(command, dict) else None
 
                 if kind == "shutdown":
                     break
 
                 if kind in ("ready", "refresh"):
-                    PANEL.start(self._config())
+                    PANEL.start(
+                        self._config(),
+                        retry_permissions=(kind == "refresh"),
+                    )
                 elif kind == "auto_select":
                     active = (PANEL.last or {}).get("spool") or {}
                     filament_id = command.get("filament_id")
@@ -1550,7 +1602,7 @@ class ActiveSpoolPanel(orca.script.ScriptPluginCapabilityBase):
                         PANEL.panel.post(PANEL.message())
 
         finally:
-            PANEL.detach_command_worker(loop)
+            PANEL.detach_command_worker(worker)
 
         return orca.ExecutionResult.success(
             "Active spool panel closed."
@@ -1704,7 +1756,7 @@ class InspectPresetApi(orca.script.ScriptPluginCapabilityBase):
 @orca.plugin
 class PhoenixSpoolmanPlugin(orca.base):
     def register_capabilities(self):
-        orca.request_permissions(threading=True, network=["http://100.93.111.109"])
+        orca.request_permissions(threading=True, network=["http://phoenix.local"])
         orca.register_capability(ActiveSpool)
         orca.register_capability(SpoolCheck)
         orca.register_capability(ActiveSpoolPanel)

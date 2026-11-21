@@ -1,5 +1,4 @@
 """Tests for orca-plugin/phoenix_spoolman.py with a stand-in `orca` module and local HTTP servers."""
-import asyncio
 import importlib.util
 import json
 import sys
@@ -226,7 +225,7 @@ class PluginTests(unittest.TestCase):
 
     def test_registers_one_script_capability(self):
         self.plugin.PhoenixSpoolmanPlugin().register_capabilities()
-        self.assertEqual(self.orca.permission_requests, [{"threading": True, "network": ["http://100.93.111.109"]}])
+        self.assertEqual(self.orca.permission_requests, [{"threading": True, "network": ["http://phoenix.local"]}])
         self.assertEqual(
             self.orca.registered,
             [self.plugin.ActiveSpool, self.plugin.SpoolCheck, self.plugin.ActiveSpoolPanel, self.plugin.InspectPresetApi],
@@ -424,6 +423,63 @@ class SpoolNameOutputTests(unittest.TestCase):
 
 
 
+
+class NetworkPermissionTests(unittest.TestCase):
+    def test_system_permission_error_is_not_audit_denial(self):
+        plugin, _ = load_plugin()
+        error = PermissionError(13, "Permission denied")
+        with mock.patch.object(
+            plugin.urllib.request, "urlopen", side_effect=error
+        ):
+            with self.assertRaises(plugin.PhoenixError) as caught:
+                plugin.get_json("http://example.invalid/test", 2)
+        self.assertNotIsInstance(
+            caught.exception, plugin.PhoenixPermissionError
+        )
+
+    def test_direct_audit_permission_error(self):
+        plugin, _ = load_plugin()
+        error = PermissionError(
+            'Plugin attempted audited operation "socket.connect" without permission'
+        )
+        with mock.patch.object(plugin.urllib.request, "urlopen", side_effect=error):
+            with self.assertRaises(plugin.PhoenixPermissionError):
+                plugin.get_json("http://example.invalid/test", 2)
+
+    def test_wrapped_audit_permission_error(self):
+        import urllib.error
+
+        plugin, _ = load_plugin()
+        error = urllib.error.URLError(PermissionError(
+            'Plugin attempted audited operation "socket.connect" without permission'
+        ))
+        with mock.patch.object(plugin.urllib.request, "urlopen", side_effect=error):
+            with self.assertRaises(plugin.PhoenixPermissionError):
+                plugin.get_json("http://example.invalid/test", 2)
+
+
+
+    def test_panel_payload_marks_permission_denial(self):
+        plugin, _ = load_plugin()
+        with mock.patch.object(
+            plugin, "fetch_active_spool",
+            side_effect=plugin.PhoenixPermissionError("Permission denied")
+        ):
+            result = plugin.panel_payload({})
+        self.assertFalse(result["ok"])
+        self.assertTrue(result.get("permission_denied"))
+
+    def test_inventory_payload_marks_permission_denial(self):
+        plugin, _ = load_plugin()
+        with mock.patch.object(
+            plugin, "fetch_spool_inventory",
+            side_effect=plugin.PhoenixPermissionError("Permission denied")
+        ):
+            result = plugin.inventory_payload({})
+        self.assertFalse(result["ok"])
+        self.assertTrue(result.get("permission_denied"))
+
+
 class InventoryTests(unittest.TestCase):
     def setUp(self):
         self.plugin, _ = load_plugin()
@@ -499,11 +555,11 @@ class PanelCommandQueueTests(unittest.TestCase):
         queue = object()
 
         self.assertFalse(plugin.PANEL.attach_command_worker(loop, queue))
-        self.assertIsNone(plugin.PANEL.command_loop)
+        self.assertIsNone(plugin.PANEL.command_worker)
 
         plugin.PANEL.panel = types.SimpleNamespace(is_open=lambda: True)
         self.assertTrue(plugin.PANEL.attach_command_worker(loop, queue))
-        self.assertIs(plugin.PANEL.command_loop, loop)
+        self.assertIs(plugin.PANEL.command_worker, loop)
         self.assertIs(plugin.PANEL.command_queue, queue)
 
     def test_detach_only_matching_worker(self):
@@ -519,10 +575,10 @@ class PanelCommandQueueTests(unittest.TestCase):
         self.assertTrue(panel.attach_command_worker(new_loop, queue))
 
         self.assertFalse(panel.detach_command_worker(old_loop))
-        self.assertIs(panel.command_loop, new_loop)
+        self.assertIs(panel.command_worker, new_loop)
 
         self.assertTrue(panel.detach_command_worker(new_loop))
-        self.assertIsNone(panel.command_loop)
+        self.assertIsNone(panel.command_worker)
         self.assertIsNone(panel.command_queue)
 
     def test_enqueue_without_worker_returns_false(self):
@@ -568,7 +624,6 @@ class FilamentAssociationTests(unittest.TestCase):
 
 class AutomaticPresetSelectionTests(unittest.TestCase):
     def test_auto_selection_uses_begin_update_without_commit(self):
-        import asyncio
         from types import SimpleNamespace
 
         plugin, orca = load_plugin()
@@ -593,10 +648,15 @@ class AutomaticPresetSelectionTests(unittest.TestCase):
             filament=SimpleNamespace(begin_update=begin_update)
         )
 
-        async def scenario():
-            with mock.patch.object(plugin.PANEL, "start"):
-                task = asyncio.create_task(cap.execute())
-                await asyncio.sleep(0)
+        with mock.patch.object(plugin.PANEL, "start"):
+            cap.execute()
+            worker = cap._autostart_thread
+            try:
+                deadline = time.monotonic() + 2
+                while plugin.PANEL.command_worker is None and time.monotonic() < deadline:
+                    time.sleep(0.01)
+                self.assertIsNotNone(plugin.PANEL.command_worker)
+
                 plugin.PANEL.last = {
                     "ok": True,
                     "spool": {"id": 4, "filament_id": 42},
@@ -606,17 +666,21 @@ class AutomaticPresetSelectionTests(unittest.TestCase):
                     "spool_id": 4,
                     "filament_id": 42,
                 }))
-                await asyncio.sleep(0.02)
-                plugin.PANEL.close()
-                await task
 
-        asyncio.run(scenario())
+                deadline = time.monotonic() + 2
+                while not calls and time.monotonic() < deadline:
+                    time.sleep(0.01)
+            finally:
+                plugin.PANEL.close()
+                worker.join(2)
+
+            self.assertFalse(worker.is_alive())
+
         self.assertEqual(calls, [(1, "PLA A")])
 
 
 class PresetChoiceTests(unittest.TestCase):
     def test_multiple_associations_require_choice(self):
-        import asyncio
         from types import SimpleNamespace
 
         plugin, orca = load_plugin()
@@ -631,10 +695,16 @@ class PresetChoiceTests(unittest.TestCase):
             )
         )
 
-        async def scenario():
-            with mock.patch.object(plugin.PANEL, "start"):
-                task = asyncio.create_task(cap.execute())
-                await asyncio.sleep(0)
+        with mock.patch.object(plugin.PANEL, "start"):
+            cap.execute()
+            worker = cap._autostart_thread
+            try:
+                deadline = time.monotonic() + 2
+                while (plugin.PANEL.command_worker is None
+                       and time.monotonic() < deadline):
+                    time.sleep(0.01)
+                self.assertIsNotNone(plugin.PANEL.command_worker)
+
                 plugin.PANEL.last = {
                     "ok": True,
                     "spool": {"id": 4, "filament_id": 42},
@@ -644,13 +714,22 @@ class PresetChoiceTests(unittest.TestCase):
                     "spool_id": 4,
                     "filament_id": 42,
                 }))
-                await asyncio.sleep(0.02)
-                posts = list(orca.panels[0].posts)
-                plugin.PANEL.close()
-                await task
-                return posts
 
-        posts = asyncio.run(scenario())
+                deadline = time.monotonic() + 2
+                while time.monotonic() < deadline:
+                    posts = list(orca.panels[0].posts)
+                    if any(
+                        m.get("type") == "preset_selection"
+                        for m in posts
+                    ):
+                        break
+                    time.sleep(0.01)
+            finally:
+                plugin.PANEL.close()
+                worker.join(2)
+
+            self.assertFalse(worker.is_alive())
+
         choices = [
             m for m in posts
             if m.get("type") == "preset_selection"
@@ -660,7 +739,6 @@ class PresetChoiceTests(unittest.TestCase):
         self.assertEqual(calls, [])
 
     def test_manual_selection_targets_requested_slot(self):
-        import asyncio
         from types import SimpleNamespace
 
         plugin, orca = load_plugin()
@@ -675,38 +753,47 @@ class PresetChoiceTests(unittest.TestCase):
             )
         )
 
-        async def scenario():
-            with mock.patch.object(plugin.PANEL, "start"):
-                task = asyncio.create_task(cap.execute())
-                await asyncio.sleep(0)
+        with mock.patch.object(plugin.PANEL, "start"):
+            cap.execute()
+            worker = cap._autostart_thread
+            try:
+                deadline = time.monotonic() + 2
+                while (plugin.PANEL.command_worker is None
+                       and time.monotonic() < deadline):
+                    time.sleep(0.01)
+                self.assertIsNotNone(plugin.PANEL.command_worker)
+
                 plugin.PANEL.last = {
                     "ok": True,
                     "spool": {"id": 4, "filament_id": 42},
                 }
-                plugin.PANEL.slots = [
-                    {"slot": 1}, {"slot": 2}
-                ]
+                plugin.PANEL.slots = [{"slot": 1}, {"slot": 2}]
                 plugin.PANEL.available_presets = [
                     {"name": "PLA A", "compatible": True},
                     {"name": "PLA B", "compatible": True},
                 ]
+
                 self.assertTrue(plugin.PANEL.enqueue_command({
                     "type": "select_associated",
                     "filament_id": 42,
                     "preset_name": "PLA B",
                     "slot": 2,
                 }))
-                await asyncio.sleep(0.02)
-                plugin.PANEL.close()
-                await task
 
-        asyncio.run(scenario())
+                deadline = time.monotonic() + 2
+                while not calls and time.monotonic() < deadline:
+                    time.sleep(0.01)
+            finally:
+                plugin.PANEL.close()
+                worker.join(2)
+
+            self.assertFalse(worker.is_alive())
+
         self.assertEqual(calls, [(2, "PLA B")])
 
 
 class AssociationWorkerTests(unittest.TestCase):
     def test_associate_persists_and_selects_preset(self):
-        import asyncio
         from types import SimpleNamespace
 
         plugin, orca = load_plugin()
@@ -720,10 +807,16 @@ class AssociationWorkerTests(unittest.TestCase):
             )
         )
 
-        async def scenario():
-            with mock.patch.object(plugin.PANEL, "start"):
-                task = asyncio.create_task(cap.execute())
-                await asyncio.sleep(0)
+        with mock.patch.object(plugin.PANEL, "start"):
+            cap.execute()
+            worker = cap._autostart_thread
+            try:
+                deadline = time.monotonic() + 2
+                while (plugin.PANEL.command_worker is None
+                       and time.monotonic() < deadline):
+                    time.sleep(0.01)
+                self.assertIsNotNone(plugin.PANEL.command_worker)
+
                 plugin.PANEL.last = {
                     "ok": True,
                     "spool": {"id": 4, "filament_id": 42},
@@ -731,18 +824,35 @@ class AssociationWorkerTests(unittest.TestCase):
                 plugin.PANEL.available_presets = [
                     {"name": "PLA A", "compatible": True}
                 ]
+
                 cap._on_message({
                     "type": "associate",
                     "filament_id": 42,
                     "preset_name": "PLA A",
                 })
-                await asyncio.sleep(0.05)
-                posts = list(orca.panels[0].posts)
-                plugin.PANEL.close()
-                await task
-                return posts
 
-        posts = asyncio.run(scenario())
+                deadline = time.monotonic() + 2
+                while time.monotonic() < deadline:
+                    posts = list(orca.panels[0].posts)
+                    saved = json.loads(cap.config)
+                    confirmed = any(
+                        m.get("type") == "association_result"
+                        and m.get("ok")
+                        for m in posts
+                    )
+                    if (confirmed
+                            and saved.get("filament_preset_map") == {
+                                "42": ["PLA A"]
+                            }
+                            and calls == [(1, "PLA A")]):
+                        break
+                    time.sleep(0.01)
+            finally:
+                plugin.PANEL.close()
+                worker.join(2)
+
+            self.assertFalse(worker.is_alive())
+
         self.assertEqual(
             json.loads(cap.config)["filament_preset_map"],
             {"42": ["PLA A"]},
@@ -892,10 +1002,34 @@ class PanelAutostartTests(unittest.TestCase):
                 orca.panels[0].kw["title"], "Phoenix active spool"
             )
             deadline = time.monotonic() + 2
-            while plugin.PANEL.command_loop is None and time.monotonic() < deadline:
+            while plugin.PANEL.command_worker is None and time.monotonic() < deadline:
                 time.sleep(0.01)
-            self.assertIsNotNone(plugin.PANEL.command_loop)
+            self.assertIsNotNone(plugin.PANEL.command_worker)
 
+
+    def test_autostart_without_internal_socket(self):
+        plugin, _ = load_plugin()
+        cap = plugin.ActiveSpoolPanel()
+
+        denial = PermissionError(
+            'Plugin attempted audited operation "socket.__new__" '
+            'without permission: audit permission required'
+        )
+        with mock.patch.object(plugin.PANEL, "start"), \
+             mock.patch("socket.socket", side_effect=denial):
+            cap.on_load()
+            worker = cap._autostart_thread
+            try:
+                deadline = time.monotonic() + 2
+                while (plugin.PANEL.command_worker is None
+                       and worker.is_alive()
+                       and time.monotonic() < deadline):
+                    time.sleep(0.01)
+                self.assertTrue(plugin.PANEL.is_open())
+                self.assertIsNotNone(plugin.PANEL.command_worker)
+            finally:
+                cap.on_unload()
+                worker.join(2)
 
     def test_autostart_unload_stops_worker(self):
         plugin, _ = load_plugin()
@@ -906,13 +1040,13 @@ class PanelAutostartTests(unittest.TestCase):
             worker = cap._autostart_thread
             try:
                 deadline = time.monotonic() + 2
-                while plugin.PANEL.command_loop is None and time.monotonic() < deadline:
+                while plugin.PANEL.command_worker is None and time.monotonic() < deadline:
                     time.sleep(0.01)
-                self.assertIsNotNone(plugin.PANEL.command_loop)
+                self.assertIsNotNone(plugin.PANEL.command_worker)
                 cap.on_unload()
                 worker.join(2)
                 self.assertFalse(worker.is_alive())
-                self.assertIsNone(plugin.PANEL.command_loop)
+                self.assertIsNone(plugin.PANEL.command_worker)
             finally:
                 cap.on_unload()
                 worker.join(2)
@@ -944,23 +1078,33 @@ class PanelAutostartTests(unittest.TestCase):
             worker = cap._autostart_thread
             try:
                 deadline = time.monotonic() + 2
-                while plugin.PANEL.command_loop is None and time.monotonic() < deadline:
+                while plugin.PANEL.command_worker is None and time.monotonic() < deadline:
                     time.sleep(0.01)
-                self.assertIsNotNone(plugin.PANEL.command_loop)
+                self.assertIsNotNone(plugin.PANEL.command_worker)
 
                 orca.panels[0].kw["on_close"]()
                 worker.join(2)
                 self.assertFalse(worker.is_alive())
 
-                async def reopen():
-                    task = asyncio.create_task(cap.execute())
-                    await asyncio.sleep(0)
+                result = cap.execute()
+                reopened_worker = cap._autostart_thread
+                try:
+                    self.assertEqual(result.status, "success")
                     self.assertEqual(len(orca.panels), 2)
                     self.assertTrue(plugin.PANEL.is_open())
-                    plugin.PANEL.close()
-                    await task
+                    self.assertIsNot(reopened_worker, worker)
 
-                asyncio.run(reopen())
+                    deadline = time.monotonic() + 2
+                    while (plugin.PANEL.command_worker is not reopened_worker
+                           and time.monotonic() < deadline):
+                        time.sleep(0.01)
+
+                    self.assertIs(plugin.PANEL.command_worker, reopened_worker)
+                finally:
+                    plugin.PANEL.close()
+                    reopened_worker.join(2)
+
+                self.assertFalse(reopened_worker.is_alive())
             finally:
                 cap.on_unload()
                 worker.join(2)
@@ -976,7 +1120,7 @@ class PanelAutostartTests(unittest.TestCase):
                 cap.on_load()
                 self.assertEqual(len(orca.panels), 0)
                 self.assertFalse(plugin.PANEL.is_open())
-                self.assertIsNone(plugin.PANEL.command_loop)
+                self.assertIsNone(plugin.PANEL.command_worker)
             finally:
                 cap.on_unload()
                 worker = getattr(cap, "_autostart_thread", None)
@@ -996,48 +1140,40 @@ class PanelTests(unittest.TestCase):
 
         self._panel_threads = []
         self._panel_errors = []
-        self._async_execute = self.cap.execute
+        self._sync_execute = self.cap.execute
         self.cap.execute = lambda: self.start_panel_worker()
         self.addCleanup(self.cleanup_panel_worker)
 
     def start_panel_worker(self):
-        if self.plugin.PANEL.is_open():
-            self.plugin.PANEL.panel.show()
-            return self.orca.ExecutionResult.success(
-                "The active spool panel is already open."
-            )
+        result = self._sync_execute()
 
-        def run():
-            try:
-                asyncio.run(self._async_execute())
-            except BaseException as exc:
-                self._panel_errors.append(exc)
+        if not self.plugin.PANEL.is_open():
+            return result
 
-        thread = threading.Thread(
-            target=run,
-            name="test-phoenix-panel",
-            daemon=True,
-        )
-        self._panel_threads.append(thread)
-        thread.start()
+        worker = getattr(self.cap, "_autostart_thread", None)
+        if worker is None:
+            raise AssertionError("Panel worker not created")
+
+        if worker not in self._panel_threads:
+            self._panel_threads.append(worker)
 
         if not self.wait_for(
-            lambda: self.plugin.PANEL.command_loop is not None
-            or not thread.is_alive()
+            lambda: self.plugin.PANEL.command_worker is worker
+            or not worker.is_alive()
         ):
-            raise AssertionError("Async panel worker did not start")
+            raise AssertionError("Panel worker did not start")
 
-        if self._panel_errors:
-            raise self._panel_errors[-1]
+        if self.plugin.PANEL.command_worker is not worker:
+            raise AssertionError("Panel worker terminated during startup")
 
-        return self.orca.ExecutionResult.success("Active spool panel opened.")
+        return result
 
     def cleanup_panel_worker(self):
         self.plugin.PANEL.close()
         for thread in self._panel_threads:
             thread.join(5)
             if thread.is_alive():
-                raise AssertionError("Async panel worker did not stop")
+                raise AssertionError("Panel worker did not stop")
 
     def wait_for(self, predicate, seconds=5):
         end = time.monotonic() + seconds
@@ -1052,10 +1188,10 @@ class PanelTests(unittest.TestCase):
         self.cap.execute()
 
         panel = self.orca.panels[0]
-        worker_loop = self.plugin.PANEL.command_loop
+        worker_loop = self.plugin.PANEL.command_worker
 
         self.assertIsNotNone(worker_loop)
-        self.assertTrue(worker_loop.is_running())
+        self.assertTrue(worker_loop.is_alive())
 
         worker_thread = next(
             thread for thread in self._panel_threads
@@ -1068,9 +1204,9 @@ class PanelTests(unittest.TestCase):
 
         self.assertFalse(
             worker_thread.is_alive(),
-            "Async Script worker did not terminate after shutdown"
+            "Script worker did not terminate after shutdown"
         )
-        self.assertIsNone(self.plugin.PANEL.command_loop)
+        self.assertIsNone(self.plugin.PANEL.command_worker)
         self.assertIsNone(self.plugin.PANEL.command_queue)
 
     def test_panel_cancellation_terminates_async_worker(self):
@@ -1082,7 +1218,7 @@ class PanelTests(unittest.TestCase):
             if thread.is_alive()
         )
 
-        self.assertIsNotNone(self.plugin.PANEL.command_loop)
+        self.assertIsNotNone(self.plugin.PANEL.command_worker)
 
         self.cap.on_cancelled()
 
@@ -1090,9 +1226,9 @@ class PanelTests(unittest.TestCase):
 
         self.assertFalse(
             worker_thread.is_alive(),
-            "Async Script worker did not terminate after cancellation"
+            "Script worker did not terminate after cancellation"
         )
-        self.assertIsNone(self.plugin.PANEL.command_loop)
+        self.assertIsNone(self.plugin.PANEL.command_worker)
         self.assertIsNone(self.plugin.PANEL.command_queue)
         self.assertFalse(self.plugin.PANEL.is_open())
 
@@ -1194,6 +1330,56 @@ check(elements.verdict.hidden, 'Old verdict remains without spool');
         self.cap.execute()  # a second run shows the same panel instead of opening another
         self.assertEqual(len(self.orca.panels), 1)
         self.assertEqual(panel.shown, 1)
+
+
+    def test_permission_denial_pauses_polling_until_refresh(self):
+        denied = {
+            "type": "state",
+            "ok": False,
+            "error": "Permission denied",
+            "permission_denied": True,
+        }
+        inventory_result = {
+            "type": "inventory",
+            "ok": True,
+            "spools": [],
+        }
+
+        with mock.patch.object(
+            self.plugin, "panel_payload", return_value=denied
+        ) as active, mock.patch.object(
+            self.plugin, "inventory_payload", return_value=inventory_result
+        ) as inventory:
+            self.cap.execute()
+            panel = self.orca.panels[0]
+
+            self.assertTrue(self.wait_for(
+                lambda: active.call_count >= 1
+            ))
+
+            time.sleep(0.2)
+            active_before = active.call_count
+            inventory_before = inventory.call_count
+
+            self.assertFalse(self.wait_for(
+                lambda: active.call_count > active_before
+                or inventory.call_count > inventory_before,
+                seconds=1.4,
+            ), "Polling continued after permission denial")
+
+            # Simulate the user granting permission before Refresh.
+            active.return_value = {
+                "type": "state", "ok": True, "spool": None
+            }
+            panel.kw["on_message"]({"type": "refresh"})
+
+            self.assertTrue(self.wait_for(
+                lambda: active.call_count > active_before
+            ), "Refresh did not restart the active spool request")
+            self.assertTrue(self.wait_for(
+                lambda: inventory.call_count > inventory_before
+            ), "Refresh did not restart the inventory request")
+
 
     def test_ready_starts_polling_and_posts_the_active_spool(self):
         self.cap.execute()
@@ -1447,6 +1633,13 @@ check(elements.verdict.hidden, 'Old verdict remains without spool');
     def test_messages_from_the_page_are_validated(self):
         self.cap.execute()
         panel = self.orca.panels[0]
+        self.assertTrue(self.wait_for(
+            lambda: self.plugin.PANEL.thread is not None
+            and self.plugin.PANEL.inventory_thread is not None
+            and self.plugin.PANEL.thread.is_alive()
+            and self.plugin.PANEL.inventory_thread.is_alive()
+        ), "Both polling threads must start")
+
         active_thread = self.plugin.PANEL.thread
         inventory_thread = self.plugin.PANEL.inventory_thread
 
