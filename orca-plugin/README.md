@@ -23,22 +23,33 @@ releases **after 2.4.2** (OrcaSlicer 2.4.2 itself does not have it). Standard li
 filament, material, colour, diameter, temperatures, remaining weight and the NFC tag. It only
 reads; nothing is written to the printer, to Spoolman or to Orca's presets.
 
-**Active spool panel** (script, **new in 0.4.0, not yet run inside OrcaSlicer**) opens a panel docked beside the
-3D view that follows the spool the Phoenix reader activated: swatch, vendor and name, material, diameter, nozzle and
-bed temperature, remaining weight and NFC tag. Place a spool on the reader and the panel updates within a few
-seconds (`poll_seconds`, default 3, minimum 1). A background thread asks Moonraker and Spoolman; the page never talks
-to them. If Moonraker or Spoolman cannot be reached the panel keeps the last spool and shows the error. Run the script
-once from the Plugins window; running it again just shows the same panel.
+**Active spool panel** (script, verified with OrcaSlicer 2.5.1, version 0.6.6)
+opens automatically when the plugin loads, unless `auto_open_panel` is disabled.
+It can also be opened manually from the Plugins window.
 
-Since 0.5.0 the panel also shows the **filament profile currently selected in OrcaSlicer** and whether it matches the
-active spool: the spool's material against the profile's `filament_type`, and the profile's nozzle temperature against
-the spool's within `nozzle_temp_tolerance` (the same rule as *Spool check*). A mismatch is shown in red, and a profile that has the right material but looks like another product is
-shown in amber ("Same material, but check the profile"): the product is judged from the names, ignoring the printer
-part after `@`, using the spool's product name (PolyTerra) or, when that is only generic words, its vendor. The
-amber note is a hint, not an error: profile names are free text. Both update as soon as you
-place a spool or change the profile (the page asks the plugin every 2 s, and the plugin reads the selection on the UI
-thread). If the selection cannot be read, the panel just says so. The panel only reads: OrcaSlicer's plugin API gives
-no way to change the selected filament preset, so it cannot select the spool's profile for you.
+The docked panel displays the active Moonraker/Spoolman spool, its material,
+colour, temperatures, remaining weight and NFC information. It also displays
+the Spoolman inventory and the filament profiles selected in OrcaSlicer.
+
+The panel compares the active filament with Orca's selected profiles, checking
+material and nozzle temperature and highlighting possible mismatches.
+
+**Filament preset associations:** users can associate a Spoolman filament with
+one or more existing OrcaSlicer presets. Associations are saved persistently.
+When the active spool changes, a single associated preset is selected
+automatically in Orca. If several presets are associated, the user can choose
+which one to use and select the target filament slot.
+
+Associations can also be removed from the panel, with confirmation.
+The Refresh action requests updated spool, inventory and preset information.
+
+The panel uses background worker threads so network polling does not block
+the user interface. Moonraker and Spoolman permissions are requested together
+for the default host `phoenix.local`; alternative hosts may require separate
+authorization. Network failures are reported in the panel.
+
+The plugin selects existing OrcaSlicer presets; it does not create or rewrite
+filament preset files.
 
 **Inspect preset API** (script, diagnostic) shows what the panel reads as the selected filament, followed by the members
 of `orca.host.preset_bundle()`, in a dialog and in OrcaSlicer's Python log. Use it to see why the panel cannot read the
@@ -85,26 +96,41 @@ which spool is active, so a spool changed after slicing is not noticed.
 
 **Note (0.2.1).** OrcaSlicer's audit hook refuses reads of the Python interpreter's own files while a G-code file is being exported. The plugin therefore loads `encodings.idna` when it starts (Python imports it lazily to resolve a host name), and any unexpected error during the check skips it instead of stopping the export. In 0.2.0 that blocked read made the export fail silently: no error, no file.
 
-Not done yet: writing a filament preset from the active spool.
+Not implemented: generating a new OrcaSlicer filament preset from Spoolman metadata. Selecting existing associated presets is supported.
 
 ## Install
 
-1. Copy the file into its own folder under the OrcaSlicer data directory, with OrcaSlicer closed:
-   `~/.config/OrcaSlicer/orca_plugins/phoenix-spoolman/phoenix_spoolman.py`. Start OrcaSlicer,
-   open **Plugins**, press **Refresh** and tick **Activate**. (**Install local plugin** did not work
-   in the nightly build tested on Linux; the folder copy does.)
-2. Expand the plugin, find the **Active spool** script and press **Run**.
-3. OrcaSlicer asks whether the plugin may contact the network. The plugin talks only to the
-   Moonraker and Spoolman addresses in its configuration.
-4. **Active spool panel** and **Inspect preset API** are scripts: expand the plugin and press **Run**. **Spool check** is a slicing-pipeline plugin: in the **Process** settings, tab **Others**, section **Slicing Pipeline Plugin**, press **Add plugin** and pick "Spool check". Slice, export a G-code file and open its last lines.
+Verified with OrcaSlicer 2.5.1 on Linux.
+
+1. Open OrcaSlicer's Plugins manager and install the local
+   `phoenix_spoolman.py` file.
+2. Activate the plugin if necessary and grant its requested permissions.
+   The default configuration requests network access to `phoenix.local`
+   and permission to create threads.
+3. The Active spool panel opens automatically and loads the current
+   Moonraker/Spoolman state. It can also be opened manually from Plugins.
+4. Configure Moonraker and Spoolman URLs if they differ from the defaults.
+5. Optionally add **Spool check** under Process settings, Others,
+   Slicing Pipeline Plugin, to validate exported G-code.
+
+The **Active spool** and **Inspect preset API** diagnostic scripts remain
+available in the Plugins manager.
+
+No modification to OrcaSlicer's C++ code is required.
 
 ## Configuration
 
-Plugins window → select the plugin → **Config** tab → choose **Active spool** or **Spool check** (each has its own configuration; `on_mismatch` and `nozzle_temp_tolerance` only matter for **Spool check**). Defaults:
+Plugins window → select the plugin → **Config** tab → configure the
+appropriate capability. **Active spool panel** controls automatic opening,
+polling intervals, connections and filament associations. **Spool check**
+uses `on_mismatch` to decide whether to block an incompatible G-code export.
+`nozzle_temp_tolerance` is used by both the panel and Spool check.
+
+Defaults:
 
 ```json
 {"moonraker_url": "http://phoenix.local:7125", "spoolman_url": "http://phoenix.local:7912", "timeout_seconds": 5,
- "on_mismatch": "block", "nozzle_temp_tolerance": 25, "poll_seconds": 3}
+ "on_mismatch": "block", "nozzle_temp_tolerance": 25, "poll_seconds": 3, "inventory_poll_seconds": 30, "auto_open_panel": true}
 ```
 
 Away from home with Tailscale, use the Phoenix's Tailscale address in both URLs.
