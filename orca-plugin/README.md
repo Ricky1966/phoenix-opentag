@@ -51,10 +51,6 @@ authorization. Network failures are reported in the panel.
 The plugin selects existing OrcaSlicer presets; it does not create or rewrite
 filament preset files.
 
-**Inspect preset API** (script, diagnostic) shows what the panel reads as the selected filament, followed by the members
-of `orca.host.preset_bundle()`, in a dialog and in OrcaSlicer's Python log. Use it to see why the panel cannot read the
-selection, if it ever cannot.
-
 **Spool check** (G-code post-processing, experimental in OrcaSlicer) runs when a G-code file is
 exported. It compares the active spool with the filament profile that was sliced, reading
 `filament_type` and `nozzle_temperature` from the settings block that Orca writes at the end of the
@@ -113,8 +109,7 @@ Verified with OrcaSlicer 2.5.1 on Linux.
 5. Optionally add **Spool check** under Process settings, Others,
    Slicing Pipeline Plugin, to validate exported G-code.
 
-The **Active spool** and **Inspect preset API** diagnostic scripts remain
-available in the Plugins manager.
+The **Active spool** script remains available in the Plugins manager.
 
 No modification to OrcaSlicer's C++ code is required.
 

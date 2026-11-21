@@ -1760,4 +1760,3 @@ class PhoenixSpoolmanPlugin(orca.base):
         orca.register_capability(ActiveSpool)
         orca.register_capability(SpoolCheck)
         orca.register_capability(ActiveSpoolPanel)
-        orca.register_capability(InspectPresetApi)

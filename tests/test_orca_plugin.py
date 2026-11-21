@@ -228,7 +228,7 @@ class PluginTests(unittest.TestCase):
         self.assertEqual(self.orca.permission_requests, [{"threading": True, "network": ["http://phoenix.local"]}])
         self.assertEqual(
             self.orca.registered,
-            [self.plugin.ActiveSpool, self.plugin.SpoolCheck, self.plugin.ActiveSpoolPanel, self.plugin.InspectPresetApi],
+            [self.plugin.ActiveSpool, self.plugin.SpoolCheck, self.plugin.ActiveSpoolPanel],
         )
         self.assertEqual(self.cap.get_name(), "Active spool")
         self.assertEqual(self.plugin.SpoolCheck().get_name(), "Spool check")
